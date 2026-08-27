@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AICollaboration Resident Lab</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <strong>AICollaboration</strong>
+    <span>Resident Participant Lab</span>
+  </header>
+  <main>
+    <section class="session-header">
+      <div>
+        <p class="kicker">实验会话</p>
+        <h1>Codex 驻留参与者</h1>
+        <p>网页发送 @ 消息，等待中的 Codex MCP 调用收到任务并继续推理。</p>
+      </div>
+      <button id="reset" class="secondary">重置实验</button>
+    </section>
+
+    <section class="status-strip">
+      <div><span>入会码</span><strong id="inviteCode">加载中</strong></div>
+      <div><span>参与者</span><strong id="participant">等待加入</strong></div>
+      <div><span>状态</span><strong id="status">连接中</strong></div>
+    </section>
+
+    <section class="conversation">
+      <div id="messages" class="messages"></div>
+      <form id="composer" class="composer">
+        <textarea id="content" rows="3" placeholder="Codex 入会后，在这里输入 @CodexResident 你好，请介绍一下自己"></textarea>
+        <button type="submit">发送</button>
+      </form>
+      <p id="feedback" class="feedback"></p>
+    </section>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
