@@ -1,0 +1,74 @@
+# 操作系统文件
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# IDE 文件
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.swp
+
+# .NET 构建输出和工具
+**/[Bb]in/
+**/[Oo]bj/
+TestResults/
+BenchmarkDotNet.Artifacts/
+artifacts/
+*.nupkg
+packages/
+project.lock.json
+project.fragment.lock.json
+*.tmp_proj
+*.csproj.user
+*.rsuser
+
+# 前端依赖和包管理器文件
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 前端构建输出和缓存
+dist/
+build/
+coverage/
+.next/
+.nuxt/
+.svelte-kit/
+.parcel-cache/
+.cache/
+.vite/
+.turbo/
+.eslintcache
+
+# 本地开发文件
+.worktrees/
+.env
+.env.*
+!.env.example
+
+# 日志和临时文件
+*.log
+*.tmp
+*.cache
+
+# agent相关文件
+.gitnexus
+.claude
+.agents/skills/generated
+.agents/skills/gitnexus
+CLAUDE.md
