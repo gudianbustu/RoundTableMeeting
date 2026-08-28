@@ -61,9 +61,12 @@ Client/
     vitest.config.ts
     tsconfig.json
     tsconfig.app.json
+    tsconfig.node.json
 ```
 
 以上是目录边界，不要求初始化时创建全部空目录。某个 feature 暂时不需要 `hooks/` 或 `types/` 时，不创建对应目录。
+
+Vite 配置使用独立的 `tsconfig.node.json`；该文件属于客户端工程配置，和应用源码一样纳入类型检查。
 
 ## 4. 总体组织规则
 
@@ -150,7 +153,7 @@ src/api/generated/
 
 ### 8.2 公共 API 层
 
-- `api/client/`：以模块级单例创建和配置 Kiota Client，处理基础地址、公共请求选项和后续认证接入。开发和生产统一使用相对基础地址 `/api`；开发由 Vite 代理，生产由同源 ASP.NET Core 提供。
+- `api/client/`：以模块级单例创建和配置 Kiota Client，处理基础地址、公共请求选项和后续认证接入。开发和生产统一使用相对 `/api` 逻辑路径；Kiota RequestAdapter 的技术 base URL 使用当前页面 origin，`/api` 由 OpenAPI path 和生成请求模板追加一次。开发由 Vite 代理，生产由同源 ASP.NET Core 提供。
 - `api/errors/`：识别并转换 `ProblemDetails`、网络错误和无法解析的服务端错误。
 
 页面和组件不能直接依赖 `api/generated/`。每个 feature 通过自己的 `api/` 调用公共 Client，并将生成模型转换为适合该 feature 的视图模型或状态。公共 Client 不由页面或组件各自 new；后续认证通过该公共层的 RequestAdapter 配置接入。
@@ -165,7 +168,7 @@ src/api/generated/
 - 字段级校验信息。
 - 网络不可用或服务端不可访问。
 
-公共错误对象的准确 TypeScript 类型在实施设计中固定，并优先由 OpenAPI/Kiota 生成的 ProblemDetails 模型承载传输字段。页面不解析任意服务端 JSON，也不直接依赖 `ProblemDetails` 的传输细节；页面分支判断使用稳定的 `code` 或 HTTP 状态，不使用本地化错误文案。
+公共错误对象的准确 TypeScript 类型在实施设计中固定，并优先由 OpenAPI/Kiota 生成的 ProblemDetails 模型承载传输字段。页面不解析任意服务端 JSON，也不直接依赖 `ProblemDetails` 的传输细节；页面分支判断使用稳定的 `code` 或 HTTP 状态，不使用本地化错误文案。组件卸载或调用方取消不转换为网络错误，也不显示失败状态。
 
 ## 9. 路由与页面
 
@@ -250,7 +253,7 @@ features/systemStatus/pages/
 ### 15.1 开发环境
 
 - Vite 独立启动。需要重新生成 Kiota Client 时，同时启动 ASP.NET Core，并由生成脚本通过 HTTP 获取 OpenAPI JSON。
-- `/api` 代理到 ASP.NET Core；客户端公共 Client 的基础地址固定为相对 `/api`，不在组件中拼接环境专属绝对地址。
+- `/api` 代理到 ASP.NET Core；客户端公共 Client 从当前页面 origin 发起请求，生成请求模板负责追加一次 `/api`，不在组件中拼接环境专属绝对地址。
 - API 基础地址由公共 Client 配置统一处理。
 - 本地开发不要求 ASP.NET Core 托管静态文件。
 
@@ -281,7 +284,7 @@ features/systemStatus/pages/
 - `package.json` 脚本名称。
 - `@/` 路径别名的 TypeScript、Vite 和 Vitest 配置。
 - Kiota 生成命令、服务端 OpenAPI HTTP 地址、服务就绪等待方式和运行时 npm 依赖。
-- 公共 Client 的模块级单例、相对 `/api` 基础地址和 RequestAdapter 配置方式。
+- 公共 Client 的模块级单例、当前 origin base URL、由生成路径追加一次 `/api` 的 RequestAdapter 配置方式。
 - 公共 API Client 与已确定字段契约对应的客户端错误对象准确 TypeScript 类型。
 - 系统状态页面的组件拆分和视觉设计。
 - Vite 代理端口和 ASP.NET Core 开发地址。

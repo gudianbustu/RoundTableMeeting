@@ -89,7 +89,7 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 
 生成脚本在写入 `src/api/generated/` 后统一转换为 CRLF，遵守项目文件行尾约定；生成目录不得通过 `.gitattributes` 豁免为 LF。
 
-客户端所有环境都使用相对基础地址 `/api`：开发环境由 Vite 代理到 ASP.NET Core，生产环境由同源 ASP.NET Core 直接提供。认证等公共请求配置只能在公共 Client 层接入。
+客户端所有环境都使用同源请求。服务端 OpenAPI path 固定包含一次 `/api` 前缀，OpenAPI `servers` 省略或使用相对 `/`；Kiota RequestAdapter 的技术 base URL 使用当前页面 origin，不设置为 `/api`，由生成请求模板追加一次 `/api`。开发环境由 Vite 代理到 ASP.NET Core，生产环境由同源 ASP.NET Core 直接提供。认证等公共请求配置只能在公共 Client 层接入。
 
 ### 5.2 错误响应
 

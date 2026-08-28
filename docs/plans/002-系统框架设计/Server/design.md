@@ -116,7 +116,7 @@ public interface IUnitOfWork
 - 提交成功返回受影响记录数。
 - 提交失败不能返回成功结果。
 - `DbUpdateConcurrencyException` 不能通过重新加载实体静默吞掉。
-- 成功提交后清理当前作用域内的实体跟踪状态。
+- Commit 尝试结束后清理当前作用域内的实体跟踪状态；失败或取消仍然上抛，并要求调用方废弃当前 scope，不在同一工作单元上重试。
 - 同一作用域内的工作单元和 `DbContext` 不允许被多个并发执行流同时使用；每个 HTTP 请求、后台任务或消息处理都使用独立 DI scope。
 - 不在工作单元内部自动串行化并发调用；并发复用同一个 `DbContext` 属于编程错误，应通过 EF Core 线程安全检查和测试尽早暴露。
 
@@ -197,7 +197,7 @@ ASP.NET Core 启动时：
 - 工作单元实现使用 `IScopedDependency<IUnitOfWork>`。
 - 数据库初始化实现使用适合启动作用域的 Scoped 生命周期。
 - `DbContext`、数据库 Provider 和连接字符串由启动项目或 Repository 注册扩展显式配置。
-- 自动注册扫描 `RoundTableMeeting.Application` 和当前数据库 Repository 程序集。
+- 自动注册只扫描 `RoundTableMeeting.Application` 和当前数据库 Repository 程序集；数据库技术配置（Options、拦截器和 DbContext）由当前数据库组合根显式注册，带 `IScopedDependency<T>` 标记的应用服务、初始化器、可用性检查器、工作单元和具体 Repository 由一次扫描注册。
 - Domain 和 Abstraction 不参与实现类型扫描。
 
 `IScopedDependency<T>` 的泛型参数 `T` 是容器注册时对外暴露的服务类型，例如实现类使用 `IScopedDependency<IUserService>` 时注册为 `IUserService -> 实现类`。
@@ -247,7 +247,7 @@ Materal 包首版基线为：`Materal.TTA.Common`、`Materal.TTA.EFRepository`�
 
 应用生成的错误响应必须提供 `code`。`detail`、`errors` 和 `traceId` 不得包含密码、连接字符串、绝对路径、堆栈或其他敏感内部信息。
 
-服务端需要为扩展 ProblemDetails 建立明确的 OpenAPI schema，并在各个 operation 上声明可能返回的 4xx/5xx 错误响应，确保 Kiota 可以生成类型化错误模型。未处理异常固定使用 `code = "internal_error"`。字段校验错误在输出前归一化模型级空键和嵌套字段路径，准确规则在实施文档中固定。
+服务端需要为扩展 ProblemDetails 建立明确的 OpenAPI schema，并在各个 operation 上声明可能返回的 4xx/5xx 错误响应，确保 Kiota 可以生成类型化错误模型。OpenAPI `servers` 省略或使用相对 `/`，不得把本机开发地址写入生成契约。未处理异常固定使用 `code = "internal_error"`。字段校验错误在输出前归一化模型级空键和嵌套字段路径，准确规则在实施文档中固定。
 
 请求关联使用 W3C Trace Context。`traceId` 优先取 `Activity.Current?.TraceId`，无 Activity 时回退到 `HttpContext.TraceIdentifier`。未处理异常只由集中异常处理组件记录一次结构化日志；日志和响应均不得泄露敏感信息。
 
