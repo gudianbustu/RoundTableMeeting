@@ -12,7 +12,7 @@
 - HTTP API 使用 Controller。
 - Application 使用普通应用服务，不引入 MediatR、消息总线或形式化 CQRS Handler 框架。
 - 数据访问使用 Entity Framework Core，第一版使用 SQLite。
-- 使用 `Materal.Extensions.DependencyInjection` 的标记接口自动注册应用服务和仓储实现。
+- 使用 ASP.NET Core 默认 DI 容器承载 Web、OpenAPI、Scalar 和测试宿主；使用 `Materal.Extensions.DependencyInjection` 的标记接口自动注册应用服务和仓储实现。
 - 使用 ASP.NET Core OpenAPI 生成 OpenAPI JSON，并提供 Scalar 或同类 UI。
 - API 错误统一使用 `ProblemDetails`。
 - 使用 Serilog 作为日志实现，通过 `Serilog.AspNetCore` 接入 ASP.NET Core，使用 Console Sink 输出结构化日志，并使用 W3C Trace Context 关联请求与错误。
@@ -186,9 +186,9 @@ ASP.NET Core 启动时：
 4. 直接调用 `DbContext.Database.MigrateAsync(cancellationToken)` 应用未执行的 Migration；不得调用会吞掉异常的迁移辅助方法。
 5. 初始化成功后才开放业务请求。
 
-初始化失败直接终止服务启动并记录必要诊断信息，不能在数据库状态不确定时继续运行。日志不得记录密码、连接字符串或其他敏感信息。
+初始化失败直接终止服务启动并记录必要诊断信息，不能在数据库状态不确定时继续运行。日志不得记录密码、连接字符串、数据库文件绝对路径或其他敏感信息；启动失败日志只保留异常类型等安全摘要，不输出原始异常正文或堆栈。
 
-默认数据库文件为 `data/round-table-meeting.db`，相对路径按 `AppContext.BaseDirectory` 归一化为稳定路径；数据库目录加入 `.gitignore`。连接字符串写入 `appsettings.json`，允许通过 `appsettings.{Environment}.json`、开发机 user-secrets 和生产环境变量覆盖。SQLite 启用 WAL 和 busy timeout，具体连接参数在实施文档中固定。首版以单服务实例运行作为自动迁移前提；未来多实例部署时重新评估迁移协调策略。
+默认数据库文件为 `data/round-table-meeting.db`，相对路径按 `AppContext.BaseDirectory` 归一化为稳定路径；`.gitignore` 忽略 SQLite 数据库文件及其 WAL、SHM、journal 伴随文件，但不按目录名宽泛忽略未来可能提交的数据目录。连接字符串写入 `appsettings.json`，允许通过 `appsettings.{Environment}.json`、开发机 user-secrets 和生产环境变量覆盖。SQLite 启用 WAL 和 busy timeout，具体连接参数在实施文档中固定。首版以单服务实例运行作为自动迁移前提；未来多实例部署时重新评估迁移协调策略。
 
 ## 9. 依赖注入
 
@@ -202,7 +202,7 @@ ASP.NET Core 启动时：
 
 `IScopedDependency<T>` 的泛型参数 `T` 是容器注册时对外暴露的服务类型，例如实现类使用 `IScopedDependency<IUserService>` 时注册为 `IUserService -> 实现类`。
 
-Materal 的 `AddAutoService` 必须接收明确的程序集清单，不依赖默认的全进程程序集扫描。ASP.NET Core 宿主调用 `AddMateralServiceProvider()`，由其内部使用 `MateralServiceContextProviderFactory` 接入 Materal/AspectCore 服务提供程序；不调用 TTA 的 `AddTTARepository` 或 `AddTTASqliteEFRepository` 扫描扩展，避免将宽泛的 `IRepository<TEntity, Guid>` 注册为 Application 可直接解析的服务。实现类同时注册多个服务时使用 Materal 的多泛型参数标记接口，不使用多个单参数标记接口。容器构建集成测试需要隔离服务集合和服务提供程序，验证 .NET 10 下的解析结果。
+Materal 的 `AddAutoService` 必须接收明确的程序集清单，不依赖默认的全进程程序集扫描。最终方案使用 ASP.NET Core 默认 DI 容器；不调用 `AddMateralServiceProvider()`，不启用 `Materal.Extensions.DependencyInjection.AspNetCore` 或 AspectCore 容器集成。原因是该容器无法满足 ASP.NET Core OpenAPI 命名服务的 keyed service 解析，`MapOpenApi` 和官方文档 provider 会在运行时失败。默认容器仍通过一次 `AddAutoService` 扫描 Application 与当前 SQLite Repository 程序集中的标记服务；不调用 TTA 的 `AddTTARepository` 或 `AddTTASqliteEFRepository` 扫描扩展，避免将宽泛的 `IRepository<TEntity, Guid>` 注册为 Application 可直接解析的服务。实现类同时注册多个服务时使用 Materal 的多泛型参数标记接口，不使用多个单参数标记接口。容器集成测试验证标记服务解析、Scoped 生命周期、同 scope DbContext 共享、跨 scope 隔离、WebApplicationFactory 替换、测试 ApplicationPart、Serilog 和 OpenAPI。
 
 未来存在多套数据库 Repository 源码时，每个发布构建的 Web 组合根只引用并注册其中一套，避免同一个领域仓储或 `IDatabaseInitializer` 出现多个实现冲突。
 
@@ -214,12 +214,12 @@ Materal 的 `AddAutoService` 必须接收明确的程序集清单，不依赖默
 - `Materal.TTA.EFRepository`：提供 EF Core 通用仓储基础实现。
 - `Materal.TTA.SqliteEFRepository`：提供 SQLite EF Core 仓储能力。
 - `Materal.Extensions.DependencyInjection`：提供标记接口自动注册。
-- `Materal.Extensions.DependencyInjection.AspNetCore`：提供 `AddMateralServiceProvider()` 和 ASP.NET Core 宿主容器集成。
+- `Materal.Extensions.DependencyInjection.AspNetCore`：本主题不直接引用；其容器集成存在 ASP.NET Core OpenAPI keyed service 兼容性边界，不作为框架运行时前提。
 - Materal.Utils 仅在代码出现明确工具需求时直接引用；由 TTA 传递引入不视为项目主动采用其全部能力。
 
-Materal 包首版基线为：`Materal.TTA.Common`、`Materal.TTA.EFRepository`、`Materal.TTA.SqliteEFRepository` 使用 `1.4.7`，`Materal.Extensions.DependencyInjection` 和 `Materal.Extensions.DependencyInjection.AspNetCore` 使用 `1.4.4`。实现时通过 NuGet 还原和 .NET 10 集成测试确认后写入集中包版本配置；本主题不引入没有已确认用途的 MergeBlock。
+Materal 包首版基线为：`Materal.TTA.Common`、`Materal.TTA.EFRepository`、`Materal.TTA.SqliteEFRepository` 使用 `1.4.7`，`Materal.Extensions.DependencyInjection` 使用 `1.4.4`。本主题不直接引用 `Materal.Extensions.DependencyInjection.AspNetCore`，也不引入没有已确认用途的 MergeBlock。
 
-自动注册集成方式以 Materal 源码中的 `AddMateralServiceProvider()` 和显式 `AddAutoService(assemblies)` 为准；前者内部使用 `MateralServiceContextProviderFactory` 和 AspectCore 服务提供程序，因此必须通过容器集成测试验证作用域、服务解析和 .NET 10 兼容性。不通过默认构建路径隐式扫描已加载程序集。
+自动注册集成方式固定为默认 ASP.NET Core DI 容器加显式 `AddAutoService(assemblies)`；只扫描 Application 和当前 SQLite Repository 程序集，不通过默认构建路径隐式扫描已加载程序集。`AddMateralServiceProvider()`、`MateralServiceContextProviderFactory` 和 AspectCore 服务提供程序不属于本主题最终方案；IntegrationTests 必须验证默认容器下的作用域、服务解析、测试替换和 OpenAPI 兼容性。
 
 本项目不直接使用 TTA 的 `IUnitOfWork` 和 `EFUnitOfWorkImpl`。工作单元改进成熟后可以反向沉淀到 TTA，再评估是否切回 TTA 的新实现。
 
@@ -277,14 +277,14 @@ Serilog 使用 ASP.NET Core 请求日志中间件将单次 HTTP 请求压缩为�
 
 生产环境由 `RoundTableMeeting` 托管 Vite 构建产物，并提供 React Router SPA 回退。SPA fallback 必须显式排除 `/api`、OpenAPI、Scalar 和其他服务端端点；未匹配的 `/api/*` 返回 ProblemDetails 404，不能使用默认 fallback 将未知 API 变成 HTML 200。
 
-`dotnet publish` 必须自动触发或集成客户端生产构建，并将产物放入发布目录。发布环境必须安装 Node 24 LTS 与 pnpm，执行 `pnpm install --frozen-lockfile`；依赖安装或前端构建失败必须使 publish 失败，不能静默跳过。具体 MSBuild Target 在 `impl.md` 中确定。生产环境必须使用 HTTPS；localhost 开发环境允许 HTTP。
+`dotnet publish` 必须自动触发或集成客户端生产构建，并将产物放入发布目录。发布环境必须安装 Node `24.20.0` 与 pnpm `11.24.0`，发布前精确校验实际执行工具版本，再执行 `pnpm install --frozen-lockfile`；版本不匹配、依赖安装或前端构建失败必须使 publish 失败，不能静默跳过。具体 MSBuild Target 在 `impl.md` 中确定。生产环境必须使用 HTTPS；localhost 开发环境允许 HTTP。
 
 ## 14. 服务端测试
 
 - `RoundTableMeeting.Domain.Tests`：基础实体、领域规则和纯领域行为。
 - `RoundTableMeeting.Application.Tests`：应用服务编排、仓储交互和工作单元调用。
 - `RoundTableMeeting.Repository.Sqlite.Tests`：真实 SQLite 查询、状态注册、事务、映射、Migration 和数据库初始化。
-- `RoundTableMeeting.IntegrationTests`：HTTP 管道、Materal 服务提供程序、OpenAPI、ProblemDetails、状态接口、未知 API 404 和静态文件托管；为 `WebApplicationFactory` 提供明确的宿主入口可见性。
+- `RoundTableMeeting.IntegrationTests`：HTTP 管道、默认 ASP.NET Core DI、显式 Materal 标记扫描、OpenAPI、ProblemDetails、状态接口、未知 API 404 和静态文件托管；为 `WebApplicationFactory` 提供明确的宿主入口可见性。
 - `RoundTableMeeting.ArchitectureTests`：项目引用、程序集依赖、Application 不注入宽泛 TTA Repository、Abstraction 不暴露 Domain 类型等禁止依赖规则。
 
 Repository 测试不能使用开发数据库文件。每次测试使用独立 SQLite 数据库或等价隔离方式，不使用 EF Core InMemory 替代关系型行为测试。

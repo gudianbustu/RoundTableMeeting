@@ -1,0 +1,54 @@
+{
+  "name": "roundtablemeeting",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "generate:api": "node scripts/generate-api.mjs",
+    "check:format": "node scripts/check-text-format.mjs",
+    "check:toolchain": "node scripts/check-toolchain.mjs"
+  },
+  "dependencies": {
+    "@ant-design/icons": "6.3.2",
+    "@microsoft/kiota-abstractions": "1.0.0-preview.103",
+    "@microsoft/kiota-bundle": "1.0.0-preview.103",
+    "@microsoft/kiota-http-fetchlibrary": "1.0.0-preview.103",
+    "@microsoft/kiota-serialization-form": "1.0.0-preview.103",
+    "@microsoft/kiota-serialization-json": "1.0.0-preview.103",
+    "@microsoft/kiota-serialization-multipart": "1.0.0-preview.103",
+    "@microsoft/kiota-serialization-text": "1.0.0-preview.103",
+    "antd": "6.6.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-router-dom": "7.18.2"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.6",
+    "@types/node": "24.13.3",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
+    "@vitejs/plugin-react": "6.1.0",
+    "@vitest/coverage-v8": "4.1.11",
+    "jsdom": "30.0.1",
+    "typescript": "5.9.3",
+    "vite": "8.2.2",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=24.0.0 <25.0.0",
+    "pnpm": ">=11.24.0 <12.0.0"
+  },
+  "packageManager": "pnpm@11.24.0",
+  "volta": {
+    "node": "24.20.0",
+    "pnpm": "11.24.0"
+  }
+}

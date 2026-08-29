@@ -144,7 +144,7 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 - ASP.NET Core 托管该构建产物，浏览器页面和 API 使用同一源站。
 - React Router 路由由服务端提供 SPA 回退。API、OpenAPI 和其他服务端端点不能回退到 `index.html`。
 - 未匹配的 `/api/*` 必须返回 ProblemDetails 404；OpenAPI、Scalar 和其他服务端端点也不能被 SPA 回退掩盖。
-- `dotnet publish` 必须自动包含客户端生产构建结果，不要求开发者手工复制文件。发布环境必须提供 Node 24 LTS 和 pnpm，并使用 `pnpm install --frozen-lockfile`；前端安装或构建失败必须使发布失败，不能静默跳过。
+- `dotnet publish` 必须自动包含客户端生产构建结果，不要求开发者手工复制文件。发布环境必须提供 Node `24.20.0` 和 pnpm `11.24.0`，发布前精确校验实际工具版本，再使用 `pnpm install --frozen-lockfile`；版本不匹配、前端安装或构建失败必须使发布失败，不能静默跳过。
 
 ## 7. 测试与调试方向
 

@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/RoundTableMeeting.Application.Tests/RoundTableMeeting.Application.Tests.csproj" />
+    <Project Path="Tests/RoundTableMeeting.ArchitectureTests/RoundTableMeeting.ArchitectureTests.csproj" />
+    <Project Path="Tests/RoundTableMeeting.Domain.Tests/RoundTableMeeting.Domain.Tests.csproj" />
+    <Project Path="Tests/RoundTableMeeting.IntegrationTests/RoundTableMeeting.IntegrationTests.csproj" />
+    <Project Path="Tests/RoundTableMeeting.Repository.Sqlite.Tests/RoundTableMeeting.Repository.Sqlite.Tests.csproj" />
+  </Folder>
+  <Project Path="RoundTableMeeting.Abstraction/RoundTableMeeting.Abstraction.csproj" />
+  <Project Path="RoundTableMeeting.Application/RoundTableMeeting.Application.csproj" />
+  <Project Path="RoundTableMeeting.Domain/RoundTableMeeting.Domain.csproj" />
+  <Project Path="RoundTableMeeting.Repository.Sqlite/RoundTableMeeting.Repository.Sqlite.csproj" />
+  <Project Path="RoundTableMeeting/RoundTableMeeting.csproj" />
+</Solution>

@@ -72,8 +72,8 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 2. 建立根目录 `.config/dotnet-tools.json`，登记 `Microsoft.OpenApi.Kiota` `1.34.1` 和仓储 Migration 所需的 `dotnet-ef` 精确版本。
 3. 建立服务端集中包版本文件或等价的单一版本管理位置。Materal 包固定为 `1.4.7` 或 `1.4.4`，EF Core、ASP.NET Core OpenAPI、Serilog 和测试包采用同一 .NET 10 兼容版本。
 4. 建立客户端 Node 24 LTS 版本提示、`packageManager`、`engines` 和依赖锁文件策略。
-5. 检查 `.gitignore` 至少忽略 `bin/`、`obj/`、`node_modules/`、`dist/`、`data/`、`artifacts/`、测试临时数据库和本地日志。
-6. 执行最小工具链探针：确认 .NET 10、OpenAPI 3.0、Scalar、Kiota `1.34.1`、TypeScript、Vite 和 Vitest 能完成“服务端输出 OpenAPI -> Kiota 生成 -> TypeScript 类型检查”的最小链路。若 TypeScript 7 与 `tsc -b`、Vitest 或生成代码存在阻断性兼容问题，允许回退到实施时已验证的 TypeScript `5.9.x`，并同步 `Client/impl.md`、锁文件和本阶段验收记录；不得通过浮动版本规避问题。
+5. 检查 `.gitignore` 至少忽略 `bin/`、`obj/`、`node_modules/`、`dist/`、`artifacts/`、SQLite 数据库及伴随文件、测试临时数据库和本地日志；不按 `data/` 或 `packages/` 目录名宽泛忽略未来可能提交的业务资产。
+6. 执行最小工具链探针：确认 .NET 10、OpenAPI 3.0、Scalar、Kiota `1.34.1`、TypeScript、Vite 和 Vitest 能完成“服务端输出 OpenAPI -> Kiota 生成 -> TypeScript 类型检查”的最小链路。若 TypeScript 5.9.3 与 Kiota preview.103 生成代码存在阻断性兼容问题，项目固定使用已验证的 TypeScript `5.9.3`，并同步 `Client/impl.md`、锁文件和本阶段验收记录；不得通过浮动版本规避问题。
 
 输出：工具约束、包版本约束和仓库忽略规则。
 
@@ -95,7 +95,7 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 3. 创建 Domain、Application、Repository.Sqlite、Integration 和 Architecture 测试项目，并按测试目标决定是否创建独立的测试项目引用。
 4. 添加项目引用：Web 引用 Application、Abstraction、Repository.Sqlite；Application 引用 Domain、Abstraction；Repository.Sqlite 引用 Domain、Abstraction；Domain 和 Abstraction 不引用其他本项目生产项目。
 5. 加入统一的 nullable、隐式 using、分析器和测试构建属性。测试项目不能通过项目引用把 EF Core 或 Web 依赖传入 Domain 测试目标。
-6. 建立各项目的程序集标记类型，供 Materal 的显式程序集扫描使用。
+6. 建立各项目的程序集标记类型，供 Materal `AddAutoService` 显式扫描 Application 与当前 Repository.Sqlite 程序集中的标记服务；Web 使用 ASP.NET Core 默认 DI，不调用 `AddMateralServiceProvider`。
 
 输出：可还原的服务端解决方案和空的分层项目。
 
@@ -141,14 +141,14 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 3. 配置 W3C Trace Context；集中异常处理只记录一次未处理异常，并使用 `Activity.Current.TraceId`，无 Activity 时回退 `HttpContext.TraceIdentifier`。
 4. 接入统一 ProblemDetails。固定标准字段、`code`、`traceId` 和字段校验 `errors`，明确公开错误不得包含堆栈、连接字符串、绝对路径或秘密。
 5. 创建匿名 `GET /api/system/status` Controller。运行期用真实轻量数据库检查，数据库故障返回 `200` 的 `degraded/unavailable` 结果。
-6. 配置 ASP.NET Core OpenAPI 输出 OpenAPI 3.0，并提供 Scalar 交互页面。ProblemDetails schema 和各 operation 的错误响应必须进入文档。
+6. 配置 ASP.NET Core OpenAPI 输出 OpenAPI 3.0，并提供 Scalar 交互页面。ProblemDetails schema 和各 operation 的错误响应必须进入文档；Web/OpenAPI/Scalar 使用默认 ASP.NET Core DI，避免 Materal keyed service 兼容性边界。
 
 输出：可通过 HTTP 观察的服务端框架接口。
 
 验收门：
 
 - `GET /api/system/status` 的成功、降级和服务不可访问场景与设计一致。
- - 通过 IntegrationTests 测试宿主注入的 `GET /__test/throw` 触发一个故意异常，只产出一条集中异常日志并返回 `internal_error` ProblemDetails；该端点不属于生产 API。
+- 通过 IntegrationTests 测试宿主注入的 `GET /__test/throw` 触发一个故意异常，只产出一条集中异常日志并返回 `internal_error` ProblemDetails；该端点不属于生产 API。
 - OpenAPI 文档可以由 HTTP 获取，版本为 3.0，包含状态接口和错误 schema。
 - Scalar 能读取同一个 OpenAPI 地址，未维护第二份手工契约。
 
@@ -222,7 +222,7 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 实施内容：
 
 1. 在 Web 项目定义客户端目录、构建目录和发布目录的 MSBuild 属性。
-2. `dotnet publish` 前执行客户端依赖安装和 `pnpm build`，统一使用 `pnpm install --frozen-lockfile`。
+2. `dotnet publish` 前执行 `pnpm run check:toolchain` 精确校验 Node `24.20.0` 和 pnpm `11.24.0`，再执行客户端依赖安装和 `pnpm build`，统一使用 `pnpm install --frozen-lockfile`。
 3. 将 `dist/` 复制到 ASP.NET Core 发布输出的 `wwwroot/`，前端安装或构建失败时终止 publish。
 4. 配置静态文件、Controller、OpenAPI、Scalar 和 SPA fallback 的路由顺序。
 5. fallback 只处理页面导航请求，明确排除 `/api`、`/openapi`、`/scalar` 和其他服务端端点。未知 `/api/*` 返回 ProblemDetails 404。
@@ -244,7 +244,7 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 
 实施内容：
 
-1. 按 testPlan 建立 Domain、Application、Repository.Sqlite、Integration 和 Architecture 的 xUnit 测试；测试宿主专用异常和模型校验端点只由 IntegrationTests 注入，不进入生产项目、发布产物或生产 OpenAPI。
+1. 按 testPlan 建立 Domain、Application、Repository.Sqlite、Integration 和 Architecture 的 xUnit 测试；验证默认 ASP.NET Core DI 下的显式 Materal 标记扫描、Scoped 生命周期、临时配置替换、测试 ApplicationPart、Serilog 和 OpenAPI；测试宿主专用异常和模型校验端点只由 IntegrationTests 注入，不进入生产项目、发布产物或生产 OpenAPI。
 2. 建立 Vitest 的 jsdom 测试环境和系统状态页面组件测试。
 3. 增加构建、OpenAPI/Kiota、publish 和未知 API 404 的自动化验证。
 4. 启动独立开发模式 Chrome，通过 CDP 检查 endpoint、目标页面、DOM、控制台、网络和截图；不得把端口可访问当作调试完成。

@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Scalar.AspNetCore" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Settings.Configuration" />
+    <PackageReference Include="Serilog.Sinks.Console" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+    <ProjectReference Include="..\RoundTableMeeting.Application\RoundTableMeeting.Application.csproj" />
+    <ProjectReference Include="..\RoundTableMeeting.Abstraction\RoundTableMeeting.Abstraction.csproj" />
+    <ProjectReference Include="..\RoundTableMeeting.Repository.Sqlite\RoundTableMeeting.Repository.Sqlite.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SpaRoot>$(MSBuildProjectDirectory)\..\..\Client\roundTableMeeting\</SpaRoot>
+    <SpaDist>$(SpaRoot)dist\</SpaDist>
+  </PropertyGroup>
+
+  <Target Name="BuildClient" BeforeTargets="ComputeFilesToPublish">
+    <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm run check:toolchain" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm install --frozen-lockfile" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm build" />
+    <ItemGroup>
+      <ClientDistFiles Include="$(SpaDist)**\*" />
+      <ResolvedFileToPublish Include="@(ClientDistFiles)" Exclude="@(ResolvedFileToPublish)">
+        <RelativePath>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+</Project>

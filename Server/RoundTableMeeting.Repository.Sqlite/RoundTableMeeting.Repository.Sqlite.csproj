@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\RoundTableMeeting.Domain\RoundTableMeeting.Domain.csproj" />
+    <ProjectReference Include="..\RoundTableMeeting.Abstraction\RoundTableMeeting.Abstraction.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Materal.TTA.EFRepository" />
+    <PackageReference Include="Materal.TTA.SqliteEFRepository" />
+    <PackageReference Include="Materal.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+  </ItemGroup>
+
+</Project>

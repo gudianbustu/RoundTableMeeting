@@ -41,6 +41,8 @@ corepack prepare pnpm@11.24.0 --activate
 pnpm install --frozen-lockfile
 ~~~
 
+客户端提供 `pnpm run check:toolchain`，直接检查实际执行脚本的 Node 为 `24.20.0`、pnpm 为 `11.24.0`。发布 Target 在安装依赖前先执行该检查；版本不匹配时 publish 必须返回非零，不能只依赖 `engine-strict` 是否把版本偏差提升为错误。
+
 ### 2.2 运行依赖
 
 首版直接依赖固定为：
@@ -49,7 +51,7 @@ pnpm install --frozen-lockfile
 | --- | --- | --- |
 | `react` | `19.2.8` | React 运行时 |
 | `react-dom` | `19.2.8` | 浏览器渲染 |
-| `antd` | `6.6.2` | 基础 UI 组件 |
+| `antd` | `6.6.1` | 基础 UI 组件 |
 | `@ant-design/icons` | `6.3.2` | Ant Design 图标 |
 | `react-router-dom` | `7.18.2` | 页面路由 |
 | `@microsoft/kiota-bundle` | `1.0.0-preview.103` | Kiota TypeScript 运行时组合包 |
@@ -61,8 +63,8 @@ pnpm install --frozen-lockfile
 | 包 | 版本 | 用途 |
 | --- | --- | --- |
 | `vite` | `8.2.2` | 开发服务器和生产构建 |
-| `@vitejs/plugin-react` | `6.1.1` | React Vite 插件 |
-| `typescript` | `7.0.2` | TypeScript 编译 |
+| `@vitejs/plugin-react` | `6.1.0` | React Vite 插件 |
+| `typescript` | `5.9.3` | TypeScript 编译 |
 | `@types/react` | `19.2.18` | React 类型 |
 | `@types/react-dom` | `19.2.5` | React DOM 类型 |
 | `@types/node` | `24.13.3` | Vite/Node 配置类型 |
@@ -73,7 +75,9 @@ pnpm install --frozen-lockfile
 | `@testing-library/user-event` | `14.6.6` | 用户交互测试 |
 | `@testing-library/jest-dom` | `7.0.1` | DOM 断言 |
 
-版本来源为实施阶段可访问的官方 npm registry；写入 `package.json` 时使用精确版本，安装后提交 `pnpm-lock.yaml`。如果 TypeScript `7.0.2` 与 `tsc -b`、Vitest 或 Kiota 生成代码组合出现阻断性兼容问题，允许回退到已验证的 `5.9.x`（首选 `5.9.3`），并同步 `package.json`、锁文件与本文件；不得使用浮动版本。
+版本来源为实施阶段可访问的官方 npm registry；写入 `package.json` 时使用精确版本，安装后提交 `pnpm-lock.yaml`。Kiota CLI `1.34.1` 的 TypeScript `preview.103` 生成代码与 TypeScript `7.0.2` 在 `Partial<...>.additionalData` 类型上出现阻断性兼容问题，已按实施约定回退到精确的 TypeScript `5.9.3`；必须同步 `package.json` 和锁文件，不得使用浮动版本。
+
+Kiota 生成代码实际 import 的运行时包全部作为直接依赖固定为 `1.0.0-preview.103`：`@microsoft/kiota-abstractions`、`@microsoft/kiota-http-fetchlibrary`、`@microsoft/kiota-serialization-form`、`@microsoft/kiota-serialization-json`、`@microsoft/kiota-serialization-multipart` 和 `@microsoft/kiota-serialization-text`；`@microsoft/kiota-bundle` 同样固定为 `1.0.0-preview.103`，不只依赖传递依赖。
 
 ## 3. 项目初始化
 
@@ -84,8 +88,8 @@ pnpm dlx create-vite@9.2.0 Client/roundTableMeeting --template react-ts
 Set-Location Client/roundTableMeeting
 corepack enable
 corepack prepare pnpm@11.24.0 --activate
-pnpm add --save-exact react@19.2.8 react-dom@19.2.8 antd@6.6.2 @ant-design/icons@6.3.2 react-router-dom@7.18.2 @microsoft/kiota-bundle@1.0.0-preview.103
-pnpm add -D --save-exact vite@8.2.2 @vitejs/plugin-react@6.1.1 typescript@7.0.2 @types/react@19.2.18 @types/react-dom@19.2.5 @types/node@24.13.3 vitest@4.1.11 @vitest/coverage-v8@4.1.11 jsdom@30.0.1 @testing-library/react@16.3.3 @testing-library/user-event@14.6.6 @testing-library/jest-dom@7.0.1
+pnpm add --save-exact react@19.2.8 react-dom@19.2.8 antd@6.6.1 @ant-design/icons@6.3.2 react-router-dom@7.18.2 @microsoft/kiota-bundle@1.0.0-preview.103
+pnpm add -D --save-exact vite@8.2.2 @vitejs/plugin-react@6.1.0 typescript@5.9.3 @types/react@19.2.18 @types/react-dom@19.2.5 @types/node@24.13.3 vitest@4.1.11 @vitest/coverage-v8@4.1.11 jsdom@30.0.1 @testing-library/react@16.3.3 @testing-library/user-event@14.6.6 @testing-library/jest-dom@7.0.1
 pnpm install --frozen-lockfile
 ~~~
 
@@ -205,7 +209,7 @@ Vite 固定使用：
 - `environment: 'jsdom'`。
 - `globals: false`，测试文件显式从 Vitest 导入 API。
 - `setupFiles: ['./src/test/setup.ts']`。
-- `include: ['src/**/*.test.{ts,tsx}']`。
+- `include: ['src/**/*.test.{ts,tsx}', 'scripts/**/*.test.mjs']`；脚本测试覆盖 Kiota 生成内容归一化、generated 目录替换与失败回滚，客户端源码测试覆盖页面、路由和 feature 行为。
 - `resolve.alias` 与 Vite 一致。
 - 覆盖率只统计 `src/` 中非 generated 的业务源码。
 
@@ -263,12 +267,14 @@ pnpm generate:api
 2. 使用 `fetch` 轮询 OpenAPI 地址，间隔 250ms，总超时 30s；只接受 HTTP 2xx。
 3. 解析 JSON，确认 `openapi` 以 `3.0` 开头，且包含 `paths` 对象。
 4. 在系统临时目录创建本次生成的 staging 目录；不把独立 OpenAPI JSON 作为仓库资产。
-5. 调用仓库工具，把 Kiota 输出写入 staging：`dotnet tool run kiota generate --language TypeScript --openapi <url> --output <staging> --class-name RoundTableMeetingApiClient --clean-output --additional-data`。`--additional-data` 用于为生成模型保留未知字段，支持契约向前兼容；不能在未重新检查生成差异和错误适配前删除。
-6. 在 staging 中检查入口 Client、TypeScript 结构和绝对路径，统一转换为 UTF-8 无 BOM，行尾使用 CRLF，并移除尾随空白。
-7. staging 全部通过后才替换 `src/api/generated/`；替换过程失败时恢复原目录，不能留下空目录或半生成结果。
+5. 调用仓库工具，把 Kiota 输出写入 staging：`dotnet tool run kiota generate --language TypeScript --openapi <url> --output <staging> --class-name RoundTableMeetingApiClient --clean-output --additional-data`。`--additional-data` 用于为生成模型保留未知字段，支持契约向前兼容；不能在未重新检查生成差异和错误适配前删除。Kiota 产生的 `.kiota.log` 只属于运行诊断，不进入 generated 交付目录。
+6. 在 staging 中检查入口 Client、TypeScript 结构和绝对路径；将生成入口的默认 adapter base URL 归一化为当前页面 origin，将 `kiota-lock.json` 的描述地址归一化为相对 `/openapi/v1.json`；统一转换为 UTF-8 无 BOM，行尾使用 CRLF，并移除尾随空白。
+7. staging 全部通过后才替换 `src/api/generated/`；先准备同父目录替换目录，再备份并重命名旧目录，最后切换新目录；任意失败都恢复原目录且不留下替换目录、备份目录或半生成结果。
 8. 任意等待、HTTP、JSON、Kiota、文本检查或目录替换失败都返回非零，并输出不含秘密的诊断信息。
 
-脚本不启动或关闭服务端，不杀掉开发者已有进程。它只消费已经启动的服务；服务端生命周期由开发者或上层联调脚本负责。
+生成入口和锁文件中的 localhost 或 127.0.0.1 任意端口地址必须在 staging 阶段归一化；归一化后扫描全部 generated 文件，禁止残留任何开发绝对 URL。页面 feature 按 ApiError.kind、稳定 code 和 HTTP status 选择安全标题与说明，未知 code 使用通用文案；traceId 只作为可选关联标识展示。共享 PageState 不承载业务错误语义，AbortError、调用方取消和组件卸载不进入错误态。
+
+脚本不启动或关闭服务端，不杀掉开发者已有进程。它只消费已经启动的服务；服务端生命周期由开发者或上层联调脚本负责。dotnet publish 使用发布环境提供的 pnpm 命令；本机验证时使用 Volta 将 Node 24.20.0 和 pnpm 11.24.0 放入当前命令 PATH，不把 Volta 作为发布机运行时依赖。
 
 ### 7.2 RequestAdapter 和单例
 
@@ -284,7 +290,7 @@ pnpm generate:api
 
 ### 7.3 API 错误适配
 
-`api/errors/` 定义公共 `ApiError`：
+`api/errors/` 中，`ApiError.ts` 只定义公共类型，`toApiError.ts` 实现错误转换：
 
 ~~~typescript
 export type ApiError = {
@@ -304,7 +310,7 @@ Kiota `1.34.1` 配套 runtime 的错误对象遵循 `ApiError`，提供 `respons
 - 能解析标准 ProblemDetails 且含 `code`：`kind = 'problemDetails'`。
 - Fetch 无响应：`kind = 'network'`，显示服务不可访问状态。
 - 调用方取消或组件卸载导致的 `AbortError` 或 runtime 取消异常：不转换为 `network` 或 `unknown`，页面不显示失败状态。
- - 有 HTTP 响应但未产生可用的类型化 ProblemDetails（例如 body 为空、Content-Type 非 JSON、JSON 无法按 schema 解析或模型缺少 `code`）：`kind = 'unknown'`，使用安全通用文案，并从 `responseStatusCode` 保留 HTTP 状态（如果存在）。
+- 有 HTTP 响应但未产生可用的类型化 ProblemDetails（例如 body 为空、Content-Type 非 JSON、JSON 无法按 schema 解析或模型缺少 `code`）：`kind = 'unknown'`，使用安全通用文案，并从 `responseStatusCode` 保留 HTTP 状态（如果存在）。
 - 未知异常：`kind = 'unknown'`，显示安全通用文案。
 - 保存 `traceId` 供页面显示或用户反馈，但不把内部路径、堆栈或响应原文展示出来。
 
@@ -380,6 +386,7 @@ pnpm preview
 Web 项目按[服务端实现方案](../Server/impl.md)中的 MSBuild Target 在计算发布文件前完成安装和构建，再把 `dist/` 纳入发布文件列表；具体 target 时序必须通过干净目录、已有旧 dist、重复 publish 和失败回滚探针后冻结：
 
 ~~~xml
+<Exec WorkingDirectory="$(SpaRoot)" Command="pnpm run check:toolchain" />
 <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm install --frozen-lockfile" />
 <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm build" />
 ~~~
@@ -398,7 +405,7 @@ Web 项目按[服务端实现方案](../Server/impl.md)中的 MSBuild Target 在
 
 ## 11. 前端客户端完成标准
 
-1. Node 24 LTS 和 pnpm 版本约束已写入项目，锁文件存在且可用 `--frozen-lockfile` 安装。
+1. Node `24.20.0` 和 pnpm `11.24.0` 的精确约束与 `check:toolchain` 已写入项目，错误工具链会使 publish 失败，锁文件存在且可用 `--frozen-lockfile` 安装。
 2. Vite、React、Ant Design、React Router、Kiota runtime、Vitest 和 Testing Library 依赖为精确版本。
 3. 目录遵守 `app`、`features`、`shared`、`api/generated` 的边界；不存在模板演示内容。
 4. `/` 和 `/system/status` 能渲染系统状态页面，页面请求真实 API。

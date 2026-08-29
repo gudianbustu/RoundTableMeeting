@@ -34,9 +34,9 @@
 | `Materal.TTA.EFRepository` | `1.4.7` | Repository.Sqlite |
 | `Materal.TTA.SqliteEFRepository` | `1.4.7` | Repository.Sqlite |
 | `Materal.Extensions.DependencyInjection` | `1.4.4` | Application、Repository.Sqlite |
-| `Materal.Extensions.DependencyInjection.AspNetCore` | `1.4.4` | Web |
+| `Materal.Extensions.DependencyInjection.AspNetCore` | `1.4.4` | 不引用；仅记录 keyed service 兼容性边界 |
 | `Microsoft.EntityFrameworkCore.Sqlite` | `10.0.11` | Repository.Sqlite |
-| `Microsoft.EntityFrameworkCore.Design` | `10.0.11` | Repository.Sqlite |
+| `Microsoft.EntityFrameworkCore.Design` | `10.0.11` | Repository.Sqlite、Web（均 `PrivateAssets=all`） |
 | `Microsoft.AspNetCore.OpenApi` | `10.0.11` | Web |
 | `Scalar.AspNetCore` | `2.17.1` | Web |
 | `Serilog.AspNetCore` | `10.0.0` | Web |
@@ -47,11 +47,10 @@
 | `xunit.runner.visualstudio` | `4.0.0` | 所有 xUnit 测试项目 |
 | `Microsoft.NET.Test.Sdk` | `18.9.0` | 所有测试项目 |
 | `Microsoft.AspNetCore.Mvc.Testing` | `10.0.11` | IntegrationTests |
-| `NetArchTest.Rules` | `1.3.2` | ArchitectureTests |
 
 Materal TTA `1.4.7` 在 `net10.0` 下依赖 EF Core `10.0.8`；Repository.Sqlite 对 EF Core `10.0.11` 的直接引用目标是把同一依赖图统一到当前实施基线。完成实现后必须通过还原和集成测试确认兼容性，并检查没有同时加载多个 EF Core 补丁版本。
 
-`Microsoft.EntityFrameworkCore.Design`、测试 runner 等只在需要的项目中设置 `PrivateAssets=all`，不让设计时和测试依赖进入发布产物。
+`Microsoft.EntityFrameworkCore.Design`、测试 runner 等只在需要的项目中设置 `PrivateAssets=all`，不让设计时和测试依赖进入发布产物。由于 `dotnet-ef` 在指定 Web startup project 时要求启动项目直接引用 Design 包，`RoundTableMeeting.csproj` 也直接引用 `Microsoft.EntityFrameworkCore.Design` 且设置 `PrivateAssets=all`；该引用仅用于设计时，不应出现在 publish 输出的运行时依赖清单或程序集目录中。
 
 ### 2.3 .NET Tool Manifest
 
@@ -132,6 +131,8 @@ dotnet add Server/RoundTableMeeting.Repository.Sqlite/RoundTableMeeting.Reposito
 - ArchitectureTests 引用全部生产项目，用于加载和检查程序集。
 
 Application 不得添加 EF Core、Repository.Sqlite 或 Web 的 ProjectReference。Domain 和 Abstraction 不得引用其他本项目生产程序集。
+
+`RoundTableMeeting.csproj` 额外直接引用 `Microsoft.EntityFrameworkCore.Design`，并固定 `PrivateAssets=all`，用于 `dotnet-ef` 指定 Web startup project 的设计时构建；发布验证必须检查输出不包含 `Microsoft.EntityFrameworkCore.Design.dll`、设计时 `.deps.json` 依赖或其他仅设计时资产。
 
 ## 4. 服务端目录结构
 
@@ -289,9 +290,10 @@ options.EnableSensitiveDataLogging(false);
 Repository.Sqlite 建立项目自己的通用基类：
 
 ```csharp
-public abstract class SqliteRepository<TEntity>(RoundTableMeetingDbContext dbContext)
-    : SqliteEFRepositoryImpl<TEntity, Guid, RoundTableMeetingDbContext>(dbContext)
-    where TEntity : class, IEntity<Guid>, new()
+public abstract class SqliteRepository<TEntity, TPrimaryKeyType>(RoundTableMeetingDbContext dbContext)
+    : SqliteEFRepositoryImpl<TEntity, TPrimaryKeyType, RoundTableMeetingDbContext>(dbContext)
+    where TEntity : class, IEntity<TPrimaryKeyType>, new()
+    where TPrimaryKeyType : struct
 {
 }
 ```
@@ -300,7 +302,7 @@ public abstract class SqliteRepository<TEntity>(RoundTableMeetingDbContext dbCon
 
 ```csharp
 public sealed class XxxRepository(RoundTableMeetingDbContext dbContext)
-    : SqliteRepository<Xxx>(dbContext), IXxxRepository, IScopedDependency<IXxxRepository>
+    : SqliteRepository<Xxx, Guid>(dbContext), IXxxRepository, IScopedDependency<IXxxRepository>
 {
 }
 ```
@@ -361,7 +363,7 @@ Repository.Sqlite 实现 `IDesignTimeDbContextFactory<RoundTableMeetingDbContext
 4. 关闭迁移连接并调用 `SqliteConnection.ClearAllPools()`，使后续连接重新按拦截器配置打开；再用独立新连接复核 WAL 和 busy timeout。
 5. 记录不含路径和连接字符串的成功日志。
 
-任何一步失败都向外抛出。Web 在开始监听请求前创建 scope 并调用初始化器；失败时 bootstrap logger 记录一次关键错误，进程返回非零。初始化器和数据库可用性检查分别实现 `IScopedDependency<IDatabaseInitializer>`、`IScopedDependency<IDatabaseAvailabilityChecker>`，由 Materal 标记接口自动注册为 Scoped；组合根不得再次显式注册同一实现。
+任何一步失败都向外抛出。Web 在开始监听请求前创建 scope 并调用初始化器；失败时启动阶段日志记录一次关键错误，进程返回非零。初始化器和数据库可用性检查分别实现 `IScopedDependency<IDatabaseInitializer>`、`IScopedDependency<IDatabaseAvailabilityChecker>`，由 Materal 标记接口自动注册为 Scoped；组合根不得再次显式注册同一实现。
 
 ### 6.6 运行期数据库检查
 
@@ -386,7 +388,7 @@ Repository.Sqlite 实现 `IDesignTimeDbContextFactory<RoundTableMeetingDbContext
 Web 中建立扩展方法，例如 `AddRoundTableMeetingServices`。核心注册顺序：
 
 ```csharp
-builder.AddMateralServiceProvider();
+// 使用 ASP.NET Core 默认 DI 容器；不调用 AddMateralServiceProvider。
 
 builder.Services.AddAutoService(
     typeof(ApplicationAssemblyMarker).Assembly,
@@ -472,7 +474,7 @@ traceId 获取顺序如下。该逻辑提取为独立的 `TraceIdResolver` 静�
 
 ### 9.1 包和配置
 
-Web 使用 Serilog bootstrap logger 捕获 Host 构建、配置校验和 Migration 失败。Host 建立后使用 `ReadFrom.Configuration` 替换 bootstrap 配置；业务类只注入 `ILogger<T>`，禁止直接调用静态 `Log`。
+Web 使用 Serilog Console logger 捕获 Host 构建、配置校验和 Migration 失败；Host 建立后使用 `ReadFrom.Configuration` 配置正式日志管道，业务类只注入 `ILogger<T>`，禁止直接调用静态 `Log`。
 
 `appsettings.json` 至少包含：
 
@@ -487,6 +489,7 @@ Web 使用 Serilog bootstrap logger 捕获 Host 构建、配置校验和 Migrati
       "Default": "Information",
       "Override": {
         "Microsoft.AspNetCore": "Warning",
+        "Microsoft.EntityFrameworkCore.Database.Connection": "Fatal",
         "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
       }
     },
@@ -505,20 +508,21 @@ Web 使用 Serilog bootstrap logger 捕获 Host 构建、配置校验和 Migrati
 }
 ```
 
-Development 可把部分框架类别提高到 Information，但不得开启 EF SensitiveDataLogging。
+Development 可把部分框架类别提高到 Information，但不得开启 EF SensitiveDataLogging。对于可能输出 SQLite DataSource 的 `Microsoft.EntityFrameworkCore.Database.Connection` 类别，配置为 `Fatal`，避免连接失败时将数据库绝对路径写入日志。
 
 ### 9.2 请求日志
 
-使用 `UseSerilogRequestLogging`，每个 HTTP 请求产生一条完成日志。EnrichDiagnosticContext 至少补充：
+使用 `UseSerilogRequestLogging`，每个 HTTP 请求产生一条 Information 级完成日志；即使请求由集中异常处理转换为 500，也不把请求完成事件重复提升为 Error，未处理异常的唯一 Error/Critical 由 `ApiExceptionHandler` 记录。进入异常处理和 Controller 前，宿主把当前请求的 `traceId` 推入 Serilog `LogContext`，使 Application、Repository 和集中异常处理在该请求内产生的日志可与请求完成日志关联。请求上下文通过 `EnrichDiagnosticContext` 补充 `traceId`、`requestMethod` 和 `requestPath`；规范化的 `statusCode` 与 `elapsedMilliseconds` 不在请求上下文阶段提前写入，而由 enricher 从请求完成事件的原生 `StatusCode` 与 `Elapsed` 属性生成：
 
 - `traceId`。
 - `requestMethod`。
 - `requestPath`，不包含 QueryString。
-- `routeName` 或 endpoint display name，无法解析时省略。
 - `statusCode`。
 - `elapsedMilliseconds`。
 
-请求体、响应体、Cookie、Authorization、密码、Token、连接字符串、完整聊天消息、AI Prompt 和文件内容不进入日志。未来业务只能记录消息 ID、任务 ID、会议 ID 等必要标识，不能记录完整内容。
+IntegrationTests 注入真实 sink 并解析结构化 LogEvent，断言最终响应状态、字段类型和安全边界，不通过替换 Console 文本伪造日志验证。
+
+请求体、响应体、Cookie、Authorization、密码、Token、连接字符串、数据库文件绝对路径、完整聊天消息、AI Prompt 和文件内容不进入日志。宿主启动失败只记录异常类型，不附带原始异常对象；未来业务只能记录消息 ID、任务 ID、会议 ID 等必要标识，不能记录完整内容。
 
 ## 10. Controller、OpenAPI 和状态接口
 
@@ -565,14 +569,15 @@ SPA fallback 只服务 GET/HEAD 且接受 HTML 的非服务端路径。以下前
 - `/scalar`。
 
 非 HTML 请求和非 GET/HEAD 请求使用普通 404 ProblemDetails 或空 404，不返回 React 页面。
+如果发布产物中的 `wwwroot/index.html` 不存在，页面导航返回空 404 并记录正常请求完成日志，不允许由 `SendFileAsync` 抛出异常后伪装成 `internal_error`。开发环境页面仍由 Vite 提供，服务端不承担缺失前端产物时的占位页面。
 
 ## 11. Program 启动顺序
 
 `Program.cs` 按以下顺序组织：
 
-1. 设置 W3C Activity 格式并创建 Serilog bootstrap logger。
+1. 设置 W3C Activity 格式并创建 Serilog 启动阶段日志记录器。
 2. 创建 `WebApplicationBuilder`。
-3. 调用 `builder.AddMateralServiceProvider()`。
+3. 保持 ASP.NET Core 默认 DI 容器，不调用 `AddMateralServiceProvider()`。
 4. 用配置接入 Serilog。
 5. 注册 Controller、ProblemDetails、异常处理、OpenAPI、Application、SQLite Repository 和 RuntimeEnvironment。
 6. 构建 WebApplication。
@@ -582,7 +587,7 @@ SPA fallback 只服务 GET/HEAD 且接受 HTML 的非服务端路径。以下前
 10. 配置静态文件、Controller、OpenAPI、Scalar、API fallback 和 SPA fallback。
 11. 调用 `RunAsync`。
 
-为了支持 `WebApplicationFactory<Program>`，在文件末尾声明 `public partial class Program;` 或等价可见入口。阶段 0/1 必须先完成一个最小测试宿主探针，验证 Materal/AspectCore 服务提供程序下 `ConfigureTestServices` 能替换临时数据库配置和故障服务、同一 scope 的 Scoped 实例保持一致、不同 scope 相互隔离，并且测试可以捕获 Serilog 事件。若该探针失败，不得继续依赖未经验证的服务替换方案，需先调整组合根或测试宿主接入方式并同步本文。
+为了支持 `WebApplicationFactory<Program>`，在文件末尾声明 `public partial class Program;` 或等价可见入口。测试宿主使用默认 ASP.NET Core DI，验证 `ConfigureWebHost`/`ConfigureServices` 能替换临时数据库配置、注入测试 ApplicationPart、保持同一 scope 的 Scoped 实例一致并隔离不同 scope，同时确认 Serilog 请求日志仍可捕获。Materal/AspectCore 容器集成不属于最终运行时方案；其 keyed service 兼容性失败证据已通过探针确认。 发布 Target 使用发布环境提供的 `pnpm`，本机仅通过 Volta 将 Node 24.20.0/pnpm 11.24.0 放入当前命令 PATH 验证。
 
 I-005/I-006 使用 IntegrationTests 中派生的 `WebApplicationFactory`，在 `ConfigureTestServices` 中把测试程序集的 Controller 作为 MVC ApplicationPart 注入。测试 Controller 使用 `[ApiController]`、`[ApiExplorerSettings(IgnoreApi = true)]`：`GET /__test/throw` 确定性抛出未处理异常，`POST /__test/validation` 绑定测试程序集内带 `[Required]` 字段的请求模型。它们复用生产的 `MapControllers`、模型校验、异常处理和 ProblemDetails 管道，不替换整个应用管道。临时端点不得写入生产 `Program.cs`，不得被生产程序集引用，不进入生产发布产物或任何 OpenAPI 文档。
 
@@ -608,10 +613,11 @@ Web 项目定义：
 
 ### 12.2 Publish Target
 
-在计算发布文件前完成客户端安装和构建，再把产物纳入发布文件列表。实际 MSBuild Target 以 P-001/P-007 的干净目录、旧 dist、重复 publish 和失败回滚探针为准；若 SDK 行为证明 `BeforeTargets=ComputeFilesToPublish` 仍不能稳定纳入当前列表，必须改为验证通过的 `DependsOnTargets` 或专用 publish target。当前示例是待探针确认的首选实现：
+在计算发布文件前完成客户端工具链校验、安装和构建，再把产物纳入发布文件列表。MSBuild Target 先执行 `pnpm run check:toolchain`，要求实际执行脚本的 Node 为 `24.20.0`、pnpm 为 `11.24.0`，再执行 frozen install 和 build；本机可以使用 Volta 或把固定版本的 Node/pnpm 目录置于 PATH，不把 Volta 作为发布机运行时依赖。
 
 ```xml
 <Target Name="BuildClient" BeforeTargets="ComputeFilesToPublish">
+  <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm run check:toolchain" />
   <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm install --frozen-lockfile" />
   <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm build" />
   <ItemGroup>
