@@ -8,6 +8,8 @@
 
 使用 Form、Input、Input.Password、Button 和 Alert。用户名原始输入必填且 maxLength=128，密码必填且 maxLength=256；客户端长度只用于即时反馈，服务端在 Trim/NFC 后按显示值 64、比较值 128 执行权威校验并返回 validation_failed。密码不 Trim、不做 Unicode 规范化。
 
+当 ApiError.code 为 validation_failed 且包含 fieldErrors 时，将 username/password 的错误分别绑定到对应 Form.Item，同时保留不暴露后端原始细节的表单级安全提示。
+
 ## 3. 状态实现
 
 - Form 内部保存输入值，不写入浏览器持久化存储。

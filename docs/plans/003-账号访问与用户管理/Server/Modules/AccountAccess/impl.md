@@ -82,7 +82,7 @@ AccountSeeder 接收 Web 已验证的种子输入集合，重新规范化并检�
 
 ## 7. 测试实现映射
 
-Application.Tests 使用 fake 仓储、fake 当前用户上下文、真实 PasswordHasher<UserAccount> 和 fake UoW，覆盖有效登录、无效凭证、空用户名、当前用户匿名、账号不存在、种子新增、重复执行、配置内重复、已有账号不覆盖和取消传播。
+Application.Tests 使用 fake 仓储、fake 当前用户上下文、真实 PasswordHasher<UserAccount> 和 fake UoW，覆盖有效登录、无效凭证、空用户名、当前用户匿名、账号不存在、种子新增、重复执行、配置内重复、已有账号不覆盖和取消传播。只有真实 PasswordHasher 无法稳定构造的 SuccessRehashNeeded 分支允许使用受控 fake 驱动，并断言本主题不写回密码哈希。
 
 Domain.Tests 只测试纯规范化和实体约束，不引用 Web 或 EF Core。架构测试确保 Application 不引用 Repository.Sqlite、Web、EF Core 或 Options。
 

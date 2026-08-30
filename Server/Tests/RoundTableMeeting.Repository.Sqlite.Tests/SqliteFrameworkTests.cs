@@ -76,7 +76,7 @@ public sealed class SqliteFrameworkTests
             command.CommandText = "SELECT Value FROM InitializationProbe;";
             Assert.Equal("preserved", Convert.ToString(await command.ExecuteScalarAsync()));
             command.CommandText = "SELECT COUNT(*) FROM __EFMigrationsHistory;";
-            Assert.Equal(1L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+            Assert.Equal(2L, Convert.ToInt64(await command.ExecuteScalarAsync()));
         }
         finally
         {

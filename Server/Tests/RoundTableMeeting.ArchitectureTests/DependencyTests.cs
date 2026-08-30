@@ -5,9 +5,13 @@ using Microsoft.EntityFrameworkCore;
 using RoundTableMeeting.Abstraction.Persistence;
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.UnitOfWork;
+using RoundTableMeeting.Domain.Entities;
+using RoundTableMeeting.Domain.Repositories;
 using RoundTableMeeting.Repository.Sqlite.Database;
 using RoundTableMeeting.Repository.Sqlite.Repositories;
 using Materal.TTA.SqliteEFRepository;
+using RoundTableMeeting.Authentication;
+using RoundTableMeeting.Controllers;
 using ProjectUnitOfWork = RoundTableMeeting.Domain.UnitOfWork.IUnitOfWork;
 
 namespace RoundTableMeeting.ArchitectureTests;
@@ -159,6 +163,57 @@ public sealed class DependencyTests
     }
 
     [Fact]
+    public void UserAccountRepositoryUsesDomainAndSqliteContractsWithoutWriteMethods()
+    {
+        Assert.True(typeof(IUserAccountRepository).IsAssignableTo(typeof(IRepository<UserAccount, Guid>)));
+        Assert.True(typeof(UserAccountRepository).IsAssignableTo(typeof(SqliteRepository<UserAccount, Guid>)));
+        Assert.Contains(typeof(UserAccountRepository).GetInterfaces(), type => type == typeof(IScopedDependency<IUserAccountRepository>));
+        Assert.DoesNotContain(typeof(IUserAccountRepository).GetMethods(), method => method.Name.Contains("Add", StringComparison.Ordinal) || method.Name.Contains("Update", StringComparison.Ordinal) || method.Name.Contains("Delete", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void ApplicationTypesDoNotExposeWebOptionsOrAuthenticationTypes()
+    {
+        foreach (var type in Load("RoundTableMeeting.Application").GetTypes())
+        {
+            var allTypes = type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static)
+                .SelectMany(member => member switch
+                {
+                    MethodInfo method => new[] { method.ReturnType }.Concat(method.GetParameters().Select(parameter => parameter.ParameterType)),
+                    PropertyInfo property => [property.PropertyType],
+                    FieldInfo field => [field.FieldType],
+                    _ => Array.Empty<Type>()
+                });
+            Assert.DoesNotContain(allTypes, candidate => candidate.FullName is not null &&
+                (candidate.FullName.Contains("HttpContext", StringComparison.Ordinal)
+                 || candidate.FullName.Contains("ClaimsPrincipal", StringComparison.Ordinal)
+                 || candidate.FullName.Contains("IConfiguration", StringComparison.Ordinal)
+                 || candidate.FullName.Contains("IOptions", StringComparison.Ordinal)
+                 || candidate.FullName.Contains("Cookie", StringComparison.Ordinal)));
+        }
+    }
+
+    [Fact]
+    public void AuthenticationCompositionUsesApplicationContractsWithoutFullIdentityStore()
+    {
+        var web = Load("RoundTableMeeting");
+        var application = Load("RoundTableMeeting.Application");
+        Assert.Contains(web.GetTypes(), type => type.Name == "AuthenticationController");
+        Assert.Contains(application.GetTypes(), type => type.Name == "AuthenticationService");
+        Assert.DoesNotContain(web.GetTypes(), type => type.Name.Contains("UserManager", StringComparison.Ordinal) || type.Name.Contains("RoleManager", StringComparison.Ordinal) || type.Name.Contains("IdentityDbContext", StringComparison.Ordinal));
+        Assert.DoesNotContain(application.GetTypes(), type => type.Name.Contains("UserManager", StringComparison.Ordinal) || type.Name.Contains("RoleManager", StringComparison.Ordinal) || type.Name.Contains("IdentityDbContext", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AuthenticationOptionsAndHttpContextStayInTheWebAssembly()
+    {
+        var application = Load("RoundTableMeeting.Application");
+        var domain = Load("RoundTableMeeting.Domain");
+        Assert.DoesNotContain(application.GetReferencedAssemblies(), reference => reference.Name is "RoundTableMeeting" or "Microsoft.AspNetCore.App");
+        Assert.DoesNotContain(domain.GetReferencedAssemblies(), reference => reference.Name is "Microsoft.AspNetCore.App" or "Microsoft.Extensions.Options");
+    }
+
+    [Fact]
     public void SqliteDbContextAppliesConfigurationsFromItsAssembly()
     {
         var sourcePath = Path.Combine(FindRoot(), "Server", "RoundTableMeeting.Repository.Sqlite", "Database", "RoundTableMeetingDbContext.cs");
@@ -166,6 +221,28 @@ public sealed class DependencyTests
         Assert.Contains("protected override void OnModelCreating", source, StringComparison.Ordinal);
         Assert.Contains("base.OnModelCreating(modelBuilder)", source, StringComparison.Ordinal);
         Assert.Contains("ApplyConfigurationsFromAssembly(typeof(RoundTableMeetingDbContext).Assembly)", source, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AuthenticationPipelineAndOriginMetadataHaveTheFrozenOrder()
+    {
+        var root = FindRoot();
+        var source = File.ReadAllText(Path.Combine(root, "Server", "RoundTableMeeting", "Program.cs"));
+        var routing = source.IndexOf("app.UseRouting();", StringComparison.Ordinal);
+        var responseHeaders = source.IndexOf("app.UseMiddleware<AuthenticationResponseHeadersMiddleware>();", StringComparison.Ordinal);
+        var origin = source.IndexOf("app.UseMiddleware<OriginValidationMiddleware>();", StringComparison.Ordinal);
+        var authentication = source.IndexOf("app.UseAuthentication();", StringComparison.Ordinal);
+        var authorization = source.IndexOf("app.UseAuthorization();", StringComparison.Ordinal);
+
+        Assert.True(routing >= 0);
+        Assert.True(routing < responseHeaders);
+        Assert.True(responseHeaders < origin);
+        Assert.True(origin < authentication);
+        Assert.True(authentication < authorization);
+        var loginOrigin = typeof(AuthenticationController).GetMethod("Login")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
+        var logoutOrigin = typeof(AuthenticationController).GetMethod("Logout")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
+        Assert.True(loginOrigin.RequireJsonBody);
+        Assert.False(logoutOrigin.RequireJsonBody);
     }
 
     private static Assembly Load(string name) => Assembly.Load(name);

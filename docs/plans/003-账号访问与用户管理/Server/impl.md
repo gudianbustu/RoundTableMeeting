@@ -172,10 +172,10 @@ AuthenticationResponseHeadersMiddleware 对 `/api/auth/*` 请求使用 Response.
 
 ### 7.3 Origin 校验
 
-新增固定类型 `RequireBrowserOriginAttribute` 作为端点元数据；OriginValidationMiddleware 位于显式 `UseRouting()` 之后，只处理当前 Endpoint 带该元数据的 Cookie 写操作。login 和 logout Controller action 必须标记，后续业务写 action 引入时必须同步标记：
+新增固定类型 `RequireBrowserOriginAttribute(bool requireJsonBody = false)` 作为端点元数据；OriginValidationMiddleware 位于显式 `UseRouting()` 之后，只处理当前 Endpoint 带该元数据的 Cookie 写操作。login 使用 `RequireBrowserOrigin(true)` 要求 JSON，logout 使用默认参数只要求 Origin 和 POST，不要求请求体 Content-Type；后续业务写 action 引入时必须同步标记并显式选择正文策略：
 
-- 带正文的标记端点要求 Content-Type `application/json`；不匹配返回 415 `unsupported_media_type`。
-- 退出只接受 POST，无请求体时不强制 Content-Type。
+- `RequireJsonBody=true` 的标记端点要求解析后的 media type 精确为 `application/json`；不匹配返回 415 `unsupported_media_type`。
+- `RequireJsonBody=false` 的无正文端点只接受 POST，不强制 Content-Type。
 - Origin 必须存在且精确匹配 AllowedOrigins；null、缺失和外部源返回 403 origin_not_allowed。
 - 缺失 Origin 同样返回 403 origin_not_allowed；IntegrationTests 和联调工具必须显式提供允许的 Origin。
 - 不开放携带凭证的跨源 CORS。
@@ -217,7 +217,7 @@ LoginRequest 的 DataAnnotations 字段名通过现有模型键归一化输出�
 3. IAccountSeeder.SeedAsync。
 4. 任一步失败，记录安全摘要并终止，不监听端口。
 
-账号种子不塞入 SQLite 初始化器。请求管道固定为：异常处理、Serilog 请求日志、HTTPS/静态文件、`UseRouting()`、AuthenticationResponseHeadersMiddleware、OriginValidationMiddleware、`UseAuthentication()`、`UseAuthorization()`，随后映射 OpenAPI、Scalar、Controller、API fallback 和 SPA fallback。必须显式调用 `UseRouting()`，Origin 中间件必须严格位于其后，否则无法读取端点元数据。Origin 中间件只对带元数据端点生效，未知 API 继续得到 route_not_found。
+账号种子不塞入 SQLite 初始化器。请求管道固定为：异常处理、Serilog 请求日志、HTTPS、`UseRouting()`、AuthenticationResponseHeadersMiddleware、OriginValidationMiddleware、`UseAuthentication()`、`UseAuthorization()`、静态文件，随后映射 OpenAPI、Scalar、Controller、API fallback 和 SPA fallback。必须显式调用 `UseRouting()`，Origin 中间件必须严格位于其后，否则无法读取端点元数据。Origin 中间件只对带元数据端点生效，未知 API 继续得到 route_not_found。
 
 登录和退出 action、SystemController、OpenAPI、Scalar、专用 API 404 fallback 与 SPA fallback 显式使用 `[AllowAnonymous]` 或 endpoint `.AllowAnonymous()`。现有 IntegrationTests `Controllers/TestController.cs` 的 `/__test/application-part`、`/__test/throw`、`/__test/validation` 继续承担 002 ApplicationPart、ProblemDetails、字段校验、traceId 和请求日志回归，Controller 类必须显式标记 `[AllowAnonymous]`，保持原 200/400/500 语义。另新增独立测试控制器 `DefaultAuthorizationTestController`（无授权元数据）验证 FallbackPolicy 401，以及独立 `ForbiddenTestController`（始终失败策略）验证 403 forbidden；二者不得复用现有 TestController，也不得改变 002 夹具的预期。
 

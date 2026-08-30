@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel.DataAnnotations;
 
 namespace RoundTableMeeting.IntegrationTests.Controllers;
@@ -6,6 +7,7 @@ namespace RoundTableMeeting.IntegrationTests.Controllers;
 [ApiController]
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("__test")]
+[AllowAnonymous]
 public sealed class TestController : ControllerBase
 {
     [HttpGet("application-part")]

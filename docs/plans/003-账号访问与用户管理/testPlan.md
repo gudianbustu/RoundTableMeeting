@@ -57,12 +57,12 @@
 | AD-006 | P1 | 昵称前后空格与 NFC | 保存规范化昵称，不要求平台唯一 |
 | AD-007 | P0 | 实体公开 API 扫描 | 不含 Cookie、Claim、角色、禁用或会话字段 |
 | AD-008 | P1 | 用户名、昵称和规范化值超长 | 按约定长度上限拒绝，不生成可持久化实体 |
-| AD-009 | P1 | 64 长度显示用户名大写后超过 128 | 实体按 NormalizedUsername 上限拒绝 |
+| AD-009 | P1 | 显示用户名上限与规范化长度防御 | 显示用户名最多 64；规范化值最多 128。当前 .NET ToUpperInvariant 没有稳定的多字符扩展样例可触发后者溢出，防御性分支保留但不伪造不可执行样例 |
 | AD-010 | P0 | UserAccount 主键契约 | 只使用继承的 ID；实体不额外声明 UserId 属性 |
 
 ## 6. Application 测试
 
-项目：RoundTableMeeting.Application.Tests。使用 fake 仓储、fake 当前用户上下文、fake UoW 和真实 PasswordHasher<UserAccount>。
+项目：RoundTableMeeting.Application.Tests。使用 fake 仓储、fake 当前用户上下文、fake UoW 和真实 PasswordHasher<UserAccount>；真实实现无法稳定产生的 SuccessRehashNeeded 分支允许用受控 fake 驱动。
 
 | 编号 | 优先级 | 场景 | 预期 |
 | --- | --- | --- | --- |
@@ -153,7 +153,7 @@ TestApplicationFactory 注入临时数据库、两个测试账号、AllowedOrigi
 | AI-029 | P1 | 未标记未知 API | Origin 中间件不拦截未知 `/api/*`，仍返回 route_not_found |
 | AI-030 | P1 | 显式 AllowAnonymous 回归 | login、logout、system/status、OpenAPI、Scalar、API 404 fallback 和现有 `/__test/*` 不受 FallbackPolicy 阻断 |
 | AI-032 | P0 | 独立默认拒绝控制器 | DefaultAuthorizationTestController 无 AllowAnonymous/Authorize 标记，在 FallbackPolicy 下返回 401 |
-| AI-033 | P1 | Origin 元数据顺序 | 显式 UseRouting 后中间件可读取 RequireBrowserOrigin；移动到 UseRouting 前的探针不能作为生产实现 |
+| AI-033 | P1 | Origin 元数据顺序和正文策略 | 显式 UseRouting 后按 RequireBrowserOrigin 元数据读取 Origin；login 元数据要求 JSON，logout 元数据不要求 JSON；移动到 UseRouting 前的探针不能作为生产实现 |
 | AI-034 | P0 | 认证管道加入后的 002 回归 | 现有 TestController 显式 AllowAnonymous，`/__test/application-part`、`/__test/throw`、`/__test/validation` 保持 200/500/400；静态文件、OpenAPI、Scalar、未知 API、SPA fallback 和非 HTML/非 GET 边界保持 002 语义 |
 | AI-035 | P1 | AllowedOrigins 配置错误 | 启动失败并指出安全配置键，不打印 Origin 值或其他秘密 |
 
@@ -212,7 +212,7 @@ TestApplicationFactory 注入临时数据库、两个测试账号、AllowedOrigi
 | AP-015 | P0 | CurrentUserBar logout 失败 | 仍显示当前用户和可重试错误 |
 | AP-016 | P2 | 登录页窄屏 | 文本、输入和按钮不溢出或遮挡 |
 | AP-018 | P1 | LoginPage unsupported_media_type | 显示请求格式不受支持，不显示网络错误文案 |
-| AP-019 | P1 | returnTo 包含 query/hash | 校验后保留 pathname、search、hash；非法任一部分回退 `/` |
+| AP-019 | P1 | returnTo 包含 query/hash | 校验后保留 pathname、search、hash；非法 pathname、search 或 hash 分别回退 `/` |
 | AP-020 | P1 | 用户名原始长度 65 至 128 | 客户端允许输入，最终由服务端规范化长度决定是否接受 |
 
 ## 13. 构建和发布回归

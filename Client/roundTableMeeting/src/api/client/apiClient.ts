@@ -2,15 +2,19 @@ import { DefaultRequestAdapter } from '@microsoft/kiota-bundle'
 import { AnonymousAuthenticationProvider } from '@microsoft/kiota-abstractions'
 import { HttpClient, type Middleware } from '@microsoft/kiota-http-fetchlibrary'
 import { createRoundTableMeetingApiClient, type RoundTableMeetingApiClient } from '@/api/generated/roundTableMeetingApiClient'
+import { notifyUnauthorized } from './authenticationEvents'
 
 let client: RoundTableMeetingApiClient | undefined
 
 class RequestOptionsMiddleware implements Middleware {
   next: Middleware | undefined = undefined
 
-  execute(url: string, requestInit: RequestInit, requestOptions?: Record<string, { getKey(): string; value?: AbortSignal }>) {
+  async execute(url: string, requestInit: RequestInit, requestOptions?: Record<string, { getKey(): string; value?: AbortSignal }>) {
     const signal = requestOptions?.['request-signal']?.value
-    return this.next?.execute(url, { ...requestInit, signal }, requestOptions) ?? Promise.reject(new Error('Kiota request middleware is not configured.'))
+    const response = await (this.next?.execute(url, { ...requestInit, credentials: 'same-origin', signal }, requestOptions) ?? Promise.reject(new Error('Kiota request middleware is not configured.')))
+    const pathname = new URL(url, window.location.origin).pathname
+    if (response.status === 401 && !pathname.startsWith('/api/auth/')) notifyUnauthorized()
+    return response
   }
 }
 

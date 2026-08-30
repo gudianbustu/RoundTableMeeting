@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using RoundTableMeeting.Abstraction.Persistence;
 using RoundTableMeeting.Abstraction.Services;
+using RoundTableMeeting.Application.AccountAccess;
 using RoundTableMeeting.Domain.UnitOfWork;
 using RoundTableMeeting.Repository.Sqlite.Database;
 
@@ -27,6 +28,8 @@ public sealed class ContainerCompatibilityTests : IClassFixture<TestApplicationF
         var unitOfWork = services.GetRequiredService<IUnitOfWork>();
         var initializer = services.GetRequiredService<IDatabaseInitializer>();
         var availabilityChecker = services.GetRequiredService<IDatabaseAvailabilityChecker>();
+        var authenticationService = services.GetRequiredService<IAuthenticationService>();
+        var accountSeeder = services.GetRequiredService<IAccountSeeder>();
         var dbContext = services.GetRequiredService<RoundTableMeetingDbContext>();
 
         Assert.Same(dbContext, services.GetRequiredService<RoundTableMeetingDbContext>());
@@ -34,6 +37,8 @@ public sealed class ContainerCompatibilityTests : IClassFixture<TestApplicationF
         Assert.NotNull(unitOfWork);
         Assert.NotNull(initializer);
         Assert.NotNull(availabilityChecker);
+        Assert.IsType<AuthenticationService>(authenticationService);
+        Assert.IsType<AccountSeeder>(accountSeeder);
         using var otherScope = factory.Services.CreateScope();
         Assert.NotSame(statusService, otherScope.ServiceProvider.GetRequiredService<ISystemStatusService>());
         Assert.NotSame(unitOfWork, otherScope.ServiceProvider.GetRequiredService<IUnitOfWork>());

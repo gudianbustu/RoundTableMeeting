@@ -19,6 +19,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <SpaRoot>$(MSBuildProjectDirectory)\..\..\Client\roundTableMeeting\</SpaRoot>
     <SpaDist>$(SpaRoot)dist\</SpaDist>
+    <UserSecretsId>roundtablemeeting-development</UserSecretsId>
   </PropertyGroup>
 
   <Target Name="BuildClient" BeforeTargets="ComputeFilesToPublish">

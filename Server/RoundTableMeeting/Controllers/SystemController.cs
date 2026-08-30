@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using RoundTableMeeting.Abstraction.Contracts;
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Errors;
+using Microsoft.AspNetCore.Authorization;
 
 namespace RoundTableMeeting.Controllers;
 
@@ -9,6 +10,7 @@ namespace RoundTableMeeting.Controllers;
 [Route("api/system")]
 public sealed class SystemController(ISystemStatusService systemStatusService) : ControllerBase
 {
+    [AllowAnonymous]
     [HttpGet("status")]
     [Produces("application/json")]
     [ProducesResponseType(typeof(SystemStatusDto), StatusCodes.Status200OK)]

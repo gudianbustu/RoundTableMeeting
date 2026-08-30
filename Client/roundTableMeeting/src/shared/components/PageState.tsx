@@ -1,7 +1,7 @@
 import { Button, Result, Spin } from 'antd'
 
 export function LoadingState() {
-  return <div className="page-state" aria-label="正在加载"><Spin size="large" /><p>正在检查系统状态…</p></div>
+  return <div className="page-state" aria-label="正在加载"><Spin size="large" /><p>正在加载…</p></div>
 }
 
 export function ErrorState({ title, description, traceId, onRetry }: { title: string; description: string; traceId?: string; onRetry: () => void }) {

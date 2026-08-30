@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="Materal.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Identity.Core" />
   </ItemGroup>
 
 </Project>

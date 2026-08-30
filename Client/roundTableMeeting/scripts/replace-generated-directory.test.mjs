@@ -36,4 +36,35 @@ describe('replaceGeneratedDirectory', () => {
     expect(readdirSync(root).filter((name) => name.startsWith('.generated-'))).toHaveLength(0)
     rmSync(root, { recursive: true, force: true })
   })
+
+  it('restores the complete directory when installation fails after partial copy', () => {
+    const root = mkdtempSync(join(tmpdir(), 'roundtable-generated-test-'))
+    const source = join(root, 'source')
+    const target = join(root, 'target')
+    mkdirSync(source, { recursive: true })
+    mkdirSync(target, { recursive: true })
+    writeFileSync(join(source, 'client.ts'), 'new')
+    writeFileSync(join(source, 'extra.ts'), 'extra')
+    writeFileSync(join(target, 'client.ts'), 'old')
+    writeFileSync(join(target, 'legacy.ts'), 'legacy')
+
+    expect(() => replaceGeneratedDirectory(source, target, { failDuringInstall: true })).toThrow()
+    expect(readFileSync(join(target, 'client.ts'), 'utf8')).toBe('old')
+    expect(readFileSync(join(target, 'legacy.ts'), 'utf8')).toBe('legacy')
+    expect(readdirSync(root).filter((name) => name.startsWith('.generated-'))).toHaveLength(0)
+    rmSync(root, { recursive: true, force: true })
+  })
+
+  it('removes a partial target when installation fails without an existing backup', () => {
+    const root = mkdtempSync(join(tmpdir(), 'roundtable-generated-test-'))
+    const source = join(root, 'source')
+    const target = join(root, 'target')
+    mkdirSync(source, { recursive: true })
+    writeFileSync(join(source, 'client.ts'), 'new')
+
+    expect(() => replaceGeneratedDirectory(source, target, { failDuringInstall: true })).toThrow()
+    expect(readdirSync(root).filter((name) => name.startsWith('.generated-'))).toHaveLength(0)
+    expect(readdirSync(root).includes('target')).toBe(false)
+    rmSync(root, { recursive: true, force: true })
+  })
 })

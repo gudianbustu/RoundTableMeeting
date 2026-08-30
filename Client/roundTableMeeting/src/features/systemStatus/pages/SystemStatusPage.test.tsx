@@ -1,7 +1,8 @@
-import { act, cleanup, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
 import { renderWithProviders } from '@/test/renderWithProviders'
+import { AuthenticationContext } from '@/features/authentication/context/AuthenticationContext'
 import { SystemStatusPage } from './SystemStatusPage'
 
 const getSystemStatus = vi.hoisted(() => vi.fn())
@@ -98,5 +99,17 @@ describe('SystemStatusPage', () => {
     view.unmount()
     await act(async () => { resolveRequest?.({ status: 'available', databaseStatus: 'available', environment: 'Testing' }) })
     expect(document.body.textContent).not.toContain('框架运行状态')
+  })
+
+  it('renders independently when authentication initialization is in error', async () => {
+    getSystemStatus.mockResolvedValue({ status: 'available', databaseStatus: 'available', environment: 'Testing' })
+    const authenticationValue = {
+      state: { status: 'error' as const, error: { kind: 'network' as const, message: 'network' } },
+      login: vi.fn(), logout: vi.fn(), retry: vi.fn(), isLoggingIn: false, isLoggingOut: false,
+    }
+
+    render(<AuthenticationContext.Provider value={authenticationValue}><SystemStatusPage /></AuthenticationContext.Provider>)
+
+    expect(await screen.findByText('框架运行状态')).toBeInTheDocument()
   })
 })

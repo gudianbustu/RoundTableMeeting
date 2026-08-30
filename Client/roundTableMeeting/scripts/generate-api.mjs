@@ -66,6 +66,7 @@ try {
   replaceGeneratedDirectory(staging, output, {
     failBeforeInstall: process.env.KIOTA_TEST_FAIL_SWAP === '1',
     failAfterBackup: process.env.KIOTA_TEST_FAIL_AFTER_BACKUP === '1',
+    failDuringInstall: process.env.KIOTA_TEST_FAIL_DURING_INSTALL === '1',
   })
 } catch (error) {
   console.error(error instanceof Error ? error.message : 'Kiota generation failed.')

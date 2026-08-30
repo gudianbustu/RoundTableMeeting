@@ -22,6 +22,7 @@
     <ProjectReference Include="..\..\RoundTableMeeting.Application\RoundTableMeeting.Application.csproj" />
     <ProjectReference Include="..\..\RoundTableMeeting.Domain\RoundTableMeeting.Domain.csproj" />
     <ProjectReference Include="..\..\RoundTableMeeting.Abstraction\RoundTableMeeting.Abstraction.csproj" />
+    <ProjectReference Include="..\..\RoundTableMeeting.Repository.Sqlite\RoundTableMeeting.Repository.Sqlite.csproj" />
   </ItemGroup>
 
 </Project>

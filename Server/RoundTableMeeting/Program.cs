@@ -4,6 +4,10 @@ using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 using RoundTableMeeting.Abstraction.Persistence;
 using RoundTableMeeting.Hosting;
+using RoundTableMeeting.Abstraction.Services;
+using RoundTableMeeting.Abstraction.Contracts.Authentication;
+using Microsoft.Extensions.Options;
+using RoundTableMeeting.Authentication;
 using Serilog;
 using Serilog.Context;
 
@@ -39,6 +43,9 @@ try
     using (var scope = app.Services.CreateScope())
     {
         await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
+        var authenticationOptions = scope.ServiceProvider.GetRequiredService<IOptions<AuthenticationOptions>>().Value;
+        await scope.ServiceProvider.GetRequiredService<IAccountSeeder>().SeedAsync(
+            authenticationOptions.SeedAccounts.Select(account => new SeedAccountInput(account.Username!, account.Nickname!, account.Password!)).ToArray());
     }
 
     app.Use(async (context, next) =>
@@ -60,10 +67,14 @@ try
         };
     });
     app.UseHttpsRedirection();
+    app.UseRouting();
+    app.UseMiddleware<AuthenticationResponseHeadersMiddleware>();
+    app.UseMiddleware<OriginValidationMiddleware>();
+    app.UseAuthentication();
     app.UseAuthorization();
     app.UseDefaultFiles();
     app.UseStaticFiles();
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.MapControllers();
     app.Map("/api/{**path}", async (HttpContext context) =>
     {
@@ -79,8 +90,8 @@ try
         };
         context.Response.StatusCode = StatusCodes.Status404NotFound;
         await Results.Json(problem, contentType: "application/problem+json").ExecuteAsync(context);
-    });
-    app.MapScalarApiReference("/scalar/v1", options => options.WithOpenApiRoutePattern("/openapi/v1.json"));
+    }).AllowAnonymous();
+    app.MapScalarApiReference("/scalar/v1", options => options.WithOpenApiRoutePattern("/openapi/v1.json")).AllowAnonymous();
     app.MapFallback(async context =>
     {
         var acceptsHtml = context.Request.GetTypedHeaders().Accept?.Any(value =>
@@ -104,7 +115,7 @@ try
         }
 
         await context.Response.SendFileAsync(indexPath);
-    });
+    }).AllowAnonymous();
     app.Run();
 }
 catch (Exception exception)
