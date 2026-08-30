@@ -17,28 +17,15 @@ public sealed class ApiExceptionHandler(
             return false;
         }
 
-        var traceId = TraceIdResolver.Resolve(httpContext);
-        logger.LogError(exception, "Unhandled request exception. TraceId: {TraceId}", traceId);
+        logger.LogError(exception, "Unhandled request exception. TraceId: {TraceId}", TraceIdResolver.Resolve(httpContext));
 
-        var (status, code, title, detail) = exception switch
+        var (status, code) = exception switch
         {
-            ConcurrencyConflictException => (StatusCodes.Status409Conflict, "concurrency_conflict", "Concurrency conflict", "The requested change could not be saved."),
-            _ => (StatusCodes.Status500InternalServerError, "internal_error", "Internal server error", "An unexpected error occurred.")
+            ConcurrencyConflictException => (StatusCodes.Status409Conflict, "concurrency_conflict"),
+            _ => (StatusCodes.Status500InternalServerError, "internal_error")
         };
 
-        var problem = new ApiProblemDetails
-        {
-            Status = status,
-            Type = $"/problems/{code}",
-            Title = title,
-            Detail = detail,
-            Instance = httpContext.Request.Path,
-            Code = code,
-            TraceId = traceId
-        };
-
-        httpContext.Response.StatusCode = status;
-        await Results.Json(problem, contentType: "application/problem+json").ExecuteAsync(httpContext);
+        await ApiProblemDetailsWriter.WriteAsync(httpContext, status, code);
         return true;
     }
 }

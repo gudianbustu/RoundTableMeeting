@@ -480,4 +480,16 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.NotEqual("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
+
+    [Fact]
+    public async Task AnonymousStaticAssetIsServedBeforeOriginAndAuthorization()
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/origin-safe-asset.txt");
+        request.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("static asset is public", await response.Content.ReadAsStringAsync());
+    }
 }

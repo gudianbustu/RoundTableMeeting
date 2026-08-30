@@ -74,11 +74,7 @@ public static class ServiceCollectionExtensions
         builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
             options.InvalidModelStateResponseFactory = context =>
-                new ObjectResult(ProblemDetailsFactory.CreateValidation(context.HttpContext, context.ModelState))
-                {
-                    StatusCode = StatusCodes.Status400BadRequest,
-                    ContentTypes = { "application/problem+json" }
-                };
+                ApiProblemDetailsWriter.CreateValidationResult(context.HttpContext, context.ModelState);
         });
 
         return builder;

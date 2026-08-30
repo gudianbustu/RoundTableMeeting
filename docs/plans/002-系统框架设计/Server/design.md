@@ -255,6 +255,31 @@ Serilog 使用 ASP.NET Core 请求日志中间件将单次 HTTP 请求压缩为�
 
 并发冲突需要转换为明确的项目级异常，再由 Web 层映射为对应的 `ProblemDetails`。该约定只在业务实体明确配置 EF Core 并发令牌，或 EF Core 因更新行数为零检测到并发冲突时生效；不会把并发字段提前加入 `BaseEntity`。准确错误标识在实施设计中固定。
 
+### 11.1 浏览器 Cookie 写请求 Origin 保护
+
+后续业务主题使用 Cookie 身份改变服务端状态时，统一复用 Web 层的浏览器 Origin 保护能力。该能力由 endpoint routing 和 endpoint metadata 驱动，不通过 URL、Controller 名称或 HTTP 方法字符串猜测端点类型，也不在中间件中硬编码只允许 `POST`。
+
+Web 定义方法级 `RequireBrowserOriginAttribute(bool requireJsonBody = false)` 或语义等价的端点元数据。首版只允许标记具体 action/endpoint，不允许同时在 Controller 类型和 action 两级标记，避免正文策略覆盖顺序产生歧义：
+
+- 只有已匹配 Endpoint 明确携带该元数据时，Origin 中间件才执行校验。
+- `RequireJsonBody = true` 只表示该端点要求请求声明 JSON 媒体类型；解析 `Content-Type` 后的 media type 必须精确为 `application/json`，允许 `charset` 等合法参数，但不把 `application/*+json`、缺失或无法解析的 Content-Type 当作 `application/json`。该元数据不读取或验证正文内容；空正文、非法 JSON 和模型结构错误继续由 endpoint 模型绑定与校验返回 400。
+- `RequireJsonBody = false` 表示该端点不由 Origin 中间件约束正文类型；无正文写端点缺少 Content-Type 时不得失败。
+- 元数据只声明浏览器写请求保护和正文策略，不声明 endpoint 接受哪些 HTTP 方法。
+
+HTTP 方法合法性完全由 endpoint routing、Controller action 特性或 endpoint convention 决定。框架至少支持并验证带元数据的 `POST`、`PATCH`、`PUT`、`DELETE` 端点。中间件读取 endpoint 的 `IHttpMethodMetadata` 或等价路由元数据；当元数据声明了方法且当前请求方法不匹配时，中间件不执行 Origin 或媒体类型校验，直接交给后续 routing/endpoint 管道形成项目当前的 `404` 或框架可产生的 `405`。Origin 中间件不得将方法不匹配改写为 `403` 或 `415`。未匹配的 `/api/*` 和未标记端点不受 Origin 中间件拦截，继续保持原有授权、endpoint 执行或 `route_not_found` 语义。
+
+Origin 校验固定规则：
+
+- Endpoint 已标记且方法匹配时，请求必须只携带一个非空 Origin；重复 Origin 头或解析后包含多个值一律拒绝，不依赖 Header 拼接后碰巧无法命中允许列表。
+- 缺失 Origin、值为 `null`、无法解析或不在已验证允许列表中的外部 Origin，统一返回 `403`、`code = "origin_not_allowed"`。
+- Origin 允许后才检查 `RequireJsonBody`；媒体类型不符合要求时返回 `415`、`code = "unsupported_media_type"`。
+- 两类拒绝均使用 `Errors` 边界统一的 `ApiProblemDetails` 工厂/写入器、`TraceIdResolver` 和安全固定文案，不读取或记录请求正文；认证、Origin 和模型校验不得分别复制 ProblemDetails 对象构造与响应写入流程。
+- 允许 Origin 和配置 Origin 使用经过校验的绝对 HTTP/HTTPS Origin 表达，不接受通配符、`null`、userinfo、path、query 或 fragment；具体配置节可由首次接入 Cookie 的业务主题提供，但中间件不依赖业务服务。
+
+管道顺序固定为：显式 `UseRouting()` 完成 endpoint 选择后，先执行 Origin 中间件，再执行 `UseAuthentication()` 和 `UseAuthorization()`，最后进入 endpoint。需要覆盖拒绝响应的通用响应头中间件应放在 Origin 中间件之前。该顺序意味着标记端点的缺失、`null` 或外部 Origin 在认证与授权之前统一得到 `403 origin_not_allowed`；允许 Origin 才继续进入认证和授权边界。
+
+该能力是后续业务主题的最小浏览器 Cookie 写请求保护，不在系统框架主题中引入完整 ASP.NET Core Antiforgery、角色权限、业务级 API 权限或允许携带凭证的跨源 CORS。Origin 头可由非浏览器客户端伪造，因此该机制不提供 Antiforgery Token 级保证，只用于缩小可由跨源浏览器页面发起 Cookie 写请求的来源面。未来开放跨源客户端、嵌入式页面或第三方集成时，必须重新设计并评估 Antiforgery 或等价双重提交令牌。
+
 ## 12. 系统状态接口
 
 框架主题固定提供 `GET /api/system/status`。成功响应为：

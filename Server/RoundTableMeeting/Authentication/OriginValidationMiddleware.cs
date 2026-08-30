@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
 using System.Net.Http.Headers;
 
@@ -8,26 +9,30 @@ public sealed class OriginValidationMiddleware(RequestDelegate next, IOptions<Au
     public async Task InvokeAsync(HttpContext context)
     {
         var endpoint = context.GetEndpoint();
-        if (endpoint?.Metadata.GetMetadata<RequireBrowserOriginAttribute>() is null)
+        var metadata = endpoint?.Metadata.GetMetadata<RequireBrowserOriginAttribute>();
+        if (metadata is null)
         {
             await next(context);
             return;
         }
 
-        var origin = context.Request.Headers.Origin.ToString();
-        var allowed = options.Value.AllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
-        var metadata = endpoint.Metadata.GetMetadata<RequireBrowserOriginAttribute>()!;
-        var contentTypeValid = context.Request.Method.Equals("POST", StringComparison.OrdinalIgnoreCase)
-            && (!metadata.RequireJsonBody || IsJsonContentType(context.Request.ContentType));
-        if (!allowed)
+        var methodMetadata = endpoint!.Metadata.GetMetadata<IHttpMethodMetadata>();
+        if (methodMetadata?.HttpMethods is { Count: > 0 } methods
+            && !methods.Contains(context.Request.Method, StringComparer.OrdinalIgnoreCase))
         {
-            await AuthenticationProblemDetailsExtensions.WriteAsync(context, StatusCodes.Status403Forbidden, "origin_not_allowed");
+            await next(context);
             return;
         }
 
-        if (!contentTypeValid)
+        if (!HasAllowedOrigin(context))
         {
-            await AuthenticationProblemDetailsExtensions.WriteAsync(context, StatusCodes.Status415UnsupportedMediaType, "unsupported_media_type");
+            await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status403Forbidden, "origin_not_allowed");
+            return;
+        }
+
+        if (metadata.RequireJsonBody && !IsJsonContentType(context.Request.ContentType))
+        {
+            await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status415UnsupportedMediaType, "unsupported_media_type");
             return;
         }
 
@@ -37,4 +42,26 @@ public sealed class OriginValidationMiddleware(RequestDelegate next, IOptions<Au
     private static bool IsJsonContentType(string? contentType)
         => MediaTypeHeaderValue.TryParse(contentType, out var parsed)
             && string.Equals(parsed.MediaType, "application/json", StringComparison.OrdinalIgnoreCase);
+
+    private bool HasAllowedOrigin(HttpContext context)
+    {
+        var values = context.Request.Headers.Origin;
+        if (values.Count != 1) return false;
+
+        var origin = values[0];
+        if (string.IsNullOrWhiteSpace(origin) || string.Equals(origin.Trim(), "null", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!Uri.TryCreate(origin, UriKind.Absolute, out var parsed)
+            || parsed.Scheme is not ("http" or "https")
+            || string.IsNullOrEmpty(parsed.Host)
+            || !string.IsNullOrEmpty(parsed.UserInfo)
+            || !string.IsNullOrEmpty(parsed.Query)
+            || !string.IsNullOrEmpty(parsed.Fragment)
+            || parsed.AbsolutePath != "/"
+            || !string.Equals(origin, parsed.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return options.Value.AllowedOrigins.Contains(origin, StringComparer.OrdinalIgnoreCase);
+    }
 }

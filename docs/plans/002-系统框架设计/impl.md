@@ -140,14 +140,16 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 2. 接入 `Serilog.AspNetCore`，默认使用 Console Sink，配置结构化输出和请求完成日志。应用代码只使用 `ILogger<T>`。
 3. 配置 W3C Trace Context；集中异常处理只记录一次未处理异常，并使用 `Activity.Current.TraceId`，无 Activity 时回退 `HttpContext.TraceIdentifier`。
 4. 接入统一 ProblemDetails。固定标准字段、`code`、`traceId` 和字段校验 `errors`，明确公开错误不得包含堆栈、连接字符串、绝对路径或秘密。
-5. 创建匿名 `GET /api/system/status` Controller。运行期用真实轻量数据库检查，数据库故障返回 `200` 的 `degraded/unavailable` 结果。
-6. 配置 ASP.NET Core OpenAPI 输出 OpenAPI 3.0，并提供 Scalar 交互页面。ProblemDetails schema 和各 operation 的错误响应必须进入文档；Web/OpenAPI/Scalar 使用默认 ASP.NET Core DI，避免 Materal keyed service 兼容性边界。
+5. 在 Web 层冻结可供后续 Cookie 写端点复用的 `RequireBrowserOrigin` 元数据、Origin 校验中间件和 `origin_not_allowed`/`unsupported_media_type` 错误契约；中间件不判断 POST/PATCH/PUT/DELETE 白名单，方法合法性由 endpoint routing/action 决定。
+6. 创建匿名 `GET /api/system/status` Controller。运行期用真实轻量数据库检查，数据库故障返回 `200` 的 `degraded/unavailable` 结果。
+7. 配置 ASP.NET Core OpenAPI 输出 OpenAPI 3.0，并提供 Scalar 交互页面。ProblemDetails schema 和各 operation 的错误响应必须进入文档；Web/OpenAPI/Scalar 使用默认 ASP.NET Core DI，避免 Materal keyed service 兼容性边界。
 
 输出：可通过 HTTP 观察的服务端框架接口。
 
 验收门：
 
 - `GET /api/system/status` 的成功、降级和服务不可访问场景与设计一致。
+- Origin 框架测试证明方法级 endpoint metadata、Origin 单值校验、JSON Content-Type 约束和 `UseRouting -> Origin -> Authentication -> Authorization` 顺序。
 - 通过 IntegrationTests 测试宿主注入的 `GET /__test/throw` 触发一个故意异常，只产出一条集中异常日志并返回 `internal_error` ProblemDetails；该端点不属于生产 API。
 - OpenAPI 文档可以由 HTTP 获取，版本为 3.0，包含状态接口和错误 schema。
 - Scalar 能读取同一个 OpenAPI 地址，未维护第二份手工契约。
@@ -287,5 +289,6 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 8. 未知 API 不会被 SPA fallback 伪装成 HTML 成功响应。
 9. 服务端、客户端、集成、架构和构建测试通过，测试没有依赖开发者本机已有数据库文件。
 10. 独立 Chrome CDP 冒烟检查能够读取目标页面的 DOM、控制台、网络结果和截图。
+11. Cookie 写请求 Origin 元数据、中间件顺序、方法不匹配旁路、403/415 错误契约和统一 ProblemDetails 写入已通过 I-018 至 I-026；首个 Cookie 消费方直接复用该冻结形态，并在自身主题中完成业务 operation 的 OpenAPI 与认证回归。
 
 账号、会议、群聊、MCP Agent 和 AI 回复必须留给总体设计中后续业务主题实现，不能为了让框架页面显得完整而提前加入模拟实现。

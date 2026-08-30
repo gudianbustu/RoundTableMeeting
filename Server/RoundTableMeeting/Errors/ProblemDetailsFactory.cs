@@ -1,5 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Serialization.Metadata;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 
@@ -7,6 +5,43 @@ namespace RoundTableMeeting.Errors;
 
 public static class ProblemDetailsFactory
 {
+    public static ApiProblemDetails Create(HttpContext context, int status, string code, IReadOnlyDictionary<string, string[]>? errors = null)
+        => new()
+        {
+            Status = status,
+            Type = $"/problems/{code}",
+            Title = code switch
+            {
+                "origin_not_allowed" => "Origin not allowed",
+                "unsupported_media_type" => "Unsupported media type",
+                "validation_failed" => "Validation failed",
+                "route_not_found" => "Route not found",
+                "invalid_credentials" => "Invalid credentials",
+                "unauthenticated" => "Authentication required",
+                "forbidden" => "Forbidden",
+                "concurrency_conflict" => "Concurrency conflict",
+                "internal_error" => "Internal server error",
+                _ => code
+            },
+            Detail = code switch
+            {
+                "origin_not_allowed" => "The browser origin is not allowed.",
+                "unsupported_media_type" => "The request media type is not supported.",
+                "validation_failed" => "One or more validation errors occurred.",
+                "route_not_found" => "The requested API route was not found.",
+                "invalid_credentials" => "The username or password is invalid.",
+                "unauthenticated" => "Authentication is required.",
+                "forbidden" => "You do not have permission to access this resource.",
+                "concurrency_conflict" => "The requested change could not be saved.",
+                "internal_error" => "An unexpected error occurred.",
+                _ => "The request could not be completed."
+            },
+            Instance = context.Request.Path,
+            Code = code,
+            TraceId = TraceIdResolver.Resolve(context),
+            Errors = errors
+        };
+
     public static ApiProblemDetails CreateValidation(HttpContext context, ModelStateDictionary modelState)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -32,17 +67,7 @@ public static class ProblemDetailsFactory
             }
         }
 
-        return new ApiProblemDetails
-        {
-            Status = StatusCodes.Status400BadRequest,
-            Type = "/problems/validation_failed",
-            Title = "Validation failed",
-            Detail = "One or more validation errors occurred.",
-            Instance = context.Request.Path,
-            Code = "validation_failed",
-            TraceId = TraceIdResolver.Resolve(context),
-            Errors = errors
-        };
+        return Create(context, StatusCodes.Status400BadRequest, "validation_failed", errors);
     }
 
     public static string NormalizeKey(string key)

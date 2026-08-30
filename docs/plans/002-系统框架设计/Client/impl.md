@@ -311,6 +311,8 @@ Kiota `1.34.1` 配套 runtime 的错误对象遵循 `ApiError`，提供 `respons
 - Fetch 无响应：`kind = 'network'`，显示服务不可访问状态。
 - 调用方取消或组件卸载导致的 `AbortError` 或 runtime 取消异常：不转换为 `network` 或 `unknown`，页面不显示失败状态。
 - 有 HTTP 响应但未产生可用的类型化 ProblemDetails（例如 body 为空、Content-Type 非 JSON、JSON 无法按 schema 解析或模型缺少 `code`）：`kind = 'unknown'`，使用安全通用文案，并从 `responseStatusCode` 保留 HTTP 状态（如果存在）。
+- `code = 'origin_not_allowed'`：保留 `kind = 'problemDetails'` 和 403，页面显示“当前请求来源不受允许，请刷新页面后重试”或等价安全文案，不展示 Origin 值。
+- `code = 'unsupported_media_type'`：保留 `kind = 'problemDetails'` 和 415，页面显示“请求格式不受支持，请刷新页面后重试”或等价安全文案。
 - 未知异常：`kind = 'unknown'`，显示安全通用文案。
 - 保存 `traceId` 供页面显示或用户反馈，但不把内部路径、堆栈或响应原文展示出来。
 
@@ -364,6 +366,8 @@ pnpm dev
 ~~~
 
 浏览器打开 `http://localhost:5173/`。客户端请求 `/api/system/status`，Vite 代理到 `http://localhost:5043/api/system/status`。客户端代码不读取环境变量拼接后端绝对 URL；环境变量只允许控制脚本的 OpenAPI 地址和开发工具参数。
+
+后续 Cookie 写请求仍由浏览器自动携带 Origin；Vite 代理透传页面 Origin `http://localhost:5173`，服务端允许列表必须配置页面源而不是代理目标 `http://localhost:5043`。客户端不得通过 JavaScript 手工设置或伪造 Origin Header。
 
 服务端停止时，页面显示网络不可访问错误；服务端恢复后点击重试能够回到真实状态。不要以 Vite 能打开空白页面作为联调通过标准。
 

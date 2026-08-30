@@ -95,6 +95,8 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 
 服务端 API 统一使用 `ProblemDetails`。跨端错误契约固定使用标准字段 `type`、`title`、`status`、`detail`、`instance`，并扩展稳定业务错误标识 `code`、请求关联标识 `traceId`；字段校验错误额外使用 `errors`，类型为字段名到错误消息数组的映射。客户端公共错误适配层将这些字段转换为页面可处理的错误对象。
 
+框架还冻结两类供后续 Cookie 写端点使用的错误契约：Origin 不允许返回 `403 origin_not_allowed`，允许 Origin 后但 JSON 媒体类型不符合显式端点元数据要求返回 `415 unsupported_media_type`。HTTP 方法不匹配不属于这两类错误，必须保留 routing/action 的 `404` 或 `405` 语义。
+
 生产响应和系统状态接口不得返回堆栈、连接字符串、绝对路径、环境变量或其他敏感内部信息。
 
 ### 5.3 日志与基础可观测性
@@ -167,6 +169,7 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 - 群聊消息、提及和浏览器实时消息。
 - MCP Agent 接入和 AI 回复任务。
 - 正式业务页面。
+- Cookie 写请求的具体认证业务；本主题只提供后续主题复用的 Origin 保护元数据、中间件、允许来源策略接口和错误契约。
 
 未来的 SignalR、MCP 端点和 HostedService 可以先落在 `RoundTableMeeting` 宿主项目，业务编排仍由 Application 承担。只有当某类技术入口形成独立适配边界时，才新增能力项目；每条后台任务或消息处理都必须创建独立 DI scope，不能长期持有 Scoped DbContext。
 
@@ -186,3 +189,4 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 8. 服务端、客户端和架构约束测试通过。
 9. ASP.NET Core 发布结果能够直接打开 React 应用并调用同源 API；未知 API 不会返回 HTML。
 10. Chrome CDP 冒烟调试能够读取页面 DOM、控制台和网络结果，并完成截图检查。
+11. 后续 Cookie 写端点可以复用 endpoint metadata 驱动的 Origin 保护；方法不匹配保持 routing 的 404/405，Origin 拒绝和媒体类型拒绝分别使用稳定的 403/415 契约。

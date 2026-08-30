@@ -68,28 +68,17 @@ try
     });
     app.UseHttpsRedirection();
     app.UseRouting();
+    app.UseDefaultFiles();
+    app.UseStaticFiles();
     app.UseMiddleware<AuthenticationResponseHeadersMiddleware>();
     app.UseMiddleware<OriginValidationMiddleware>();
     app.UseAuthentication();
     app.UseAuthorization();
-    app.UseDefaultFiles();
-    app.UseStaticFiles();
     app.MapOpenApi().AllowAnonymous();
     app.MapControllers();
     app.Map("/api/{**path}", async (HttpContext context) =>
     {
-        var problem = new RoundTableMeeting.Errors.ApiProblemDetails
-        {
-            Status = StatusCodes.Status404NotFound,
-            Type = "/problems/route_not_found",
-            Title = "Route not found",
-            Detail = "The requested API route was not found.",
-            Instance = context.Request.Path,
-            Code = "route_not_found",
-            TraceId = RoundTableMeeting.Errors.TraceIdResolver.Resolve(context)
-        };
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
-        await Results.Json(problem, contentType: "application/problem+json").ExecuteAsync(context);
+        await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status404NotFound, "route_not_found");
     }).AllowAnonymous();
     app.MapScalarApiReference("/scalar/v1", options => options.WithOpenApiRoutePattern("/openapi/v1.json")).AllowAnonymous();
     app.MapFallback(async context =>

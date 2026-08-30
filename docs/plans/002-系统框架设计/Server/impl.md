@@ -434,8 +434,10 @@ JSON 使用 camelCase。`errors` 为空时省略。`type` 使用稳定相对 URI
 | 场景 | HTTP | code |
 | --- | --- | --- |
 | 模型或字段校验失败 | 400 | `validation_failed` |
+| 标记浏览器写端点的 Origin 不允许 | 403 | `origin_not_allowed` |
 | 未匹配的 API 路由 | 404 | `route_not_found` |
 | EF 并发冲突 | 409 | `concurrency_conflict` |
+| 标记端点要求 JSON 但媒体类型不支持 | 415 | `unsupported_media_type` |
 | 未处理异常 | 500 | `internal_error` |
 
 后续业务错误由对应主题增加稳定 code，不以中文或英文错误文案作为客户端判断条件。
@@ -469,6 +471,51 @@ traceId 获取顺序如下。该逻辑提取为独立的 `TraceIdResolver` 静�
 使用 ASP.NET Core `IExceptionHandler` 或等价集中组件处理异常。只有集中异常处理记录未处理异常；Controller、Application 和 Repository 在继续抛出同一异常时不得重复写 Error 日志。
 
 生产环境 `internal_error` 的 detail 使用固定安全文案。开发环境也不直接把堆栈写入响应，堆栈只进入受控日志。
+
+### 8.4 浏览器 Origin 元数据和中间件
+
+Web 增加端点元数据和中间件，固定形态：
+
+```csharp
+[AttributeUsage(AttributeTargets.Method,
+    AllowMultiple = false, Inherited = true)]
+public sealed class RequireBrowserOriginAttribute(
+    bool requireJsonBody = false) : Attribute
+{
+    public bool RequireJsonBody { get; } = requireJsonBody;
+}
+```
+
+`OriginValidationMiddleware` 每次请求先调用 `HttpContext.GetEndpoint()`，只在 Endpoint 存在且包含 `RequireBrowserOriginAttribute` 时工作。中间件不得判断 `Request.Method` 是否为 POST，也不得维护 POST/PATCH/PUT/DELETE 白名单；路由和 action 自行决定方法是否合法。
+
+方法不匹配的旁路必须显式基于 endpoint 的 `IHttpMethodMetadata` 或等价路由元数据实现：当元数据的 `HttpMethods` 非空且不包含当前 `Request.Method` 时，立即调用下一个中间件，不做 Origin 或 Content-Type 校验。最终 404/405 由 routing、endpoint 和现有 `/api/{**path}` fallback 共同决定；当前 MVC 组合可能落地为 404，测试不得强制制造 405，也不得依赖“方法不匹配 endpoint 没有 Origin 元数据”的假设。
+
+中间件处理顺序固定为：
+
+1. 读取已匹配 Endpoint 的 `RequireBrowserOriginAttribute`；没有元数据时立即调用下一个中间件。元数据只允许标记方法，禁止 Controller 与 action 双级标记。
+2. 读取 `IHttpMethodMetadata`；当前方法不在 endpoint 声明的方法集合中时立即调用下一个中间件，把 404/405 决定权留给 routing。
+3. 显式检查 Origin Header 恰好只有一个值，再通过已验证的 Origin 配置或等价策略服务做允许列表精确匹配。缺失、多值、空值、`null`、格式非法或外部 Origin 返回 `403 origin_not_allowed`。
+4. 只有 Origin 已允许且 `RequireJsonBody = true` 时，使用 `System.Net.Http.Headers.MediaTypeHeaderValue.TryParse` 解析 `Request.ContentType`；解析后的 media type 必须为 `application/json`。缺失、无法解析、`application/*+json` 或其他 media type 返回 `415 unsupported_media_type`。不读取请求 Body；空正文、非法 JSON 或模型错误交给 endpoint 模型绑定和校验。
+5. `RequireJsonBody = false` 时完全跳过 Content-Type 检查，无正文 POST/DELETE 等端点可不发送 Content-Type。
+6. 校验通过后调用下一个中间件，进入 Authentication、Authorization 和 endpoint。
+
+403 和 415 统一通过 `Errors` 边界的 ProblemDetails 公共工厂/写入器生成 `ApiProblemDetails`，包含稳定 `code` 和 `traceId`，使用安全固定 detail。认证、Origin 和模型校验可以提供各自的 code/detail 映射，但不得各自构造 `ApiProblemDetails` 或复制 `Results.Json` 写入流程。Origin 中间件不得记录 Origin 允许列表、Cookie、正文或认证信息。
+
+采用 Cookie 的业务 Controller 在具体 action 上显式添加元数据，例如：
+
+```csharp
+[HttpPatch("{userId:guid}/nickname")]
+[RequireBrowserOrigin(requireJsonBody: true)]
+public Task<IActionResult> UpdateNicknameAsync(...)
+
+[HttpDelete("{userId:guid}/temporary-state")]
+[RequireBrowserOrigin]
+public Task<IActionResult> DeleteTemporaryStateAsync(...)
+```
+
+后续 operation 在 OpenAPI 中按实际正文策略声明 `403 origin_not_allowed`，并在 `RequireJsonBody = true` 时声明 `415 unsupported_media_type`。系统框架只冻结元数据、中间件、错误契约和测试方法，不在本主题引入认证 Cookie、完整 Antiforgery、角色权限或业务 API 权限。
+
+首个 Cookie 消费方已经使用本节冻结的 Origin 元数据、中间件和统一 ProblemDetails 写入形态；其既有认证与 OpenAPI 回归已通过。后续 Cookie 写 operation 继续在具体 action 上声明元数据，并由所属业务主题补充对应的业务 OpenAPI 与认证测试。开发环境允许列表配置浏览器页面 Origin（例如 Vite 的 `http://localhost:5173`），不是代理目标 `http://localhost:5043`；Vite 代理必须透传浏览器 Origin。
 
 ## 9. Serilog 实现
 
@@ -579,17 +626,23 @@ SPA fallback 只服务 GET/HEAD 且接受 HTML 的非服务端路径。以下前
 2. 创建 `WebApplicationBuilder`。
 3. 保持 ASP.NET Core 默认 DI 容器，不调用 `AddMateralServiceProvider()`。
 4. 用配置接入 Serilog。
-5. 注册 Controller、ProblemDetails、异常处理、OpenAPI、Application、SQLite Repository 和 RuntimeEnvironment。
+5. 注册 Controller、ProblemDetails、异常处理、OpenAPI、Application、SQLite Repository、RuntimeEnvironment，以及后续 Cookie 主题需要的 Origin 元数据中间件和允许 Origin 策略契约。
 6. 构建 WebApplication。
 7. 创建启动 scope，解析 `IDatabaseInitializer` 并等待 `InitializeAsync`；失败时记录 Critical 并终止进程。
-8. 配置集中异常处理和 Serilog 请求日志。
+8. 配置请求级 LogContext、集中异常处理和 Serilog 请求日志。
 9. 非 Development 环境启用 HTTPS 重定向和生产安全策略；localhost Development 允许 HTTP 工具链访问。
-10. 配置静态文件、Controller、OpenAPI、Scalar、API fallback 和 SPA fallback。
-11. 调用 `RunAsync`。
+10. 显式调用 `UseRouting()`，使后续中间件可以读取已匹配 Endpoint 元数据。
+11. 在 `UseRouting()` 之后先配置 `UseDefaultFiles()`、`UseStaticFiles()`，使已存在的默认文件和静态资源在认证授权之前直接匿名返回；静态文件短路时不进入 Origin 中间件，也不受全局 FallbackPolicy 拦截。
+12. 配置需要覆盖拒绝响应的通用响应头中间件，再配置 `OriginValidationMiddleware`。两者位于 `UseExceptionHandler` 和 `UseSerilogRequestLogging` 之后，因此动态端点的 403/415 仍进入统一异常边界和请求完成日志。
+13. 后续 Cookie 主题在 Origin 中间件之后配置 `UseAuthentication()` 和 `UseAuthorization()`；对未被静态文件短路的动态请求，Origin 校验顺序仍为 `UseRouting()` -> `OriginValidationMiddleware` -> `UseAuthentication()` -> `UseAuthorization()`。
+14. 映射 Controller、OpenAPI、Scalar、API fallback 和 SPA fallback。该顺序与当前已验证的 Program 管道一致；静态资源不会被 Origin 或全局授权拦截。
+15. 调用 `RunAsync`。
 
 为了支持 `WebApplicationFactory<Program>`，在文件末尾声明 `public partial class Program;` 或等价可见入口。测试宿主使用默认 ASP.NET Core DI，验证 `ConfigureWebHost`/`ConfigureServices` 能替换临时数据库配置、注入测试 ApplicationPart、保持同一 scope 的 Scoped 实例一致并隔离不同 scope，同时确认 Serilog 请求日志仍可捕获。Materal/AspectCore 容器集成不属于最终运行时方案；其 keyed service 兼容性失败证据已通过探针确认。 发布 Target 使用发布环境提供的 `pnpm`，本机仅通过 Volta 将 Node 24.20.0/pnpm 11.24.0 放入当前命令 PATH 验证。
 
 I-005/I-006 使用 IntegrationTests 中派生的 `WebApplicationFactory`，在 `ConfigureTestServices` 中把测试程序集的 Controller 作为 MVC ApplicationPart 注入。测试 Controller 使用 `[ApiController]`、`[ApiExplorerSettings(IgnoreApi = true)]`：`GET /__test/throw` 确定性抛出未处理异常，`POST /__test/validation` 绑定测试程序集内带 `[Required]` 字段的请求模型。它们复用生产的 `MapControllers`、模型校验、异常处理和 ProblemDetails 管道，不替换整个应用管道。临时端点不得写入生产 `Program.cs`，不得被生产程序集引用，不进入生产发布产物或任何 OpenAPI 文档。
+
+Origin 框架测试同样通过测试程序集 ApplicationPart 注入忽略 OpenAPI 的 Controller。测试端点至少包含：要求 JSON 的标记 POST/PATCH/PUT、`RequireJsonBody=false` 的标记 POST/DELETE，以及未标记 POST。每个端点只返回可识别的成功结果，用于证明请求确实进入 endpoint；测试工厂同时提供明确创建的临时 `wwwroot/origin-safe-asset.txt`，以真实验证匿名静态资源在 Origin 和全局授权之前成功返回；不得在生产程序集创建占位业务 API。
 
 `launchSettings.json` 固定 Development 地址：
 

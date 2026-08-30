@@ -19,6 +19,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
     internal ManualTimeProvider ManualTimeProvider { get; } = new(DateTimeOffset.UtcNow);
     private readonly string databaseDirectory;
     private readonly string databasePath;
+    private readonly string staticDirectory;
     private readonly bool ownsDatabaseDirectory;
 
     public string DatabasePath => databasePath;
@@ -30,6 +31,9 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
             "RoundTableMeetingTests",
             Guid.NewGuid().ToString("N"));
         databasePath = Path.Combine(databaseDirectory, "integration.db");
+        staticDirectory = Path.Combine(databaseDirectory, "wwwroot");
+        Directory.CreateDirectory(staticDirectory);
+        File.WriteAllText(Path.Combine(staticDirectory, "origin-safe-asset.txt"), "static asset is public");
         ownsDatabaseDirectory = true;
     }
 
@@ -37,12 +41,14 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
     {
         databasePath = Path.GetFullPath(sharedDatabasePath);
         databaseDirectory = Path.GetDirectoryName(databasePath) ?? throw new ArgumentException("A database directory is required.", nameof(sharedDatabasePath));
+        staticDirectory = Path.Combine(databaseDirectory, "wwwroot");
         ownsDatabaseDirectory = false;
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseWebRoot(staticDirectory);
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
             configuration.AddInMemoryCollection(new Dictionary<string, string?>

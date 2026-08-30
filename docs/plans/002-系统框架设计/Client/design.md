@@ -170,6 +170,8 @@ src/api/generated/
 
 公共错误对象的准确 TypeScript 类型在实施设计中固定，并优先由 OpenAPI/Kiota 生成的 ProblemDetails 模型承载传输字段。页面不解析任意服务端 JSON，也不直接依赖 `ProblemDetails` 的传输细节；页面分支判断使用稳定的 `code` 或 HTTP 状态，不使用本地化错误文案。组件卸载或调用方取消不转换为网络错误，也不显示失败状态。
 
+后续 Cookie 写请求可能返回 `403 origin_not_allowed` 或 `415 unsupported_media_type`。公共错误适配层保留这两个 code 和 HTTP 状态；业务页面显示安全、可操作的通用文案，不把 Origin、Cookie 或响应原文暴露给用户。开发环境经 Vite 代理发送写请求时，浏览器 Origin 仍是页面源 `http://localhost:5173`，不是代理目标 `http://localhost:5043`；客户端不手工构造 Origin Header。
+
 ## 9. 路由与页面
 
 React Router 配置放在 `app/router/`。路由项引用 feature 通过公共出口暴露的页面。

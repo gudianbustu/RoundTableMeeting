@@ -180,7 +180,7 @@ Application 测试用编译检查和架构测试保证它没有引用 EF Core、
 
 测试项目：Server/Tests/RoundTableMeeting.IntegrationTests/。
 
-使用真实 WebApplicationFactory<Program>、默认 ASP.NET Core DI、真实 ProblemDetails 管道和测试临时 SQLite 配置。IntegrationTests 在 `ConfigureWebHost`/`ConfigureServices` 中把测试程序集 Controller 作为 MVC ApplicationPart 注入：`GET /__test/throw` 用于 I-005，`POST /__test/validation` 用于 I-006；后者绑定带 `[Required]` 字段的测试请求模型。测试 Controller 使用 `[ApiController]` 和 `[ApiExplorerSettings(IgnoreApi = true)]`，复用生产 `MapControllers`、模型校验和异常处理管道，不进入 OpenAPI。这些端点不写入生产 Program，不被生产项目引用，也不进入生产发布产物。测试工厂必须验证显式 Materal `AddAutoService` 标记服务解析、Scoped 生命周期、同 scope DbContext 共享、跨 scope 隔离、临时配置替换、测试 ApplicationPart 和 Serilog 日志捕获。`AddMateralServiceProvider` 和 AspectCore 容器集成不属于最终方案；C-009 明确禁止其调用。
+使用真实 WebApplicationFactory<Program>、默认 ASP.NET Core DI、真实 ProblemDetails 管道和测试临时 SQLite 配置。IntegrationTests 在 `ConfigureWebHost`/`ConfigureServices` 中把测试程序集 Controller 作为 MVC ApplicationPart 注入：`GET /__test/throw` 用于 I-005，`POST /__test/validation` 用于 I-006；后者绑定带 `[Required]` 字段的测试请求模型。Origin 框架测试在同一测试程序集提供标记 POST/PATCH/PUT/DELETE 和未标记 POST 端点。所有测试 Controller 使用 `[ApiController]` 和 `[ApiExplorerSettings(IgnoreApi = true)]`，复用生产 `UseRouting`、Origin、Authentication/Authorization、`MapControllers`、模型校验、异常处理和 ProblemDetails 管道，不进入 OpenAPI。这些端点不写入生产 Program，不被生产项目引用，也不进入生产发布产物。测试工厂必须验证显式 Materal `AddAutoService` 标记服务解析、Scoped 生命周期、同 scope DbContext 共享、跨 scope 隔离、临时配置替换、测试 ApplicationPart 和 Serilog 日志捕获。`AddMateralServiceProvider` 和 AspectCore 容器集成不属于最终方案；C-009 明确禁止其调用。
 
 | 编号 | 优先级 | 场景 | 预期 |
 | --- | --- | --- | --- |
@@ -201,8 +201,21 @@ Application 测试用编译检查和架构测试保证它没有引用 EF Core、
 | I-015 | P1 | 调用方取消状态请求 | 不把取消转换为 500 ProblemDetails；宿主允许请求自然终止，服务端不记录重复 Error |
 | I-016 | P1 | 数据库降级日志关联 | 产生一条 Warning 和一条请求完成日志，二者可通过 traceId 关联且不含连接信息 |
 | I-017 | P0 | 真实进程启动初始化失败 | 进程返回非零，端口未开始监听，启动日志包含安全诊断；原始、JSON 转义和正斜杠形式均不包含数据库绝对路径或连接字符串 |
+| I-018 | P0 | 标记 POST/PATCH/PUT + JSON + 允许 Origin | 三种方法都成功进入各自 endpoint，中间件不硬编码 POST |
+| I-019 | P0 | 标记 DELETE、RequireJsonBody=false、允许 Origin且无正文/Content-Type | 成功进入 endpoint，不因缺少 Content-Type 返回 415 |
+| I-020 | P0 | 标记端点的 Origin 矩阵 | 允许 Origin 通过；缺失、重复多值、`null`、外部 Origin 均返回 403 origin_not_allowed，且 endpoint 未执行 |
+| I-021 | P0 | RequireJsonBody=true 的媒体类型与正文边界 | `application/json` 与带 charset 的 JSON 通过媒体类型检查；缺失、无效、其他 media type 和 `application/*+json` 返回 415；合法 media type 下的空/非法正文继续由模型绑定返回 400 |
+| I-022 | P1 | RequireJsonBody=false 的标记 POST/DELETE，携带任意或缺失 Content-Type | Origin 允许后均不由 Origin 中间件拒绝，正文约束留给 endpoint 自身 |
+| I-023 | P0 | 对标记路由发送错误 HTTP 方法，省略 Origin 和 Content-Type | 中间件通过 IHttpMethodMetadata 识别方法不匹配并放行；最终由 routing/fallback 返回项目当前的 404 或框架 405，不得改写为 403/415 |
+| I-024 | P0 | 未标记 API 与未知 `/api/*`，分别携带缺失/外部 Origin | 未标记 endpoint 不校验 Origin并保持原授权/执行语义；未知 API 仍为 404 route_not_found |
+| I-025 | P0 | Endpoint metadata 与管道顺序 | `UseRouting` 位于 Origin 中间件之前；Origin 位于 Authentication/Authorization 之前，运行时能够读取标记元数据 |
+| I-026 | P1 | Origin/认证/模型校验 ProblemDetails 写入路径 | 403、415 与既有 400/401/403 使用 Errors 边界统一工厂/写入器；不得各自构造 ApiProblemDetails 或复制 Results.Json 流程 |
 
 `I-003` 使用测试替身验证 HTTP 状态映射，替身在真实请求内记录一条 Warning；真实 `SqliteDatabaseAvailabilityChecker` 的超时、调用方取消和异常降级语义由 Repository.Sqlite.Tests 覆盖。`I-008` 与 `I-015` 直接测试无状态 traceId 解析器和集中异常处理器；`I-014` 通过真实 Serilog sink 断言同一未处理异常只有一条 Error/Fatal；`I-016` 使用固定 W3C traceparent，断言降级 Warning 与请求完成日志具有相同 traceId，且日志不包含连接信息。`I-017` 启动独立 `RoundTableMeeting.dll` 进程并注入不可打开的 SQLite DataSource，验证非零退出、端口未监听和安全 bootstrap 日志。
+
+I-018 至 I-026 使用测试专用 `OriginTestController` 或等价 endpoint，端点固定为：要求 JSON 的标记 POST/PATCH/PUT、`RequireJsonBody=false` 的标记 POST/DELETE、未标记 POST。测试 AllowedOrigins 使用纯 Origin 值，例如 `http://localhost:5173`。测试先验证 endpoint 成功标识，再验证拒绝响应的 `status`、`code`、`traceId` 和安全固定文案；明确使用不允许/缺失 Origin 与缺失/错误 Content-Type 的组合请求证明 403 必须先于 415，Origin 不允许时不继续检查媒体类型。重复 Origin Header 必须通过显式单值判断返回 403；AttributeUsage 通过反射验证为方法级、不可重复且可继承。
+
+管道顺序同时使用运行时行为和源码/架构约定检查：请求日志必须覆盖 Origin 的 403/415，显式 `UseRouting()` 必须早于 Origin 中间件，Origin 必须早于 `UseAuthentication()`/`UseAuthorization()`，默认文件/静态文件顺序与实际 Program 保持一致。不得通过把测试 endpoint 映射到独立替代管道来绕过生产中间件顺序。
 
 ## 11. OpenAPI 和 Kiota 契约测试
 
@@ -234,6 +247,8 @@ Application 测试用编译检查和架构测试保证它没有引用 EF Core、
 Kiota CLI 和 runtime 的版本必须由脚本或包清单读取，不能依赖全局安装版本。
 
 框架阶段不为 `409 concurrency_conflict` 增加生产占位端点或假业务实体。R-026 只验证 Repository.Sqlite 的异常转换；首个明确配置并发令牌或更新行数冲突的业务主题负责增加 409 ProblemDetails 的端到端集成测试。
+
+002 的 Origin 框架能力已经被首个生产 Cookie 消费方 login/logout 实际使用，并已完成 403/415 错误响应、OpenAPI 声明和认证回归验证；后续业务主题继续在各自 operation 上声明 `RequireBrowserOrigin` 元数据和对应错误响应，并运行 I-018 至 I-026 的相关回归，不得只验证全局 schema 存在。
 
 ## 12. 客户端 Vitest 测试
 
@@ -338,6 +353,10 @@ pnpm build
 | 启动 Migration 失败 | 进程启动失败，记录诊断日志 | 无法访问服务，不能显示假状态 | P0 |
 | 运行期数据库不可用 | 200 degraded/unavailable | 显示降级，不误报网络失败 | P0 |
 | 未知 API | JSON 404 ProblemDetails | 不渲染 HTML 页面作为 API 响应 | P0 |
+| 标记写端点缺失/null/外部 Origin | 403 origin_not_allowed，endpoint 不执行 | 保持当前页面并显示安全错误 | P0 |
+| 标记 JSON 写端点媒体类型错误 | 允许 Origin 后返回 415 unsupported_media_type | 显示请求格式不受支持 | P0 |
+| 标记路由使用错误 HTTP 方法 | routing 404/405，不改写为 415 | 按 API 错误适配处理 | P0 |
+| 未知 API 携带缺失或恶意 Origin | 404 route_not_found，不进入 Origin 校验 | 不渲染 HTML 页面作为 API 响应 | P0 |
 | OpenAPI 不可用 | Kiota 脚本超时非零 | 不生成伪 Client | P0 |
 | Kiota 生成失败 | 脚本安全报错 | 客户端原有生成结果不被半成品覆盖 | P1 |
 | ProblemDetails 无法解析 | 安全未知错误响应 | 显示通用错误，不展示原始响应 | P1 |
