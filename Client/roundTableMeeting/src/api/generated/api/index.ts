@@ -4,6 +4,8 @@
 // @ts-ignore
 import { AuthRequestBuilderNavigationMetadata, type AuthRequestBuilder } from './auth/index.js';
 // @ts-ignore
+import { MeetingsRequestBuilderNavigationMetadata, MeetingsRequestBuilderRequestsMetadata, type MeetingsRequestBuilder } from './meetings/index.js';
+// @ts-ignore
 import { SystemRequestBuilderNavigationMetadata, type SystemRequestBuilder } from './system/index.js';
 // @ts-ignore
 import { type UsersRequestBuilder, UsersRequestBuilderNavigationMetadata, UsersRequestBuilderRequestsMetadata } from './users/index.js';
@@ -18,6 +20,10 @@ export interface ApiRequestBuilder extends BaseRequestBuilder<ApiRequestBuilder>
      * The auth property
      */
     get auth(): AuthRequestBuilder;
+    /**
+     * The meetings property
+     */
+    get meetings(): MeetingsRequestBuilder;
     /**
      * The system property
      */
@@ -37,6 +43,10 @@ export const ApiRequestBuilderUriTemplate = "{+baseurl}/api";
 export const ApiRequestBuilderNavigationMetadata: Record<Exclude<keyof ApiRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     auth: {
         navigationMetadata: AuthRequestBuilderNavigationMetadata,
+    },
+    meetings: {
+        requestsMetadata: MeetingsRequestBuilderRequestsMetadata,
+        navigationMetadata: MeetingsRequestBuilderNavigationMetadata,
     },
     system: {
         navigationMetadata: SystemRequestBuilderNavigationMetadata,

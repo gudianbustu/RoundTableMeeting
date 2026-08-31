@@ -12,6 +12,9 @@ public sealed class RoundTableMeetingDbContext(DbContextOptions<RoundTableMeetin
     /// 用户账号实体集合
     /// </summary>
     public DbSet<RoundTableMeeting.Domain.Entities.UserAccount> UserAccounts => Set<RoundTableMeeting.Domain.Entities.UserAccount>();
+    public DbSet<RoundTableMeeting.Domain.Entities.Meeting> Meetings => Set<RoundTableMeeting.Domain.Entities.Meeting>();
+    public DbSet<RoundTableMeeting.Domain.Entities.MeetingParticipant> MeetingParticipants => Set<RoundTableMeeting.Domain.Entities.MeetingParticipant>();
+    public DbSet<RoundTableMeeting.Domain.Entities.MeetingCreationReceipt> MeetingCreationReceipts => Set<RoundTableMeeting.Domain.Entities.MeetingCreationReceipt>();
 
     /// <summary>
     /// 校验账号后同步保存实体变更

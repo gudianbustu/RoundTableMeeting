@@ -17,5 +17,21 @@ a { color: #176b87; }
 .login-panel .ant-typography { text-align: center; }
 .authenticated-home { max-width: 820px; padding-top: 48px; }
 .current-user-bar { align-items: flex-end; min-height: 40px; }
+.meeting-workspace { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 28px; padding-top: 28px; }
+.meeting-navigation { min-width: 0; padding: 18px; background: #fff; border: 1px solid #dbe5e8; border-radius: 6px; align-self: start; }
+.meeting-navigation-list { display: grid; gap: 4px; }
+.meeting-navigation-item { width: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; cursor: pointer; padding: 10px 8px; border: 0; border-radius: 4px; background: transparent; color: inherit; text-align: left; }
+.meeting-navigation-item span { min-width: 0; display: grid; gap: 2px; }
+.meeting-navigation-item strong, .meeting-navigation-item small { overflow-wrap: anywhere; }
+.meeting-navigation-item:hover, .meeting-navigation-item.selected { background: #eaf4f7; }
+.meeting-main { min-width: 0; display: grid; gap: 24px; align-content: start; }
+.meeting-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; padding-bottom: 20px; border-bottom: 1px solid #dbe5e8; }
+.meeting-header .ant-typography { overflow-wrap: anywhere; }
+.participant-list, .conversation-placeholder { padding: 20px 0; border-bottom: 1px solid #dbe5e8; }
+.participant-list-items { display: grid; gap: 8px; }
+.participant-list-item { min-width: 0; padding: 10px 0; border-bottom: 1px solid #edf2f3; }
+.conversation-placeholder { min-height: 140px; }
+.meeting-empty { min-height: 360px; justify-content: center; align-items: flex-start; }
 @media (max-width: 560px) { .login-panel { padding: 24px 20px; } .current-user-bar { align-items: flex-start; } }
 @media (max-width: 560px) { .app-shell { padding-top: 24px; } .app-header { align-items: stretch; flex-direction: column; } .framework-badge { align-self: flex-start; } .status-content { padding-top: 32px; } }
+@media (max-width: 720px) { .meeting-workspace { grid-template-columns: 1fr; gap: 18px; } .meeting-navigation { padding: 14px; } .meeting-header { flex-direction: column; gap: 12px; } }

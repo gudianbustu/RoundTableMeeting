@@ -61,6 +61,24 @@ export function createApiProblemDetailsFromDiscriminatorValue(parseNode: ParseNo
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CreateMeetingRequest}
+ */
+// @ts-ignore
+export function createCreateMeetingRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCreateMeetingRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CreateMeetingResultDto}
+ */
+// @ts-ignore
+export function createCreateMeetingResultDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCreateMeetingResultDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {CreateUserRequest}
  */
 // @ts-ignore
@@ -88,11 +106,107 @@ export function createDatabaseStatusDtoFromDiscriminatorValue(parseNode: ParseNo
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {DeleteMeetingRequest}
+ */
+// @ts-ignore
+export function createDeleteMeetingRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoDeleteMeetingRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {JoinMeetingRequest}
+ */
+// @ts-ignore
+export function createJoinMeetingRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoJoinMeetingRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {JoinPreviewDto}
+ */
+// @ts-ignore
+export function createJoinPreviewDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoJoinPreviewDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {LoginRequest}
  */
 // @ts-ignore
 export function createLoginRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoLoginRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MeetingDetailsDto}
+ */
+// @ts-ignore
+export function createMeetingDetailsDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMeetingDetailsDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MeetingInvitationDto}
+ */
+// @ts-ignore
+export function createMeetingInvitationDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMeetingInvitationDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MeetingListItemDto}
+ */
+// @ts-ignore
+export function createMeetingListItemDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMeetingListItemDto;
+}
+export interface CreateMeetingRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The creationRequestId property
+     */
+    creationRequestId?: Guid | null;
+    /**
+     * The description property
+     */
+    description?: string | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+}
+export interface CreateMeetingResultDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The invitation property
+     */
+    invitation?: MeetingInvitationDto | null;
+    /**
+     * The meeting property
+     */
+    meeting?: MeetingDetailsDto | null;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ParticipantDto}
+ */
+// @ts-ignore
+export function createParticipantDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoParticipantDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {PreviewJoinRequest}
+ */
+// @ts-ignore
+export function createPreviewJoinRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoPreviewJoinRequest;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -155,6 +269,12 @@ export interface DatabaseStatusDto extends AdditionalDataHolder, Parsable {
      */
     status?: string | null;
 }
+export interface DeleteMeetingRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The confirmationName property
+     */
+    confirmationName?: string | null;
+}
 /**
  * The deserialization information for the current model
  * @param ApiProblemDetails The instance to deserialize into.
@@ -181,6 +301,31 @@ export function deserializeIntoApiProblemDetails(apiProblemDetails: Partial<ApiP
 // @ts-ignore
 export function deserializeIntoApiProblemDetails_errors(apiProblemDetails_errors: Partial<ApiProblemDetails_errors> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CreateMeetingRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCreateMeetingRequest(createMeetingRequest: Partial<CreateMeetingRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "creationRequestId": n => { createMeetingRequest.creationRequestId = n.getGuidValue(); },
+        "description": n => { createMeetingRequest.description = n.getStringValue(); },
+        "name": n => { createMeetingRequest.name = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param CreateMeetingResultDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCreateMeetingResultDto(createMeetingResultDto: Partial<CreateMeetingResultDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "invitation": n => { createMeetingResultDto.invitation = n.getObjectValue<MeetingInvitationDto>(createMeetingInvitationDtoFromDiscriminatorValue); },
+        "meeting": n => { createMeetingResultDto.meeting = n.getObjectValue<MeetingDetailsDto>(createMeetingDetailsDtoFromDiscriminatorValue); },
     }
 }
 /**
@@ -222,6 +367,45 @@ export function deserializeIntoDatabaseStatusDto(databaseStatusDto: Partial<Data
 }
 /**
  * The deserialization information for the current model
+ * @param DeleteMeetingRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoDeleteMeetingRequest(deleteMeetingRequest: Partial<DeleteMeetingRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "confirmationName": n => { deleteMeetingRequest.confirmationName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param JoinMeetingRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoJoinMeetingRequest(joinMeetingRequest: Partial<JoinMeetingRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "displayName": n => { joinMeetingRequest.displayName = n.getStringValue(); },
+        "meetingCode": n => { joinMeetingRequest.meetingCode = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param JoinPreviewDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoJoinPreviewDto(joinPreviewDto: Partial<JoinPreviewDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "alreadyJoined": n => { joinPreviewDto.alreadyJoined = n.getBooleanValue(); },
+        "defaultDisplayName": n => { joinPreviewDto.defaultDisplayName = n.getStringValue(); },
+        "description": n => { joinPreviewDto.description = n.getStringValue(); },
+        "existingDisplayName": n => { joinPreviewDto.existingDisplayName = n.getStringValue(); },
+        "meetingId": n => { joinPreviewDto.meetingId = n.getGuidValue(); },
+        "meetingName": n => { joinPreviewDto.meetingName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param LoginRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -230,6 +414,78 @@ export function deserializeIntoLoginRequest(loginRequest: Partial<LoginRequest> 
     return {
         "password": n => { loginRequest.password = n.getStringValue(); },
         "username": n => { loginRequest.username = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MeetingDetailsDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMeetingDetailsDto(meetingDetailsDto: Partial<MeetingDetailsDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "canDelete": n => { meetingDetailsDto.canDelete = n.getBooleanValue(); },
+        "canManageInvitation": n => { meetingDetailsDto.canManageInvitation = n.getBooleanValue(); },
+        "createdAt": n => { meetingDetailsDto.createdAt = n.getDateValue(); },
+        "currentParticipant": n => { meetingDetailsDto.currentParticipant = n.getObjectValue<ParticipantDto>(createParticipantDtoFromDiscriminatorValue); },
+        "description": n => { meetingDetailsDto.description = n.getStringValue(); },
+        "meetingId": n => { meetingDetailsDto.meetingId = n.getGuidValue(); },
+        "name": n => { meetingDetailsDto.name = n.getStringValue(); },
+        "participants": n => { meetingDetailsDto.participants = n.getCollectionOfObjectValues<ParticipantDto>(createParticipantDtoFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MeetingInvitationDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMeetingInvitationDto(meetingInvitationDto: Partial<MeetingInvitationDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "meetingCode": n => { meetingInvitationDto.meetingCode = n.getStringValue(); },
+        "meetingId": n => { meetingInvitationDto.meetingId = n.getGuidValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MeetingListItemDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMeetingListItemDto(meetingListItemDto: Partial<MeetingListItemDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "isCreator": n => { meetingListItemDto.isCreator = n.getBooleanValue(); },
+        "joinedAt": n => { meetingListItemDto.joinedAt = n.getDateValue(); },
+        "meetingId": n => { meetingListItemDto.meetingId = n.getGuidValue(); },
+        "myDisplayName": n => { meetingListItemDto.myDisplayName = n.getStringValue(); },
+        "name": n => { meetingListItemDto.name = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param ParticipantDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoParticipantDto(participantDto: Partial<ParticipantDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "displayName": n => { participantDto.displayName = n.getStringValue(); },
+        "isCreator": n => { participantDto.isCreator = n.getBooleanValue(); },
+        "isCurrentUser": n => { participantDto.isCurrentUser = n.getBooleanValue(); },
+        "joinedAt": n => { participantDto.joinedAt = n.getDateValue(); },
+        "participantId": n => { participantDto.participantId = n.getGuidValue(); },
+        "type": n => { participantDto.type = n.getEnumValue<ParticipantKind>(ParticipantKindObject); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param PreviewJoinRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoPreviewJoinRequest(previewJoinRequest: Partial<PreviewJoinRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "meetingCode": n => { previewJoinRequest.meetingCode = n.getStringValue(); },
     }
 }
 /**
@@ -269,6 +525,42 @@ export function deserializeIntoUserSummaryDto(userSummaryDto: Partial<UserSummar
         "username": n => { userSummaryDto.username = n.getStringValue(); },
     }
 }
+export interface JoinMeetingRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The displayName property
+     */
+    displayName?: string | null;
+    /**
+     * The meetingCode property
+     */
+    meetingCode?: string | null;
+}
+export interface JoinPreviewDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The alreadyJoined property
+     */
+    alreadyJoined?: boolean | null;
+    /**
+     * The defaultDisplayName property
+     */
+    defaultDisplayName?: string | null;
+    /**
+     * The description property
+     */
+    description?: string | null;
+    /**
+     * The existingDisplayName property
+     */
+    existingDisplayName?: string | null;
+    /**
+     * The meetingId property
+     */
+    meetingId?: Guid | null;
+    /**
+     * The meetingName property
+     */
+    meetingName?: string | null;
+}
 export interface LoginRequest extends AdditionalDataHolder, Parsable {
     /**
      * The password property
@@ -278,6 +570,105 @@ export interface LoginRequest extends AdditionalDataHolder, Parsable {
      * The username property
      */
     username?: string | null;
+}
+export interface MeetingDetailsDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The canDelete property
+     */
+    canDelete?: boolean | null;
+    /**
+     * The canManageInvitation property
+     */
+    canManageInvitation?: boolean | null;
+    /**
+     * The createdAt property
+     */
+    createdAt?: Date | null;
+    /**
+     * The currentParticipant property
+     */
+    currentParticipant?: ParticipantDto | null;
+    /**
+     * The description property
+     */
+    description?: string | null;
+    /**
+     * The meetingId property
+     */
+    meetingId?: Guid | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * The participants property
+     */
+    participants?: ParticipantDto[] | null;
+}
+export interface MeetingInvitationDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The meetingCode property
+     */
+    meetingCode?: string | null;
+    /**
+     * The meetingId property
+     */
+    meetingId?: Guid | null;
+}
+export interface MeetingListItemDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The isCreator property
+     */
+    isCreator?: boolean | null;
+    /**
+     * The joinedAt property
+     */
+    joinedAt?: Date | null;
+    /**
+     * The meetingId property
+     */
+    meetingId?: Guid | null;
+    /**
+     * The myDisplayName property
+     */
+    myDisplayName?: string | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+}
+export interface ParticipantDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The displayName property
+     */
+    displayName?: string | null;
+    /**
+     * The isCreator property
+     */
+    isCreator?: boolean | null;
+    /**
+     * The isCurrentUser property
+     */
+    isCurrentUser?: boolean | null;
+    /**
+     * The joinedAt property
+     */
+    joinedAt?: Date | null;
+    /**
+     * The participantId property
+     */
+    participantId?: Guid | null;
+    /**
+     * The type property
+     */
+    type?: ParticipantKind | null;
+}
+export type ParticipantKind = (typeof ParticipantKindObject)[keyof typeof ParticipantKindObject];
+export interface PreviewJoinRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The meetingCode property
+     */
+    meetingCode?: string | null;
 }
 /**
  * Serializes information the current object
@@ -308,6 +699,33 @@ export function serializeApiProblemDetails(writer: SerializationWriter, apiProbl
 export function serializeApiProblemDetails_errors(writer: SerializationWriter, apiProblemDetails_errors: Partial<ApiProblemDetails_errors> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!apiProblemDetails_errors || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(apiProblemDetails_errors.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CreateMeetingRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCreateMeetingRequest(writer: SerializationWriter, createMeetingRequest: Partial<CreateMeetingRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!createMeetingRequest || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("creationRequestId", createMeetingRequest.creationRequestId);
+    writer.writeStringValue("description", createMeetingRequest.description);
+    writer.writeStringValue("name", createMeetingRequest.name);
+    writer.writeAdditionalData(createMeetingRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CreateMeetingResultDto The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCreateMeetingResultDto(writer: SerializationWriter, createMeetingResultDto: Partial<CreateMeetingResultDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!createMeetingResultDto || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<MeetingInvitationDto>("invitation", createMeetingResultDto.invitation, serializeMeetingInvitationDto);
+    writer.writeObjectValue<MeetingDetailsDto>("meeting", createMeetingResultDto.meeting, serializeMeetingDetailsDto);
+    writer.writeAdditionalData(createMeetingResultDto.additionalData);
 }
 /**
  * Serializes information the current object
@@ -351,6 +769,48 @@ export function serializeDatabaseStatusDto(writer: SerializationWriter, database
 }
 /**
  * Serializes information the current object
+ * @param DeleteMeetingRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeDeleteMeetingRequest(writer: SerializationWriter, deleteMeetingRequest: Partial<DeleteMeetingRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!deleteMeetingRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("confirmationName", deleteMeetingRequest.confirmationName);
+    writer.writeAdditionalData(deleteMeetingRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param JoinMeetingRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeJoinMeetingRequest(writer: SerializationWriter, joinMeetingRequest: Partial<JoinMeetingRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!joinMeetingRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("displayName", joinMeetingRequest.displayName);
+    writer.writeStringValue("meetingCode", joinMeetingRequest.meetingCode);
+    writer.writeAdditionalData(joinMeetingRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param JoinPreviewDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeJoinPreviewDto(writer: SerializationWriter, joinPreviewDto: Partial<JoinPreviewDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!joinPreviewDto || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("alreadyJoined", joinPreviewDto.alreadyJoined);
+    writer.writeStringValue("defaultDisplayName", joinPreviewDto.defaultDisplayName);
+    writer.writeStringValue("description", joinPreviewDto.description);
+    writer.writeStringValue("existingDisplayName", joinPreviewDto.existingDisplayName);
+    writer.writeGuidValue("meetingId", joinPreviewDto.meetingId);
+    writer.writeStringValue("meetingName", joinPreviewDto.meetingName);
+    writer.writeAdditionalData(joinPreviewDto.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param LoginRequest The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
@@ -361,6 +821,83 @@ export function serializeLoginRequest(writer: SerializationWriter, loginRequest:
     writer.writeStringValue("password", loginRequest.password);
     writer.writeStringValue("username", loginRequest.username);
     writer.writeAdditionalData(loginRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MeetingDetailsDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMeetingDetailsDto(writer: SerializationWriter, meetingDetailsDto: Partial<MeetingDetailsDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!meetingDetailsDto || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("canDelete", meetingDetailsDto.canDelete);
+    writer.writeBooleanValue("canManageInvitation", meetingDetailsDto.canManageInvitation);
+    writer.writeDateValue("createdAt", meetingDetailsDto.createdAt);
+    writer.writeObjectValue<ParticipantDto>("currentParticipant", meetingDetailsDto.currentParticipant, serializeParticipantDto);
+    writer.writeStringValue("description", meetingDetailsDto.description);
+    writer.writeGuidValue("meetingId", meetingDetailsDto.meetingId);
+    writer.writeStringValue("name", meetingDetailsDto.name);
+    writer.writeCollectionOfObjectValues<ParticipantDto>("participants", meetingDetailsDto.participants, serializeParticipantDto);
+    writer.writeAdditionalData(meetingDetailsDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MeetingInvitationDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMeetingInvitationDto(writer: SerializationWriter, meetingInvitationDto: Partial<MeetingInvitationDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!meetingInvitationDto || isSerializingDerivedType) { return; }
+    writer.writeStringValue("meetingCode", meetingInvitationDto.meetingCode);
+    writer.writeGuidValue("meetingId", meetingInvitationDto.meetingId);
+    writer.writeAdditionalData(meetingInvitationDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MeetingListItemDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMeetingListItemDto(writer: SerializationWriter, meetingListItemDto: Partial<MeetingListItemDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!meetingListItemDto || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("isCreator", meetingListItemDto.isCreator);
+    writer.writeDateValue("joinedAt", meetingListItemDto.joinedAt);
+    writer.writeGuidValue("meetingId", meetingListItemDto.meetingId);
+    writer.writeStringValue("myDisplayName", meetingListItemDto.myDisplayName);
+    writer.writeStringValue("name", meetingListItemDto.name);
+    writer.writeAdditionalData(meetingListItemDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param ParticipantDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeParticipantDto(writer: SerializationWriter, participantDto: Partial<ParticipantDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!participantDto || isSerializingDerivedType) { return; }
+    writer.writeStringValue("displayName", participantDto.displayName);
+    writer.writeBooleanValue("isCreator", participantDto.isCreator);
+    writer.writeBooleanValue("isCurrentUser", participantDto.isCurrentUser);
+    writer.writeDateValue("joinedAt", participantDto.joinedAt);
+    writer.writeGuidValue("participantId", participantDto.participantId);
+    writer.writeEnumValue<ParticipantKind>("type", participantDto.type);
+    writer.writeAdditionalData(participantDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param PreviewJoinRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializePreviewJoinRequest(writer: SerializationWriter, previewJoinRequest: Partial<PreviewJoinRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!previewJoinRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("meetingCode", previewJoinRequest.meetingCode);
+    writer.writeAdditionalData(previewJoinRequest.additionalData);
 }
 /**
  * Serializes information the current object
@@ -436,5 +973,9 @@ export interface UserSummaryDto extends AdditionalDataHolder, Parsable {
      */
     username?: string | null;
 }
+export const ParticipantKindObject = {
+    Human: "human",
+    Agent: "agent",
+} as const;
 /* tslint:enable */
 /* eslint-enable */

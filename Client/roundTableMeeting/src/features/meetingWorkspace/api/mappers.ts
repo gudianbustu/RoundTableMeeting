@@ -1,0 +1,30 @@
+import type { MeetingDetailsDto, ParticipantDto } from '@/api/generated/models'
+import type { MeetingDetails, Participant } from '../types/meetingWorkspace'
+import { guid } from './helpers'
+
+export function mapParticipant(value: Partial<ParticipantDto>): Participant {
+  if (!value.participantId || !value.displayName) throw new Error('Invalid participant response')
+  const type = String(value.type).toLowerCase() === 'agent' ? 'agent' : 'human'
+  return {
+    participantId: guid(value.participantId),
+    displayName: value.displayName,
+    type,
+    isCurrentUser: Boolean(value.isCurrentUser),
+    isCreator: Boolean(value.isCreator),
+    joinedAt: value.joinedAt ?? undefined,
+  }
+}
+
+export function mapMeetingDetails(value: Partial<MeetingDetailsDto>): MeetingDetails {
+  if (!value.meetingId || !value.name) throw new Error('Invalid meeting details response')
+  return {
+    meetingId: guid(value.meetingId),
+    name: value.name,
+    description: value.description ?? undefined,
+    createdAt: value.createdAt ?? undefined,
+    currentParticipant: value.currentParticipant ? mapParticipant(value.currentParticipant) : undefined,
+    canDelete: Boolean(value.canDelete),
+    canManageInvitation: Boolean(value.canManageInvitation),
+    participants: (value.participants ?? []).map(mapParticipant),
+  }
+}

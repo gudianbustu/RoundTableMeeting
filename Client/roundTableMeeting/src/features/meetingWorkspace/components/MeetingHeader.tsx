@@ -1,0 +1,6 @@
+import { Button, Space, Tag, Typography } from 'antd'
+import { DeleteOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons'
+import type { MeetingDetails, MeetingInvitation } from '../types/meetingWorkspace'
+export function MeetingHeader({ meeting, invitation, onInvitation, onHideInvitation, onCopy, onRefresh, onDelete }: { meeting: MeetingDetails; invitation?: MeetingInvitation; onInvitation: () => void; onHideInvitation: () => void; onCopy: () => void; onRefresh: () => void; onDelete: () => void }) {
+  return <header className="meeting-header"><div><Space wrap><Typography.Title level={2} style={{ margin: 0 }}>{meeting.name}</Typography.Title>{meeting.canDelete && <Tag color="gold">创建者</Tag>}</Space>{meeting.description && <Typography.Paragraph type="secondary">{meeting.description}</Typography.Paragraph>}{invitation && <Typography.Text copyable={false} code>{invitation.meetingCode}</Typography.Text>}</div><Space wrap><Button aria-label="刷新会议" title="刷新会议" icon={<ReloadOutlined />} onClick={onRefresh} />{meeting.canManageInvitation && (invitation ? <><Button onClick={onCopy}>复制邀请码</Button><Button onClick={onHideInvitation}>隐藏邀请码</Button></> : <Button icon={<EyeOutlined />} onClick={onInvitation}>显示邀请码</Button>)}{meeting.canDelete && <Button danger icon={<DeleteOutlined />} onClick={onDelete}>删除会议</Button>}</Space></header>
+}

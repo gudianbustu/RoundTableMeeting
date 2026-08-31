@@ -17,6 +17,134 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.Meeting", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LifecycleState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MeetingCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("CreatorUserId");
+
+                    b.HasIndex("MeetingCode")
+                        .IsUnique();
+
+                    b.ToTable("Meetings", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Meetings_LifecycleState", "LifecycleState IN ('Active', 'Deleting')");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.MeetingCreationReceipt", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreationRequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("CreatorUserId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ExpiresAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("MeetingId");
+
+                    b.HasIndex("CreatorUserId", "CreationRequestId")
+                        .IsUnique();
+
+                    b.ToTable("MeetingCreationReceipts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MeetingCreationReceipts_StateMeeting", "(State = 'Active' AND MeetingId IS NOT NULL) OR (State = 'Deleted' AND MeetingId IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.MeetingParticipant", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("JoinedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedDisplayName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParticipantType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("MeetingId", "NormalizedDisplayName")
+                        .IsUnique();
+
+                    b.HasIndex("MeetingId", "UserId")
+                        .IsUnique()
+                        .HasFilter("UserId IS NOT NULL");
+
+                    b.ToTable("MeetingParticipants", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_MeetingParticipants_TypeUser", "(ParticipantType = 'Human' AND UserId IS NOT NULL) OR (ParticipantType = 'Agent' AND UserId IS NULL)");
+                        });
+                });
+
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.UserAccount", b =>
                 {
                     b.Property<Guid>("ID")
@@ -49,6 +177,43 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .IsUnique();
 
                     b.ToTable("UserAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.Meeting", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("CreatorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.MeetingCreationReceipt", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("CreatorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.Meeting", null)
+                        .WithMany()
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.MeetingParticipant", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.Meeting", null)
+                        .WithMany()
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.UserAccount", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 #pragma warning restore 612, 618
         }

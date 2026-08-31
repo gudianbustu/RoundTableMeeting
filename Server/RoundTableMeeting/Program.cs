@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.OpenApi;
 using Scalar.AspNetCore;
@@ -8,6 +10,7 @@ using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Abstraction.Contracts.Authentication;
 using Microsoft.Extensions.Options;
 using RoundTableMeeting.Authentication;
+using RoundTableMeeting.OpenApi;
 using Serilog;
 using Serilog.Context;
 
@@ -27,10 +30,15 @@ try
         .Enrich.With<RoundTableMeeting.Errors.RequestLogPropertyEnricher>()
         .Enrich.FromLogContext());
 
-    builder.Services.AddControllers();
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
+        });
     builder.Services.AddOpenApi(options =>
     {
         options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_0;
+        options.AddOperationTransformer<MeetingOpenApiOperationTransformer>();
         options.AddDocumentTransformer((document, _, _) =>
         {
             document.Servers = null;

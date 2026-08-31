@@ -1,0 +1,7 @@
+import { Button, Empty, Flex, Skeleton, Typography } from 'antd'
+import { PlusOutlined, TeamOutlined } from '@ant-design/icons'
+import type { MeetingListItem } from '../types/meetingWorkspace'
+
+export function MeetingNavigation({ meetings, selectedId, loading, onSelect, onCreate, onJoin }: { meetings: MeetingListItem[]; selectedId?: string; loading?: boolean; onSelect: (id: string) => void; onCreate: () => void; onJoin: () => void }) {
+  return <aside className="meeting-navigation"><Flex vertical gap="middle"><Flex align="center" justify="space-between"><Typography.Title level={4} style={{ margin: 0 }}>我的会议</Typography.Title><Button aria-label="创建会议" title="创建会议" icon={<PlusOutlined />} onClick={onCreate} /></Flex>{loading ? <Flex vertical gap="small"><Skeleton active paragraph={{ rows: 1 }} title={false} /><Skeleton active paragraph={{ rows: 1 }} title={false} /></Flex> : meetings.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有会议" /> : <nav aria-label="会议列表" className="meeting-navigation-list">{meetings.map(meeting => <button type="button" key={meeting.meetingId} className={selectedId === meeting.meetingId ? 'meeting-navigation-item selected' : 'meeting-navigation-item'} onClick={() => onSelect(meeting.meetingId)}><TeamOutlined /><span><strong>{meeting.name}</strong><small>{meeting.myDisplayName}</small></span></button>)}</nav>}<Button block icon={<TeamOutlined />} onClick={onJoin}>加入会议</Button></Flex></aside>
+}

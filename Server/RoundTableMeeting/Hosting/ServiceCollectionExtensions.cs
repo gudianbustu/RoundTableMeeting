@@ -13,6 +13,7 @@ using RoundTableMeeting.Repository.Sqlite;
 using RoundTableMeeting.Repository.Sqlite.Configuration;
 using RoundTableMeeting.Repository.Sqlite.Database;
 using RoundTableMeeting.Errors;
+using RoundTableMeeting.Meetings;
 
 namespace RoundTableMeeting.Hosting;
 
@@ -40,6 +41,10 @@ public static class ServiceCollectionExtensions
             .Bind(builder.Configuration.GetSection(AuthenticationOptions.SectionName))
             .ValidateDataAnnotations()
             .Validate(options => options.Validate(out _), "Authentication settings are invalid.")
+            .ValidateOnStart();
+        builder.Services.AddOptions<MeetingJoinRateLimitOptions>()
+            .Bind(builder.Configuration.GetSection(MeetingJoinRateLimitOptions.SectionName))
+            .ValidateDataAnnotations()
             .ValidateOnStart();
         builder.Services.AddSingleton<IPasswordHasher<RoundTableMeeting.Domain.Entities.UserAccount>, PasswordHasher<RoundTableMeeting.Domain.Entities.UserAccount>>();
         builder.Services.AddSingleton<PasswordVerificationService>();
@@ -75,6 +80,12 @@ public static class ServiceCollectionExtensions
         });
 
         builder.Services.AddSingleton<IRuntimeEnvironment>(new RuntimeEnvironment(builder.Environment.EnvironmentName));
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<MeetingDeletionSignal>();
+        builder.Services.AddSingleton<RoundTableMeeting.Abstraction.Services.IMeetingDeletionSignal>(services => services.GetRequiredService<MeetingDeletionSignal>());
+        builder.Services.AddHostedService<MeetingDeletionRecoveryService>();
+        builder.Services.AddSingleton<MeetingJoinRateLimiter>();
+        builder.Services.AddScoped<MeetingJoinRateLimitFilter>();
         builder.Services.AddExceptionHandler<ApiExceptionHandler>();
         builder.Services.AddProblemDetails();
         builder.Services.Configure<ApiBehaviorOptions>(options =>
