@@ -4,7 +4,7 @@
 
 本文将[服务端设计](design.md)具体化为项目文件、包引用、配置、数据库 Migration、DI 注册、Cookie 管道、Controller 和运行命令。主题阶段顺序见[主题实现方案](../impl.md)，模块内部实现见[账号访问模块实现方案](Modules/AccountAccess/impl.md)，自动化验证见[测试方案](../testPlan.md)。
 
-本文只实现配置预置账号、登录、当前用户查询、退出和统一认证边界，不实现用户管理后台或高级账号安全。
+本文实现配置预置账号、登录、当前用户查询、退出、统一认证边界和内部测试所需的最小用户管理，不实现完整用户后台或高级账号安全。
 
 ## 2. 依赖和项目变更
 
@@ -12,11 +12,11 @@
 
 | 项目 | 本主题新增内容 |
 | --- | --- |
-| RoundTableMeeting.Domain | UserAccount、用户名规范化、IUserAccountRepository |
-| RoundTableMeeting.Abstraction | 认证 DTO、服务接口、当前用户上下文、种子契约 |
-| RoundTableMeeting.Application | AuthenticationService、AccountSeeder |
-| RoundTableMeeting.Repository.Sqlite | DbSet、实体配置、仓储、Migration |
-| RoundTableMeeting | Cookie、Authorization、Origin 校验、Controller、启动种子 |
+| RoundTableMeeting.Domain | UserAccount、用户名规范化、昵称/哈希替换行为、IUserAccountRepository、用户名冲突异常 |
+| RoundTableMeeting.Abstraction | 认证与用户管理 DTO、服务接口、当前用户上下文、种子契约 |
+| RoundTableMeeting.Application | AuthenticationService、AccountSeeder、UserManagementService |
+| RoundTableMeeting.Repository.Sqlite | DbSet、实体配置、仓储、Migration、唯一索引冲突转换 |
+| RoundTableMeeting | Cookie、Authorization、Origin 校验、认证与用户管理 Controller、敏感响应禁缓存、启动种子 |
 
 Application 直接引用提供 IPasswordHasher<TUser> 的 Microsoft.Extensions.Identity.Core `10.0.11`，与当前 ASP.NET Core/EF Core 基线保持一致；在 `Server/Directory.Packages.props` 增加 `<PackageVersion Include="Microsoft.Extensions.Identity.Core" Version="10.0.11" />`，Application 项目只声明 PackageReference。不引入完整 ASP.NET Core Identity UI、角色系统或 EF Identity Store。
 
@@ -26,6 +26,7 @@ Application 直接引用提供 IPasswordHasher<TUser> 的 Microsoft.Extensions.I
 Server/
   RoundTableMeeting.Domain/
     Entities/UserAccount.cs
+    Exceptions/UsernameConflictException.cs
     Repositories/IUserAccountRepository.cs
   RoundTableMeeting.Abstraction/
     Contracts/Authentication/LoginRequest.cs
@@ -40,6 +41,8 @@ Server/
     AccountAccess/AuthenticationService.cs
     AccountAccess/AccountSeeder.cs
     AccountAccess/PasswordVerificationService.cs
+    UserManagement/UserManagementConstants.cs
+    UserManagement/UserManagementService.cs
   RoundTableMeeting.Repository.Sqlite/
     Database/Configurations/UserAccountConfiguration.cs
     Repositories/UserAccountRepository.cs
@@ -49,10 +52,18 @@ Server/
     Authentication/AuthenticationConstants.cs
     Authentication/HttpCurrentUserContext.cs
     Authentication/OriginValidationMiddleware.cs
-    Authentication/AuthenticationResponseHeadersMiddleware.cs
+    Authentication/NoStoreResponseAttribute.cs
+    Authentication/SensitiveResponseHeadersMiddleware.cs
     Authentication/RequireBrowserOriginAttribute.cs
     Authentication/AuthenticationProblemDetailsExtensions.cs
     Controllers/AuthenticationController.cs
+    Controllers/UsersController.cs
+  RoundTableMeeting.Abstraction/
+    Contracts/UserManagement/UserSummaryDto.cs
+    Contracts/UserManagement/CreateUserRequest.cs
+    Contracts/UserManagement/UpdateNicknameRequest.cs
+    Contracts/UserManagement/UserManagementResults.cs
+    Services/IUserManagementService.cs
 ~~~
 
 以上文件名和目录作为本主题实施基线；只有发现与已存在同名类型冲突时才允许在 `impl.md` 先更新后调整，职责不能跨层移动。
@@ -168,14 +179,15 @@ ICurrentUserContext 的接口属性固定为 `bool IsAuthenticated` 和 `Guid? U
 
 Cookie Events 覆盖 API 默认重定向：Challenge 返回 401 unauthenticated ProblemDetails；Forbidden 返回 403 forbidden ProblemDetails。forbidden 是为后续业务冻结的通用契约，本主题只通过测试专用拒绝策略端点验证形态，不代表当前存在正式业务权限场景。API 不返回 HTML 登录页。Cookie Events 和 OriginValidationMiddleware 统一调用 Web 现有 ProblemDetailsFactory/TraceIdResolver 的扩展方法生成 ApiProblemDetails，不能各自手写另一套 JSON。
 
-AuthenticationResponseHeadersMiddleware 对 `/api/auth/*` 请求使用 Response.OnStarting 统一追加 `Cache-Control: no-store` 和 `Pragma: no-cache`，并放在 Origin、Authentication 和模型绑定之前，确保成功、Challenge、Origin 拒绝、415、自动 400 和内部错误都携带同一缓存头。
+`NoStoreResponseAttribute` 作为 Controller/action metadata 标记敏感端点。`SensitiveResponseHeadersMiddleware` 在 UseRouting 后读取 metadata，并通过 Response.OnStarting 统一追加 `Cache-Control: no-store` 和 `Pragma: no-cache`；AuthenticationController 与 UsersController 均标记该 metadata。中间件放在 Origin、Authentication 和模型绑定之前，确保成功、Challenge、Origin 拒绝、415、自动 400 和内部错误都携带同一缓存头。旧的 auth-path 专用响应头中间件由此替换，避免用户管理出现第二套规则。
 
 ### 7.3 Origin 校验
 
-新增固定类型 `RequireBrowserOriginAttribute(bool requireJsonBody = false)` 作为端点元数据；OriginValidationMiddleware 位于显式 `UseRouting()` 之后，只处理当前 Endpoint 带该元数据的 Cookie 写操作。login 使用 `RequireBrowserOrigin(true)` 要求 JSON，logout 使用默认参数只要求 Origin 和 POST，不要求请求体 Content-Type；后续业务写 action 引入时必须同步标记并显式选择正文策略：
+固定类型 `RequireBrowserOriginAttribute(bool requireJsonBody = false)` 作为方法级 endpoint metadata；OriginValidationMiddleware 位于显式 `UseRouting()` 之后，只处理当前 endpoint 带该元数据的 Cookie 写操作。login 使用 `RequireBrowserOrigin(true)` 要求 JSON，logout 使用默认参数只要求 Origin，不要求请求体 Content-Type；后续业务写 action 引入时必须同步标记并显式选择正文策略：
 
 - `RequireJsonBody=true` 的标记端点要求解析后的 media type 精确为 `application/json`；不匹配返回 415 `unsupported_media_type`。
-- `RequireJsonBody=false` 的无正文端点只接受 POST，不强制 Content-Type。
+- `RequireJsonBody=false` 的无正文端点不强制 Content-Type；POST、PATCH、PUT、DELETE 的方法合法性由 routing/action metadata 决定。
+- 方法与路由不匹配时 Origin 中间件直接放行，由 routing 保留 404/405，不能改写为 403/415。
 - Origin 必须存在且精确匹配 AllowedOrigins；null、缺失和外部源返回 403 origin_not_allowed。
 - 缺失 Origin 同样返回 403 origin_not_allowed；IntegrationTests 和联调工具必须显式提供允许的 Origin。
 - 不开放携带凭证的跨源 CORS。
@@ -192,7 +204,7 @@ AuthenticationController 固定：
 | GET | /api/auth/me | Authorize；查询当前用户，返回 DTO |
 | POST | /api/auth/logout | 可匿名；SignOutAsync，幂等返回 204 |
 
-login 和 logout action 标记 `RequireBrowserOrigin`。login、me、logout 的所有最终响应（成功、validation、invalid credentials、challenge、forbidden、unsupported media type、账号不存在）统一设置 `Cache-Control: no-store` 和 `Pragma: no-cache`。GetCurrentUserAsync 返回 Unauthenticated 时，me action 先执行 SignOutAsync 删除陈旧 Cookie，再返回 401。该缓存头逻辑由认证响应公共扩展或中间件统一添加，不在每个分支重复。
+login 和 logout action 标记 `RequireBrowserOrigin`。AuthenticationController 与 UsersController 标记 `NoStoreResponse`；认证和用户管理的所有最终响应统一设置 `Cache-Control: no-store` 和 `Pragma: no-cache`。GetCurrentUserAsync 返回 Unauthenticated 时，me action 先执行 SignOutAsync 删除陈旧 Cookie，再返回 401。缓存头由 metadata 中间件统一添加，不在每个分支重复。
 
 错误契约：
 
@@ -217,9 +229,9 @@ LoginRequest 的 DataAnnotations 字段名通过现有模型键归一化输出�
 3. IAccountSeeder.SeedAsync。
 4. 任一步失败，记录安全摘要并终止，不监听端口。
 
-账号种子不塞入 SQLite 初始化器。请求管道固定为：异常处理、Serilog 请求日志、HTTPS、`UseRouting()`、AuthenticationResponseHeadersMiddleware、OriginValidationMiddleware、`UseAuthentication()`、`UseAuthorization()`、静态文件，随后映射 OpenAPI、Scalar、Controller、API fallback 和 SPA fallback。必须显式调用 `UseRouting()`，Origin 中间件必须严格位于其后，否则无法读取端点元数据。Origin 中间件只对带元数据端点生效，未知 API 继续得到 route_not_found。
+账号种子不塞入 SQLite 初始化器。请求管道固定为：异常处理、Serilog 请求日志、HTTPS、`UseRouting()`、默认文件与静态文件、SensitiveResponseHeadersMiddleware、OriginValidationMiddleware、`UseAuthentication()`、`UseAuthorization()`，随后映射 OpenAPI、Scalar、Controller、API fallback 和 SPA fallback。必须显式调用 `UseRouting()`，两个 metadata 中间件必须严格位于其后，否则无法读取 endpoint metadata。静态资源在认证与 Origin 之前匿名提供；Origin 中间件只对带元数据端点生效，未知 API 继续得到 route_not_found。
 
-登录和退出 action、SystemController、OpenAPI、Scalar、专用 API 404 fallback 与 SPA fallback 显式使用 `[AllowAnonymous]` 或 endpoint `.AllowAnonymous()`。现有 IntegrationTests `Controllers/TestController.cs` 的 `/__test/application-part`、`/__test/throw`、`/__test/validation` 继续承担 002 ApplicationPart、ProblemDetails、字段校验、traceId 和请求日志回归，Controller 类必须显式标记 `[AllowAnonymous]`，保持原 200/400/500 语义。另新增独立测试控制器 `DefaultAuthorizationTestController`（无授权元数据）验证 FallbackPolicy 401，以及独立 `ForbiddenTestController`（始终失败策略）验证 403 forbidden；二者不得复用现有 TestController，也不得改变 002 夹具的预期。
+登录和退出 action、SystemController、OpenAPI、Scalar、专用 API 404 fallback 与 SPA fallback 显式使用 `[AllowAnonymous]` 或 endpoint `.AllowAnonymous()`。用户管理增量的写 action 必须在具体 action 上声明方法级 `RequireBrowserOrigin`，不能通过 URL、Controller 名称或 HTTP 方法启发式判断。现有 IntegrationTests `Controllers/TestController.cs` 的 `/__test/application-part`、`/__test/throw`、`/__test/validation` 继续承担 002 ApplicationPart、ProblemDetails、字段校验、traceId 和请求日志回归，Controller 类必须显式标记 `[AllowAnonymous]`，保持原 200/400/500 语义。另新增独立测试控制器 `DefaultAuthorizationTestController`（无授权元数据）验证 FallbackPolicy 401，以及独立 `ForbiddenTestController`（始终失败策略）验证 403 forbidden；二者不得复用现有 TestController，也不得改变 002 夹具的预期。
 
 TestApplicationFactory 的公共配置必须增加有效 AllowedOrigins 和两个 SeedAccounts，并把上述三个测试 Controller 作为测试 ApplicationPart 注入。现有 StartupFailureTests 及任何启动真实进程的 002 回归测试，除专门验证认证配置缺失的 AI-021 外，也必须注入有效认证配置，确保测试仍由原目标故障触发。
 
@@ -227,7 +239,7 @@ StartupFailureTests 除退出码、端口和脱敏断言外，还必须断言安
 
 生产发布前必须把浏览器公开 Origin 完整值（scheme、host、port）写入 `Authentication__AllowedOrigins__0`；启动时缺失或格式非法直接失败，并在安全启动摘要中指出配置键，不打印允许源值。应用不把允许源列表写入日志，但运维检查命令必须在启动前对比发布 URL 与该配置。登录联调统一走 Vite 5173；直接访问 Development HTTPS 7043 不属于 003 登录验收路径。
 
-ASP.NET Core Data Protection 密钥不在本主题持久化；服务端重启或更换实例后 Cookie 可以失效，这与主题总体设计“不承诺服务端重启后的会话恢复”一致。容器、多实例或跨部署保留会话时必须另行设计密钥存储。运行期业务不得再次解析 SeedAccounts；账号种子完成后只通过数据库账号工作。验收账号密码必须保存在本地受保护秘密中，当前主题没有找回或重置手段。
+ASP.NET Core Data Protection 密钥不在本主题持久化；服务端重启或更换实例后 Cookie 可以失效，这与主题总体设计“不承诺服务端重启后的会话恢复”一致。容器、多实例或跨部署保留会话时必须另行设计密钥存储。运行期业务不得再次解析 SeedAccounts；账号种子完成后只通过数据库账号工作。验收账号密码必须保存在本地受保护秘密中；当前只提供已登录用户执行的固定密码重置，不提供自助找回、自定义重置或安全恢复流程。
 
 ## 10. 命令
 
@@ -252,3 +264,9 @@ dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration
 - Vite Origin 允许，外部 Origin 拒绝。
 - 密码、哈希、Cookie、Claim 和秘密不进入日志或响应。
 - 002 框架测试和发布链路继续通过。
+- 任意已登录用户可访问四条用户管理接口。
+- 用户列表只返回 UserId、Username、Nickname 并稳定排序。
+- 用户名冲突统一 409 username_conflict，目标不存在统一 404 user_not_found。
+- POST/PATCH 写请求的 Origin 和 JSON metadata 正确，方法错误保留 routing 404/405。
+- 用户管理全部响应 no-store/no-cache。
+- 固定密码、初始密码和哈希不进入日志、响应或 OpenAPI 示例。

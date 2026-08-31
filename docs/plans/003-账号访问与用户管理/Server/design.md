@@ -2,9 +2,13 @@
 
 ## 1. 文档定位
 
-本文定义账号访问主题在服务端的工程分层、认证方式、账号持久化、初始账号初始化、HTTP 入口、当前用户上下文和最小访问控制。主题范围与跨端契约以[主题总体设计](../design.md)为准；服务端账号访问模块的用例和内部契约以[账号访问模块设计](Modules/AccountAccess/design.md)为准。
+本文定义账号访问主题在服务端的工程分层、认证方式、账号持久化、初始账号初始化、HTTP 入口、当前用户上下文和最小用户管理。主题范围与跨端契约以[主题总体设计](../design.md)为准；登录和会话用例以[账号访问模块设计](Modules/AccountAccess/design.md)为准，用户列表与管理操作以[用户管理模块设计](Modules/UserManagement/design.md)为准。
 
-本文只为后续主题提供最小可用的人类身份，不建设完整 ASP.NET Core Identity 用户中心，也不实现需求文档中记录但本次延期的用户管理和账号安全能力。
+本文只为后续主题提供最小可用的人类身份和内部测试账号维护，不建设完整 ASP.NET Core Identity 用户中心，也不实现角色权限、审计和账号生命周期治理。
+
+本轮新增内容属于设计增量，尚未声明现有服务端源码已经提供 `/api/users`。
+
+公共 `OriginValidationMiddleware` 已由提交 `4abd58e` 升级完成：HTTP 方法合法性由 endpoint routing 和 action 特性决定，中间件不硬编码 POST；带 `RequireBrowserOrigin` 元数据的 POST、PATCH、PUT、DELETE 均可复用 Origin 校验，并按 `RequireJsonBody` 决定是否要求 `application/json`。用户管理不再有框架前置阻断。
 
 ## 2. 服务端目标
 
@@ -16,6 +20,7 @@
 4. 支持当前浏览器退出登录。
 5. 对后续业务入口提供统一认证和授权边界。
 6. 在错误响应和结构化日志中保护密码、Cookie 和内部实现细节。
+7. 允许任意已登录用户查看用户列表、添加账号、修改昵称和固定重置密码。
 
 ## 3. 分层职责
 
@@ -44,6 +49,7 @@ Abstraction 不暴露 Domain 实体、EF Core 查询类型、Cookie 选项或 AS
 - 将账号实体转换为当前用户 DTO；
 - 判断登录成功或无效凭证；
 - 实现 `IAccountSeeder`，编排账号种子校验、查重、密码哈希和新增提交。
+- 实现最小用户管理应用服务，编排列表、添加、昵称修改和密码重置。
 
 Application 不直接访问 `HttpContext`，不写入认证 Cookie，不返回 `ClaimsPrincipal`，不引用 Repository 或 EF Core。
 
@@ -56,6 +62,7 @@ Application 不直接访问 `HttpContext`，不写入认证 Cookie，不返回 `
 - 账号新增和初始化所需的持久化操作；
 - 用户名唯一约束；
 - 与现有 `RoundTableMeetingDbContext` 和 `IUnitOfWork` 集成。
+- 提供小规模账号列表读取。
 
 Repository 不比较密码、不解析 Cookie、不决定 HTTP 状态码，也不向客户端暴露实体。
 
@@ -66,10 +73,12 @@ Repository 不比较密码、不解析 Cookie、不决定 HTTP 状态码，也�
 - 注册 ASP.NET Core Cookie Authentication；
 - 注册授权和当前用户访问器；
 - 注册认证 Controller；
+- 注册用户管理 Controller；
 - 把登录成功的 `UserId` 写入最小认证 Claim；
 - 按统一错误边界返回 `401`、验证错误和无效凭证错误；
 - 在启动阶段触发数据库迁移及账号种子初始化；
 - 将登录状态应用到后续 Controller、实时入口和页面托管。
+- 对用户管理写接口复用 Origin 元数据和认证响应安全约束。
 
 Controller 只做请求绑定、调用应用服务、建立或清除 Cookie 和返回 DTO，不直接查询数据库。
 
@@ -109,6 +118,8 @@ Cookie 只包含识别账号所需的最小 Claim，至少包含 `UserId`。请�
 
 本主题不增加角色、权限集合、密码重置标志、首次登录标志、禁用标志或完整审计字段。若后续业务需要账号状态，必须另行设计，不以空字段预留的方式扩大当前模型。
 
+账号实体增加明确的昵称修改和密码哈希替换行为。昵称修改复用 Trim + NFC 和 64 字符上限；密码重置由 Application 生成新哈希后替换旧哈希，不允许 Controller 或 Repository 直接写入明文密码。
+
 用户名在本主题采用最小稳定比较语义：显示用户名先去除首尾空格并转换为 Unicode NFC，规范化后为空则拒绝；比较值 `NormalizedUsername` 在此基础上执行 `ToUpperInvariant()`。数据库对 `NormalizedUsername` 建立普通精确唯一索引，配置内查重和仓储查询也使用同一比较值，不依赖 SQLite `NOCASE` 或不同运行时的默认字符串比较。登录和当前用户接口返回保存的显示用户名，不返回比较值。
 
 `UserAccount.ID` 继承自 `BaseEntity`，它就是平台和跨端契约中的 `UserId`；实体不得再声明第二个 `UserId` 属性。`CurrentUserDto.UserId` 直接映射 `UserAccount.ID`，后续会议创建者、参与者和消息发送者同样引用该 Guid。密码不执行 Trim、Unicode 规范化或大小写转换，配置和登录请求中的原始字符串直接交给密码哈希器。
@@ -141,12 +152,18 @@ Web 宿主拥有 Options 绑定和 `ValidateOnStart`，将验证通过的账号�
 | `POST` | `/api/auth/login` | 匿名 | 验证凭证并建立当前浏览器会话 |
 | `GET` | `/api/auth/me` | 必须认证 | 返回当前账号的最小资料 |
 | `POST` | `/api/auth/logout` | 可匿名 | 清除当前浏览器会话，保持幂等 |
+| `GET` | `/api/users` | 已登录 | 返回全部账号的最小列表 |
+| `POST` | `/api/users` | 已登录 | 添加账号 |
+| `PATCH` | `/api/users/{userId}/nickname` | 已登录 | 修改账号昵称 |
+| `POST` | `/api/users/{userId}/reset-password` | 已登录 | 将密码重置为 `123456` |
 
 授权配置固定设置 `FallbackPolicy = RequireAuthenticatedUser()`，使没有显式授权元数据的业务端点默认要求认证。登录、退出、系统状态、OpenAPI、Scalar、API 404 fallback 和 SPA 页面 fallback 显式标记 `AllowAnonymous`；静态文件由静态文件中间件直接提供。会议、参与者、消息、实时连接和其他人类业务入口不得使用 `AllowAnonymous`。
 
-无效登录凭证固定返回 `401`，并使用 `code = "invalid_credentials"`；请求字段校验失败固定返回 `400`、`code = "validation_failed"` 和传输字段 `errors`；不支持的请求媒体类型返回 `415`、`code = "unsupported_media_type"`。`GET /api/auth/me` 没有有效会话时返回 `401`、`code = "unauthenticated"`。通用已认证但权限不足错误固定为 `403`、`code = "forbidden"`。三个认证 operation 必须在 OpenAPI 中声明对应的类型化错误响应，供 Kiota 生成错误映射。
+无效登录凭证固定返回 `401`，并使用 `code = "invalid_credentials"`；请求字段校验失败固定返回 `400`、`code = "validation_failed"` 和传输字段 `errors`；不支持的请求媒体类型返回 `415`、`code = "unsupported_media_type"`。`GET /api/auth/me` 没有有效会话时返回 `401`、`code = "unauthenticated"`。通用已认证但权限不足错误固定为 `403`、`code = "forbidden"`。用户管理的重复用户名固定返回 `409`、`code = "username_conflict"`；目标账号不存在固定返回 `404`、`code = "user_not_found"`。认证和用户管理 operation 都必须在 OpenAPI 中声明实际可能返回的类型化错误响应，供 Kiota 生成错误映射。
 
-Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为：未认证 Challenge 直接返回 `401` ProblemDetails，禁止重定向到 HTML 登录页；当前主题没有业务权限不足场景，后续出现已认证但无权限时固定使用 `403` ProblemDetails。
+Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为：未认证 Challenge 直接返回 `401` ProblemDetails，禁止重定向到 HTML 登录页；当前主题没有业务权限不足场景，后续出现已认证但无权限时固定使用 `403` ProblemDetails。`username_conflict` 和 `user_not_found` 只属于用户管理业务错误，不代表当前引入角色权限。
+
+用户管理 Controller 显式要求认证，但不检查角色、权限或管理员标志。当前所有已登录用户对四个用户管理接口拥有相同访问能力；该开放边界仅适用于少量可信内部测试，进入生产前必须在 Controller/endpoint policy 和客户端菜单同时收紧，并补充审计与会话治理；未来改造不改变 Application 用例契约。
 
 ### 6.2 登录
 
@@ -166,7 +183,44 @@ Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为
 
 ### 6.5 Cookie 写请求保护
 
-浏览器客户端和 API 在生产环境必须保持同源，服务端不开放允许携带凭证的跨源 CORS。使用 Cookie 改变状态的浏览器端点通过明确的 `RequireBrowserOrigin` 端点元数据登记；登录和退出必须登记，后续业务写端点引入时必须同步登记。校验中间件只处理匹配到该元数据的端点，未知 API 和未标记端点继续进入原有授权或 404 边界。带请求体的登记端点只接受预期 HTTP 方法和 `application/json` 请求；无请求体的退出接口只接受 `POST`，不以不存在的 Content-Type 作为失败条件。所有登记端点都必须携带 `Origin`；生产同源部署时该值必须与配置的浏览器源一致，开发环境通过明确配置允许 Vite 浏览器源（例如 `http://localhost:5173`），不把代理转发后的 API Host 当作浏览器源；缺失、`null` 或未配置的外部 Origin 一律拒绝。`SameSite=Lax`、同源或受控开发源限制和 Origin 校验共同构成本主题的最小跨站请求保护；未来若开放跨源客户端、嵌入式页面或第三方集成，必须重新评估并引入 ASP.NET Core Antiforgery 或等价双重提交令牌方案。
+浏览器客户端和 API 在生产环境必须保持同源，服务端不开放允许携带凭证的跨源 CORS。使用 Cookie 改变状态的浏览器端点通过明确的 `RequireBrowserOrigin` 端点元数据登记；登录、退出、添加账号、昵称修改和密码重置必须登记，后续业务写端点引入时必须同步登记。校验中间件只处理匹配到该元数据的端点，未知 API 和未标记端点继续进入原有授权或 404 边界。POST、PATCH、PUT、DELETE 是否允许由 endpoint routing 决定；中间件不能把非 POST 请求统一误判为 `415`。带 JSON 正文的登记端点要求 `application/json`，无正文端点不因缺少 Content-Type 失败。所有登记端点都必须携带 `Origin`；生产同源部署时该值必须与配置的浏览器源一致，开发环境通过明确配置允许 Vite 浏览器源（例如 `http://localhost:5173`），不把代理转发后的 API Host 当作浏览器源；缺失、`null` 或未配置的外部 Origin 一律拒绝。`SameSite=Lax`、同源或受控开发源限制和 Origin 校验共同构成本主题的最小跨站请求保护；未来若开放跨源客户端、嵌入式页面或第三方集成，必须重新评估并引入 ASP.NET Core Antiforgery 或等价双重提交令牌方案。
+
+添加账号和昵称修改带 JSON 正文，使用 `RequireBrowserOrigin(true)`；添加使用 POST，昵称修改使用 PATCH。密码重置无请求正文，使用 POST 和默认 `RequireBrowserOrigin`。用户列表是只读 GET，不需要 Origin 元数据。框架回归必须另外覆盖带正文 PUT 与无正文 DELETE 的标记端点，证明中间件没有方法硬编码。
+
+系统框架升级完成门固定为：
+
+| 场景 | 预期 |
+| --- | --- |
+| 标记的 POST + JSON + 允许 Origin | 进入 endpoint |
+| 标记的 PATCH + JSON + 允许 Origin | 进入 endpoint |
+| 标记的 PUT + JSON + 允许 Origin | 进入 endpoint |
+| 标记的 DELETE + 无正文 + 允许 Origin | 进入 endpoint |
+| 上述任一方法缺失或使用外部 Origin | `403 origin_not_allowed` |
+| `RequireJsonBody=true` 且媒体类型不是 `application/json` | `415 unsupported_media_type` |
+| 方法与路由不匹配 | 由 routing 返回 404/405，不由 Origin 中间件改写为 415 |
+| 未标记的 API | 不受 Origin 中间件拦截，保持原授权或 404 语义 |
+
+### 6.6 用户列表与添加
+
+`GET /api/users` 返回按规范化用户名稳定排序的完整数组，元素只包含 `userId`、`username`、`nickname`。当前仅服务内部小规模测试，不增加分页、搜索或总数元数据。
+
+`POST /api/users` 接收用户名、昵称和初始密码。用户名冲突返回 `409`、`code = username_conflict`；输入错误返回 `400 validation_failed`。成功返回 `201` 和新账号最小 DTO。新账号立即可以登录，创建过程不修改配置种子。
+
+`username_conflict` 必须登记到统一 `ProblemDetailsFactory`，通过 `ApiProblemDetailsWriter` 输出安全固定标题、detail 和 traceId；Controller 不自行构造 ProblemDetails。OpenAPI operation 必须声明 `400/401/403/409/415/500`，Kiota 生成结果必须包含对应错误映射。
+
+### 6.7 昵称修改
+
+`PATCH /api/users/{userId}/nickname` 只接收 nickname，成功返回更新后的最小 DTO。账号不存在返回 `404 user_not_found`。昵称修改只更新账号资料；会议内显示名称规则由后续会议主题定义。若修改的是当前账号，客户端在操作成功后重新读取当前用户资料。
+
+`user_not_found` 同样登记到统一 `ProblemDetailsFactory`，并由昵称修改和密码重置 operation 声明类型化 `404` 错误响应，不能通过异常消息或局部 JSON 返回。
+
+### 6.8 密码重置
+
+`POST /api/users/{userId}/reset-password` 不接收请求正文，固定将密码替换为 `123456` 的哈希并返回 `204`。账号不存在返回 `404 user_not_found`。响应和日志不返回固定密码、旧哈希或新哈希；客户端在确认对话框中依据冻结契约展示固定值。
+
+密码重置不撤销已有 Cookie，不建立首次登录改密标志，也不记录重置人、时间或历史。这些能力与后续权限、审计和会话治理一起设计。
+
+四个 `/api/users` operation 的成功和错误响应统一设置 `Cache-Control: no-store` 和 `Pragma: no-cache`。用户列表虽然是 GET，也不能被浏览器或中间缓存保存；实现时扩展现有认证响应头中间件的路径/元数据覆盖范围，不能只覆盖 `/api/auth/*`。
 
 ## 7. 授权和公开入口
 
@@ -204,6 +258,8 @@ Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为
 
 本主题不建立登录审计表、密码重置历史或管理员操作日志；“有请求日志”不等于“实现业务审计”。
 
+用户管理操作同样不记录业务审计，不记录操作人和目标账号关联历史。请求日志只能记录路由、状态和 traceId，不记录初始密码、固定重置密码、密码哈希或完整请求体。
+
 首版明确不提供登录失败限流、账号锁定、密码复杂度和最小长度策略；配置密码只要求非空且不超过 256 个字符。这是为验证核心业务做出的有意简化，不构成长期安全承诺，后续账号安全主题必须重新评估。
 
 ## 9. 服务端扩展点
@@ -221,8 +277,8 @@ Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为
 
 本主题服务端不实现：
 
-- 用户创建、用户资料修改和用户列表；
-- 密码修改、密码重置、找回密码和密码过期；
+- 用户搜索、分页、删除、禁用、批量导入和公开注册；
+- 用户名修改、用户自行修改密码、找回密码和密码过期；
 - 账号状态管理、角色和组织权限；
 - 登录风控、多因素认证、第三方身份源；
 - 持久化会话、设备管理和全局会话撤销；

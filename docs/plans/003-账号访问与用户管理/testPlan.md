@@ -2,9 +2,9 @@
 
 ## 1. 文档定位
 
-本文定义 003 账号访问主题的自动化测试、契约测试、构建回归和浏览器验收。实施顺序见[总体实现方案](impl.md)，服务端见[Server/impl.md](Server/impl.md)，客户端见[Client/impl.md](Client/impl.md)。
+本文定义 003 账号访问与用户管理主题的自动化测试、契约测试、构建回归和浏览器验收。实施顺序见[总体实现方案](impl.md)，服务端见[Server/impl.md](Server/impl.md)，客户端见[Client/impl.md](Client/impl.md)。
 
-测试只验证最小账号接入，不把添加用户、修改密码、密码重置、角色、审计或高级会话能力当作遗漏测试。
+测试验证首轮最小账号接入，以及本轮为内部测试补充的最小用户管理：列表、添加账号、昵称修改和固定密码重置。用户自行改密、找回密码、角色、审计和高级会话能力仍是明确延期范围，不作为本轮缺陷。
 
 ## 2. 测试目标
 
@@ -17,7 +17,9 @@
 5. Application 不访问 Web、Options、Cookie 或 EF Core。
 6. 页面刷新通过 me 恢复资料，不重新提交凭证。
 7. 客户端竞态、全局 401、退出网络失败和安全返回路径行为正确。
-8. 002 的系统状态、Kiota、构建、发布和 SPA 回归继续通过。
+8. 所有已登录用户可使用用户管理 API 和页面，未认证请求统一被拒绝。
+9. 用户管理写操作遵循方法级 Origin metadata、JSON 正文策略、统一 ProblemDetails 和禁缓存契约。
+10. 002 的系统状态、Kiota、构建、发布和 SPA 回归继续通过。
 
 ## 3. 环境与隔离
 
@@ -41,7 +43,7 @@
 - P1：核心失败路径、契约和客户端状态，主题完成前必须通过。
 - P2：视觉、辅助诊断和维护性检查，完成前应通过或得到明确延期批准。
 
-所有 P0/P1 失败都阻止 003 完成。
+所有 P0/P1 失败都阻止 003 完成。用户管理的开放授权边界只允许在内部测试环境使用；生产或对外部署前必须完成菜单/API 授权收紧、审计和会话治理设计，不得把本轮“所有已登录用户均可管理账号”直接视为生产安全结论。
 
 ## 5. Domain 测试
 
@@ -110,7 +112,7 @@
 | AC-002 | P0 | Application 类型扫描 | 不出现 HttpContext、ClaimsPrincipal、Cookie、IConfiguration、IOptions<AuthenticationOptions> |
 | AC-003 | P0 | ICurrentUserContext 实现位置 | 实现位于 Web，Application 只有消费方 |
 | AC-004 | P0 | Repository 类型扫描 | 不引用密码哈希器、Options、Cookie 或 HTTP 类型 |
-| AC-005 | P0 | 服务解析 | IAuthenticationService、IAccountSeeder、IUserAccountRepository、ICurrentUserContext 可按预期生命周期解析 |
+| AC-005 | P0 | 服务解析 | IAuthenticationService、IUserManagementService、IAccountSeeder、IUserAccountRepository、ICurrentUserContext 可按预期生命周期解析 |
 | AC-006 | P1 | 同 scope Repository/UoW/DbContext | 共享同一个 DbContext |
 | AC-007 | P1 | Identity 依赖扫描 | 不注册完整 Identity Store、角色或 Identity UI |
 | AC-008 | P1 | Client 依赖扫描 | 页面和组件不直接 import api/generated |
@@ -153,9 +155,11 @@ TestApplicationFactory 注入临时数据库、两个测试账号、AllowedOrigi
 | AI-029 | P1 | 未标记未知 API | Origin 中间件不拦截未知 `/api/*`，仍返回 route_not_found |
 | AI-030 | P1 | 显式 AllowAnonymous 回归 | login、logout、system/status、OpenAPI、Scalar、API 404 fallback 和现有 `/__test/*` 不受 FallbackPolicy 阻断 |
 | AI-032 | P0 | 独立默认拒绝控制器 | DefaultAuthorizationTestController 无 AllowAnonymous/Authorize 标记，在 FallbackPolicy 下返回 401 |
-| AI-033 | P1 | Origin 元数据顺序和正文策略 | 显式 UseRouting 后按 RequireBrowserOrigin 元数据读取 Origin；login 元数据要求 JSON，logout 元数据不要求 JSON；移动到 UseRouting 前的探针不能作为生产实现 |
+| AI-033 | P1 | Origin 元数据顺序、正文策略和标准写方法 | 显式 UseRouting 后按方法级 RequireBrowserOrigin 元数据读取 Origin；login 元数据要求 JSON，logout 元数据不要求 JSON；后续用户管理的 PATCH 以及框架测试的 PUT/DELETE 不能被中间件硬编码拒绝；移动到 UseRouting 前的探针不能作为生产实现 |
 | AI-034 | P0 | 认证管道加入后的 002 回归 | 现有 TestController 显式 AllowAnonymous，`/__test/application-part`、`/__test/throw`、`/__test/validation` 保持 200/500/400；静态文件、OpenAPI、Scalar、未知 API、SPA fallback 和非 HTML/非 GET 边界保持 002 语义 |
 | AI-035 | P1 | AllowedOrigins 配置错误 | 启动失败并指出安全配置键，不打印 Origin 值或其他秘密 |
+
+编号说明：历史 `AI-031` 的 `/__test/*` AllowAnonymous 回归已合并到 `AI-030`，不再保留重复用例；后续编号保持不重排，避免既有实现和审查引用失效。
 
 ## 10. OpenAPI 和 Kiota 测试
 
@@ -215,6 +219,115 @@ TestApplicationFactory 注入临时数据库、两个测试账号、AllowedOrigi
 | AP-019 | P1 | returnTo 包含 query/hash | 校验后保留 pathname、search、hash；非法 pathname、search 或 hash 分别回退 `/` |
 | AP-020 | P1 | 用户名原始长度 65 至 128 | 客户端允许输入，最终由服务端规范化长度决定是否接受 |
 
+## 12.1 用户管理增量测试
+
+本节只增加内部测试所需的最小用户管理验证，不改动前述认证测试编号。所有写操作使用真实已登录 Cookie；创建和昵称 PATCH 携带允许的 Origin 与 JSON 正文，密码重置只携带允许的 Origin，不发送请求正文。
+
+### 12.1.1 Domain
+
+项目：RoundTableMeeting.Domain.Tests。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-D01 | P0 | ChangeNickname 合法输入 | Trim + NFC 后只更新 Nickname，UserId、Username、NormalizedUsername 和 PasswordHash 不变 |
+| UM-D02 | P0 | ChangeNickname 空白、NFC 后为空或超长 | 拒绝修改，实体保持原值 |
+| UM-D03 | P0 | ReplacePasswordHash | 合法哈希替换成功；空白或超过 512 被拒绝；账号其他字段不变 |
+
+### 12.1.2 Application
+
+项目：RoundTableMeeting.Application.Tests，继续使用 fake 仓储、fake UoW 和真实 PasswordHasher<UserAccount>。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-A01 | P0 | 获取用户列表 | 保持仓储稳定顺序并映射 UserSummaryDto，不暴露 PasswordHash |
+| UM-A02 | P0 | 添加合法账号 | 规范化用户名和昵称、按原字符串生成初始密码哈希、RegisterAdd 并只 Commit 一次，返回新用户摘要；合法密码保留首尾空格，全空白密码拒绝 |
+| UM-A03 | P0 | 添加规范化后重复用户名 | 返回 UsernameConflict，不注册新增、不提交 |
+| UM-A04 | P0 | 添加账号字段无效 | 返回 ValidationFailed，Errors 键为 username、nickname 或 initialPassword；不查询或写入仓储 |
+| UM-A05 | P0 | 预检查后发生唯一索引并发冲突 | UsernameConflictException 映射为 UsernameConflict；其他数据库异常继续上抛 |
+| UM-A06 | P0 | 修改存在账号昵称 | 只调用 ChangeNickname、RegisterEdit 和一次 Commit，返回更新后的摘要 |
+| UM-A07 | P1 | 修改不存在账号昵称 | 返回 UserNotFound，不注册编辑、不提交 |
+| UM-A08 | P0 | 重置存在账号密码 | 只使用固定值 123456 生成新哈希并提交；不修改资料、不读取操作者、不撤销会话 |
+| UM-A09 | P1 | 重置不存在账号密码 | 返回 UserNotFound，不调用哈希器、不注册编辑、不提交 |
+
+### 12.1.3 Repository.Sqlite
+
+项目：RoundTableMeeting.Repository.Sqlite.Tests，使用真实临时 SQLite。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-R01 | P0 | ListAllAsync 多账号 | 按 NormalizedUsername、ID 稳定排序，查询 NoTracking，实体包含持久化资料但不在仓储层生成 DTO |
+| UM-R02 | P0 | Detached 实体昵称和哈希更新 | RegisterEdit + Commit 持久化目标字段，未修改字段保持原值 |
+| UM-R03 | P0 | 并发写入等价用户名 | 目标唯一索引冲突转换为 UsernameConflictException；非目标约束和普通 DbUpdateException 不误报 |
+
+### 12.1.4 HTTP、OpenAPI 和日志
+
+项目：RoundTableMeeting.IntegrationTests，使用 TestApplicationFactory、真实 CookieContainer 和临时 SQLite。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-H01 | P0 | 未登录访问四条用户管理 API | 全部返回 401 unauthenticated ProblemDetails，不产生写入 |
+| UM-H02 | P0 | 任意已登录账号 GET /api/users | 200 稳定数组，只含 userId、username、nickname，不检查角色或管理员身份 |
+| UM-H03 | P0 | POST /api/users 合法请求 | 201 返回摘要，不声明指向不存在单用户 GET 的 Location；新账号可立即登录 |
+| UM-H04 | P0 | POST 重复用户名 | 预检查冲突与数据库并发冲突都返回 409 username_conflict |
+| UM-H05 | P0 | POST 字段无效 | 400 validation_failed，JSON 字段名为 errors，不建立账号 |
+| UM-H06 | P0 | PATCH 存在账号昵称 | 200 返回更新摘要；随后列表和目标账号 me 显示新昵称 |
+| UM-H07 | P1 | PATCH 不存在 UserId | 404 user_not_found，不修改其他账号 |
+| UM-H08 | P0 | POST 重置存在账号密码 | 204；旧密码新登录失败，123456 新登录成功，重置前已有 Cookie 仍可调用 me |
+| UM-H09 | P1 | POST 重置不存在 UserId | 404 user_not_found，不修改任何密码哈希 |
+| UM-H10 | P0 | 三条写 API 的 Origin 缺失、null、外部或多值 | 403 origin_not_allowed，Application 用例不执行 |
+| UM-H11 | P0 | 创建与昵称 PATCH 的媒体类型 | application/json 及带 charset 被接受；缺失或其他 media type 返回 415 unsupported_media_type |
+| UM-H12 | P1 | 密码重置无正文策略 | 不要求 Content-Type；空正文正常进入用例，意外方法或路径仍由 routing 决定 |
+| UM-H13 | P0 | 四条 API 的全部最终响应 | 200/201/204/400/401/403/404/409/415/500 均含 Cache-Control: no-store 和 Pragma: no-cache |
+| UM-H14 | P0 | 用户管理错误响应 | 统一 application/problem+json、稳定 code、status、title、detail、traceId；不返回 MVC 默认 HTML |
+| UM-H15 | P0 | OpenAPI 用户管理契约 | 包含四条 operation、DTO、PATCH、201 响应体及 400/401/403/404/409/415/500 映射；不生成不存在的单用户 GET |
+| UM-H16 | P0 | 错误 HTTP 方法和相邻未知路径 | routing 保持 404/405；Origin 中间件不将其改写为 403 或 415 |
+| UM-H17 | P0 | 日志与响应扫描 | 不包含初始密码、123456、PasswordHash、Cookie、完整请求正文或操作者 Claim |
+
+### 12.1.5 客户端 Vitest
+
+测试与 userManagement feature、AuthenticationProvider 和路由文件 colocate。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-V01 | P0 | /users 首次加载成功 | 显示稳定用户表格与添加入口，行资料不包含密码或权限字段 |
+| UM-V02 | P1 | 列表网络失败后重试 | 显示 ErrorState；重试成功替换为最新完整列表 |
+| UM-V03 | P1 | StrictMode、重复加载与页面卸载 | 旧请求被取消，晚返回结果不覆盖新状态且无卸载后更新 |
+| UM-V04 | P0 | 添加账号成功 | 只提交一次，关闭弹窗、提示成功并刷新列表 |
+| UM-V05 | P0 | 添加 validation_failed | 字段错误绑定 username、nickname、initialPassword，表单保持可修正 |
+| UM-V06 | P1 | 添加 username_conflict | 显示用户名冲突，不关闭弹窗，不误报网络错误 |
+| UM-V07 | P0 | 添加请求失败 | 初始密码被清空，用户名和昵称保留，不把密码写入日志或持久化状态 |
+| UM-V08 | P0 | 修改其他账号昵称成功 | 刷新列表，不调用 refreshCurrentUser |
+| UM-V09 | P0 | 修改当前账号昵称成功 | 刷新列表并调用 refreshCurrentUser，CurrentUserBar 更新昵称 |
+| UM-V10 | P1 | 当前账号昵称成功后的两个刷新 | 列表刷新与 refreshCurrentUser 独立执行；任一失败不阻止另一个、不回滚服务端成功结果，并显示对应同步错误 |
+| UM-V11 | P1 | 修改或重置返回 user_not_found | 关闭失效目标操作、提示账号不存在并刷新列表 |
+| UM-V12 | P0 | 打开密码重置确认框 | 明确目标账号、固定值 123456 和已有会话不立即失效；不提供密码输入框 |
+| UM-V13 | P0 | 密码重置成功 | 只提交一次，关闭确认框并显示“密码已重置为 123456” |
+| UM-V14 | P0 | 任一用户管理 API 返回 401 | 公共客户端通知 AuthenticationProvider，清理认证状态并离开受保护页面 |
+| UM-V15 | P1 | 三类操作并发与旧请求晚返回 | 各自 submitting 独立；旧请求不能关闭新弹窗、覆盖目标或错误 |
+
+### 12.1.6 Kiota 与生成
+
+使用现有 generate:api 临时目录替换流程和客户端构建命令。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-K01 | P0 | pnpm generate:api | 生成 users 集合、按 userId、nickname PATCH、reset-password 请求器和三个 DTO |
+| UM-K02 | P0 | generated TypeScript 构建 | 类型检查和 Vite 构建成功；URL 只有一个 /api，不含开发绝对地址 |
+| UM-K03 | P1 | 生成错误映射和文件规范 | 客户端可识别 400/401/403/404/409/415/500 ProblemDetails；文件 UTF-8 无 BOM、CRLF，无临时诊断文件 |
+
+### 12.1.7 浏览器验收
+
+开发环境使用独立 Chrome CDP Profile；发布环境重复同一业务闭环并检查 Secure Cookie 与同源请求。
+
+| 编号 | 优先级 | 场景 | 预期 |
+| --- | --- | --- | --- |
+| UM-B01 | P0 | 已登录后从布局进入 /users | 菜单对所有已登录用户可见，页面非空且列表可读；未登录直接访问转到登录页 |
+| UM-B02 | P0 | 账号 A 添加账号 B | B 出现在列表并可用输入的初始密码登录 |
+| UM-B03 | P0 | A 修改 B 昵称 | 列表立即显示新昵称；B 刷新或重新登录后的当前用户栏显示新昵称 |
+| UM-B04 | P0 | A 重置 B 密码 | B 的旧密码新登录失败，123456 成功；重置前已打开的 B 会话仍保持登录 |
+| UM-B05 | P0 | B 管理 A 或新增账号 C | 操作成功，证明当前没有管理员或角色权限差异 |
+| UM-B06 | P1 | Network、Console、宽窄屏截图 | 方法、Origin、Content-Type 和状态码符合契约；无敏感日志、未处理异常、重叠或溢出 |
+
 ## 13. 构建和发布回归
 
 ~~~powershell
@@ -241,6 +354,8 @@ dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration
 | AB-006 | P1 | 发布 HTTPS 登录 | Cookie 名称、Path、Secure、HttpOnly、SameSite 和会话级属性符合契约 |
 | AB-007 | P1 | /system/status 回归 | 匿名页面和 API 继续可用 |
 | AB-008 | P1 | 未知 API/Scalar/OpenAPI 回归 | 不被认证布局或 SPA fallback 覆盖 |
+| AB-009 | P0 | 发布环境刷新 /users | SPA fallback 返回应用，认证恢复后加载用户列表 |
+| AB-010 | P0 | 发布环境用户管理闭环 | 同源完成添加、昵称修改和固定密码重置，成功与错误响应均满足禁缓存契约 |
 
 ## 14. CDP 浏览器验收
 
@@ -275,12 +390,18 @@ dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration
 | logout 网络失败 | 无确认 | 保持当前用户，提示重试 | P0 |
 | 数据库种子失败 | 启动失败，安全日志 | 无半初始化应用 | P0 |
 | generated 失败 | 契约不可生成 | 旧生成目录保留 | P1 |
+| 用户名重复 | 409 username_conflict | 表单保留并提示冲突 | P0 |
+| 用户目标不存在 | 404 user_not_found | 关闭失效操作并刷新列表 | P1 |
+| 用户管理写请求 Origin 无效 | 403 origin_not_allowed | 不改变列表或认证状态 | P0 |
+| 创建或昵称请求非 JSON | 415 unsupported_media_type | 显示格式错误，不伪造成功 | P0 |
+| 重置后的已有 Cookie | 会话继续有效 | 不强制退出，后续安全主题再处理 | P0 |
 
 ## 16. 003 完成门
 
 - 所有 P0/P1 测试通过。
 - dotnet build/test、pnpm test/build、generate:api 和 dotnet publish 全部成功。
-- 两个账号的登录、刷新保持、退出和切换均通过浏览器验收。
-- 认证日志、响应、OpenAPI 示例和客户端状态不含密码、hash 或 Cookie。
+- 两个账号的登录、刷新保持、退出、切换和用户管理闭环均通过浏览器验收。
+- 认证日志、响应、OpenAPI 示例和客户端长期状态不含密码、hash 或 Cookie；表单只在输入与请求生命周期内短暂持有密码。
 - 002 系统状态、ProblemDetails、Kiota、未知 API 和发布测试保持通过。
-- 没有新增延期的用户管理能力。
+- 用户列表、添加账号、昵称修改和固定密码重置全部完成，且所有已登录用户均可使用。
+- 没有混入搜索、分页、删除、禁用、用户自行改密、角色、权限或审计等延期能力。

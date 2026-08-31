@@ -2,7 +2,7 @@
 
 ## 1. 模块职责
 
-账号访问模块是服务端最小身份用例的业务边界，负责预置账号查询、凭证验证和当前用户资料读取。浏览器退出由 Web 层清除 Cookie，不属于 Application 用例。模块不负责会议权限、用户后台或完整账号安全。
+账号访问模块是服务端登录与当前身份用例的业务边界，负责预置账号查询、凭证验证和当前用户资料读取。浏览器退出由 Web 层清除 Cookie，不属于 Application 用例。用户列表、添加、昵称修改和密码重置由独立的用户管理模块负责。
 
 模块对外提供稳定的应用服务契约，对内组合账号仓储、密码哈希器和请求级当前用户上下文。HTTP Controller、当前用户上下文实现、Cookie 配置和 Origin 校验属于 Web 边界；数据库实现属于 Repository 边界。
 
@@ -141,9 +141,9 @@ Controller 不读取密码哈希、不直接查询 DbContext、不把异常文�
 
 ## 9. 模块非目标
 
-模块不添加以下服务或接口：
+模块本身不添加以下服务或接口：
 
-- `CreateUser`、`ListUsers`、`UpdateProfile`、`ChangePassword`、`ResetPassword`；
+- `CreateUser`、`ListUsers`、`UpdateNickname`、`ResetPassword`；这些操作属于同主题的用户管理模块；
 - 角色和权限管理服务；
 - Session 查询、设备列表和全局撤销服务；
 - 登录审计、风险评分或通知服务。

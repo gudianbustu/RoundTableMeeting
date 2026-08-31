@@ -4,7 +4,7 @@
 
 types/authentication.ts 定义 CurrentUserViewModel 和判别联合状态：checking、authenticated、anonymous、error。authenticated 必须携带 user；其他状态不保留过期用户。
 
-Context 对生产代码不公开，只通过 useAuthentication 使用；测试通过 `src/test/authenticationTestUtils.tsx` 中的专用 Provider 注入值。Context 值包含 state、login(username,password)、logout()、retry()、isLoggingIn、isLoggingOut 和 operationError。login 返回 Promise<CurrentUserViewModel>，logout/retry 返回 Promise<void>；页面负责登录成功导航，Provider 负责状态真实性和操作错误。
+Context 对生产代码不公开，只通过 useAuthentication 使用；测试通过 `src/test/authenticationTestUtils.tsx` 中的专用 Provider 注入值。Context 值包含 state、login(username,password)、logout()、retry()、refreshCurrentUser()、isLoggingIn、isLoggingOut 和 operationError。login 返回 Promise<CurrentUserViewModel>，logout/retry/refreshCurrentUser 返回 Promise<void>；页面负责登录成功导航，Provider 负责状态真实性和操作错误。
 
 ## 2. 初始化
 
@@ -52,11 +52,24 @@ Provider 挂载时订阅 unauthorized 事件，卸载时取消订阅。事件到
 
 ## 6. useAuthentication
 
-Hook 只能在 Provider 内使用，缺少 Provider 时抛出明确开发错误。页面和组件不直接访问 Context 对象，不自行调用 getCurrentUser。
+### 6.1 refreshCurrentUser
+
+用户管理模块成功修改当前账号昵称后调用 refreshCurrentUser：
+
+1. 分配新的 operationId 和 AbortController，但不把 state 改为 checking。
+2. 调用 getCurrentUser。
+3. 成功时替换 authenticated.user。
+4. 401 时清理状态并转 anonymous。
+5. network/unknown 保留原 authenticated 用户并向调用方抛出错误，不显示假昵称。
+6. 新的登录、退出或全局 401 可以取消资料刷新，旧结果不能覆盖新状态。
+
+### 6.2 Hook 约束
+
+Hook 只能在 Provider 内使用，缺少 Provider 时抛出明确开发错误。页面和组件不直接访问 Context 对象，不自行调用 getCurrentUser；用户管理只能调用 refreshCurrentUser。
 
 ## 7. 公共出口
 
-features/authentication/index.ts 只导出 AuthenticationProvider、LoginPage、AuthenticatedHomePage、AuthGate、CurrentUserBar、useAuthentication 和必要类型。不导出 generated model、底层 API 适配或 Context 实例。
+features/authentication/index.ts 只导出 AuthenticationProvider、LoginPage、AuthenticatedHomePage、AuthGate、CurrentUserBar、useAuthentication 和必要类型；refreshCurrentUser 通过 Hook 暴露，不单独导出底层函数。不导出 generated model、底层 API 适配或 Context 实例。
 
 ## 8. 测试重点
 
@@ -66,3 +79,4 @@ features/authentication/index.ts 只导出 AuthenticationProvider、LoginPage、
 - 退出成功、已经未认证、网络失败。
 - 全局 401 清理状态，invalid_credentials 不清理。
 - Provider 卸载后不更新状态。
+- refreshCurrentUser 成功、401、网络失败和被更新操作取消。

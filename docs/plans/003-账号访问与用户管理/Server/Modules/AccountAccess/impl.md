@@ -4,7 +4,7 @@
 
 本文将[账号访问模块设计](design.md)落地为 Domain、Abstraction、Application 和 Repository 的实现顺序。HTTP Cookie、Origin 校验和 Controller 由[服务端实现方案](../../impl.md)负责。
 
-模块只实现登录凭证验证、当前账号查询、配置种子和账号资料映射，不实现用户创建、密码修改、密码重置、角色、审计或会话管理。
+模块只实现登录凭证验证、当前账号查询、配置种子和账号资料映射。用户列表、用户创建、昵称修改和密码重置由同主题的 UserManagement 模块负责；本模块不实现角色、审计或会话管理。
 
 ## 2. 实施顺序
 

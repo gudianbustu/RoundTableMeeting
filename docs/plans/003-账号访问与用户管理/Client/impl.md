@@ -4,7 +4,7 @@
 
 本文将[客户端设计](design.md)具体化为目录、公共 API Client、认证 Provider、路由和构建步骤。认证状态机见[认证模块实现方案](Modules/Authentication/impl.md)，页面和组件的实现见对应子目录 impl.md，验证编号见[测试方案](../testPlan.md)。
 
-本主题不新增前端状态管理库，不建设用户后台或会议工作台。
+本主题不新增前端状态管理库，建设内部测试所需的最小用户管理页，不建设完整用户后台或会议工作台。
 
 ## 2. 依赖与工具链
 
@@ -35,6 +35,18 @@ src/
       pages/AuthenticatedHomePage.tsx
       providers/AuthenticationProvider.tsx
       types/authentication.ts
+      index.ts
+    userManagement/
+      api/listUsers.ts
+      api/createUser.ts
+      api/updateNickname.ts
+      api/resetPassword.ts
+      components/UserListTable.tsx
+      components/CreateUserForm.tsx
+      components/EditNicknameForm.tsx
+      components/ResetPasswordDialog.tsx
+      pages/UserManagementPage.tsx
+      types/userManagement.ts
       index.ts
   test/
     authenticationTestUtils.tsx
@@ -87,7 +99,10 @@ createBrowserRouter([
     children: [
       {
         element: <AuthenticatedLayout />,
-        children: [{ index: true, element: <AuthenticatedHomePage /> }]
+        children: [
+          { index: true, element: <AuthenticatedHomePage /> },
+          { path: '/users', element: <UserManagementPage /> }
+        ]
       }
     ]
   },
@@ -103,6 +118,8 @@ LoginPage 和 NotFoundPage 不套用认证布局；SystemStatusPage 保留既有
 
 AuthGate 只包受保护路由。登录页已认证时 Navigate 到安全返回路径或 /。/system/status 保持公开并继续作为 002 回归入口。
 
+AuthenticatedLayout 固定显示用户管理入口，所有 authenticated 用户可见，不读取权限状态。`/users` 与 `/` 共用 AuthGate 和布局。
+
 生产 SPA fallback 已由 002 支持，/login 和 / 刷新时应返回 index.html；/api/auth/* 不进入 SPA fallback。
 
 ## 7. API 适配
@@ -116,6 +133,15 @@ authentication/api 包含：
 LoginInput 只包含 username 和 password；CurrentUserViewModel 只包含 userId、username、nickname。
 
 适配层不把 generated model 传给页面，不保存密码，不在日志输出输入。
+
+userManagement/api 固定：
+
+- `listUsers(signal?) -> Promise<UserSummaryViewModel[]>`；
+- `createUser(input, signal?) -> Promise<UserSummaryViewModel>`；
+- `updateNickname(userId, input, signal?) -> Promise<UserSummaryViewModel>`，调用生成 PATCH operation；
+- `resetPassword(userId, signal?) -> Promise<void>`。
+
+适配函数统一通过 toApiError 转换 ProblemDetails，不读取响应 detail 作为分支。用户名冲突和目标不存在依据 code 处理。初始密码只存在于请求输入生命周期，失败后由表单清空。
 
 ## 8. 样式和可访问性
 
@@ -156,3 +182,7 @@ pnpm dev
 - 退出网络失败保留当前用户，确认退出后返回登录页。
 - /system/status 回归可用。
 - pnpm test、pnpm build 和 dotnet publish 通过。
+- `/users` 在认证布局内可访问，未登录返回 `/login`。
+- 添加账号、昵称修改、固定密码重置成功后刷新列表。
+- 当前用户昵称修改后 CurrentUserBar 同步更新。
+- 用户管理菜单不做权限判断，未来由菜单/API 权限统一收紧。
