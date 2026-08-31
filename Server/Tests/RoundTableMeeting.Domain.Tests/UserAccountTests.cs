@@ -43,6 +43,47 @@ public sealed class UserAccountTests
     }
 
     [Fact]
+    public void ChangeNicknameNormalizesOnlyNickname()
+    {
+        var account = UserAccount.Create("alice", "Alice");
+        account.InitializePasswordHash("hash");
+        var id = account.ID;
+        var username = account.Username;
+        var normalized = account.NormalizedUsername;
+
+        account.ChangeNickname("  Cafe\u0301  ");
+
+        Assert.Equal("Café", account.Nickname);
+        Assert.Equal(id, account.ID);
+        Assert.Equal(username, account.Username);
+        Assert.Equal(normalized, account.NormalizedUsername);
+        Assert.Equal("hash", account.PasswordHash);
+    }
+
+    [Fact]
+    public void ChangeNicknameRejectsInvalidValueAndPreservesOriginal()
+    {
+        var account = UserAccount.Create("alice", "Alice");
+
+        Assert.Throws<ArgumentException>(() => account.ChangeNickname("   "));
+        Assert.Equal("Alice", account.Nickname);
+    }
+
+    [Fact]
+    public void ReplacePasswordHashReplacesExistingHashWithBounds()
+    {
+        var account = UserAccount.Create("alice", "Alice");
+        account.InitializePasswordHash("old-hash");
+
+        account.ReplacePasswordHash("new-hash");
+
+        Assert.Equal("new-hash", account.PasswordHash);
+        Assert.Throws<ArgumentException>(() => account.ReplacePasswordHash("   "));
+        Assert.Throws<ArgumentException>(() => account.ReplacePasswordHash(new string('x', 513)));
+        Assert.Equal("new-hash", account.PasswordHash);
+    }
+
+    [Fact]
     public void NicknameCannotExceed64Characters()
     {
         Assert.Throws<ArgumentException>(() => UserAccount.Create("alice", new string('n', 65)));

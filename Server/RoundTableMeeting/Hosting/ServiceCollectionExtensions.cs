@@ -59,7 +59,7 @@ public static class ServiceCollectionExtensions
                 options.Events.OnRedirectToAccessDenied = context => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, StatusCodes.Status403Forbidden, "forbidden");
             });
         builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
-        builder.Services.AddSingleton<AuthenticationResponseHeadersMiddleware>();
+        builder.Services.AddSingleton<SensitiveResponseHeadersMiddleware>();
         builder.Services.AddSingleton<OriginValidationMiddleware>();
 
         builder.Services.AddSingleton<SqliteConnectionInterceptor>();

@@ -105,7 +105,7 @@ describe('SystemStatusPage', () => {
     getSystemStatus.mockResolvedValue({ status: 'available', databaseStatus: 'available', environment: 'Testing' })
     const authenticationValue = {
       state: { status: 'error' as const, error: { kind: 'network' as const, message: 'network' } },
-      login: vi.fn(), logout: vi.fn(), retry: vi.fn(), isLoggingIn: false, isLoggingOut: false,
+      login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false,
     }
 
     render(<AuthenticationContext.Provider value={authenticationValue}><SystemStatusPage /></AuthenticationContext.Provider>)

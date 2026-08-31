@@ -27,7 +27,7 @@ const networkError: ApiError = { kind: 'network', message: 'network' }
 
 function Harness() {
   const authentication = useAuthentication()
-  return <><output data-testid="state">{authentication.state.status}|{authentication.isLoggingIn ? 'login' : ''}|{authentication.isLoggingOut ? 'logout' : ''}|{authentication.operationError?.kind ?? ''}</output><button onClick={() => void authentication.login('alice', 'secret').catch(() => undefined)}>start-login</button></>
+  return <><output data-testid="state">{authentication.state.status}|{authentication.state.status === 'authenticated' ? authentication.state.user.nickname : ''}|{authentication.isLoggingIn ? 'login' : ''}|{authentication.isLoggingOut ? 'logout' : ''}|{authentication.operationError?.kind ?? ''}</output><button onClick={() => void authentication.login('alice', 'secret').catch(() => undefined)}>start-login</button><button onClick={() => void authentication.refreshCurrentUser().catch(() => undefined)}>refresh-user</button></>
 }
 
 function renderProvider() {
@@ -73,7 +73,7 @@ describe('authentication provider', () => {
     renderProvider()
     await waitFor(() => expect(screen.getAllByTestId('state').at(-1)).toHaveTextContent('authenticated'))
     await userEvent.setup().click(screen.getByRole('button', { name: 'start-login' }))
-    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|login'))
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|Alice|login'))
 
     act(() => notifyUnauthorized())
     expect(screen.getByTestId('state')).toHaveTextContent('anonymous')
@@ -178,6 +178,38 @@ describe('authentication provider', () => {
     resolveLatest?.(user)
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated'))
   })
+
+  it('refreshes the authenticated user without checking state', async () => {
+    getCurrentUser.mockResolvedValueOnce(user).mockResolvedValueOnce({ ...user, nickname: 'Updated' })
+    renderProvider()
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|Alice'))
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'refresh-user' }))
+
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|Updated'))
+    expect(screen.getByTestId('state')).not.toHaveTextContent('checking')
+  })
+
+  it('maps refresh 401 to anonymous', async () => {
+    getCurrentUser.mockResolvedValueOnce(user).mockRejectedValueOnce({ kind: 'problemDetails', status: 401, code: 'unauthenticated', message: 'expired' })
+    renderProvider()
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated'))
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'refresh-user' }))
+
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('anonymous'))
+  })
+
+  it('keeps authenticated user when refresh has network error', async () => {
+    getCurrentUser.mockResolvedValueOnce(user).mockRejectedValueOnce(networkError)
+    renderProvider()
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|Alice'))
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'refresh-user' }))
+
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|Alice'))
+    expect(screen.getByTestId('state')).toHaveTextContent('network')
+  })
 })
 
 function LogoutHarness() {
@@ -211,7 +243,7 @@ describe('authentication views', () => {
   })
 
   it('renders AuthGate outlet only when authenticated and keeps safe returnTo query/hash', () => {
-    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), isLoggingIn: false, isLoggingOut: false }
+    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
     render(<AuthenticationContext.Provider value={value}><MemoryRouter initialEntries={['/room?tab=chat#messages']}><Routes><Route element={<AuthGate />}><Route path="*" element={<span>protected outlet</span>} /></Route></Routes></MemoryRouter></AuthenticationContext.Provider>)
     expect(screen.getByText('protected outlet')).toBeInTheDocument()
 
@@ -220,13 +252,13 @@ describe('authentication views', () => {
   })
 
   it('navigates once to a safe returnTo containing query and hash', async () => {
-    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), isLoggingIn: false, isLoggingOut: false }
+    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
     render(<AuthenticationContext.Provider value={value}><MemoryRouter initialEntries={[{ pathname: '/login', state: { returnTo: { pathname: '/room', search: '?tab=chat', hash: '#messages' } } }]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/room" element={<span>room page</span>} /></Routes></MemoryRouter></AuthenticationContext.Provider>)
     expect(await screen.findByText('room page')).toBeInTheDocument()
   })
 
   it('keeps public login page independent from authentication errors', () => {
-    const value = { state: { status: 'error' as const, error: networkError }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), isLoggingIn: false, isLoggingOut: false }
+    const value = { state: { status: 'error' as const, error: networkError }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
     renderWithAuthentication(value, ['/login'])
     expect(screen.getByText('服务暂时不可访问')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: '用户名' })).not.toBeInTheDocument()

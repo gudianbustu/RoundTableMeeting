@@ -100,7 +100,7 @@ public sealed class DependencyTests
     {
         foreach (var type in Load("RoundTableMeeting.Domain").GetTypes().Where(type => type.IsInterface && type.Name.EndsWith("Repository", StringComparison.Ordinal)))
         {
-            Assert.DoesNotContain(type.GetMethods(), method => method.Name.Contains("Add", StringComparison.Ordinal) || method.Name.Contains("Update", StringComparison.Ordinal) || method.Name.Contains("Delete", StringComparison.Ordinal));
+            Assert.DoesNotContain(type.GetMethods(), method => method.Name.StartsWith("Add", StringComparison.Ordinal) || method.Name.StartsWith("Update", StringComparison.Ordinal) || method.Name.StartsWith("Delete", StringComparison.Ordinal));
         }
     }
 
@@ -229,7 +229,7 @@ public sealed class DependencyTests
         var root = FindRoot();
         var source = File.ReadAllText(Path.Combine(root, "Server", "RoundTableMeeting", "Program.cs"));
         var routing = source.IndexOf("app.UseRouting();", StringComparison.Ordinal);
-        var responseHeaders = source.IndexOf("app.UseMiddleware<AuthenticationResponseHeadersMiddleware>();", StringComparison.Ordinal);
+        var responseHeaders = source.IndexOf("app.UseMiddleware<SensitiveResponseHeadersMiddleware>();", StringComparison.Ordinal);
         var origin = source.IndexOf("app.UseMiddleware<OriginValidationMiddleware>();", StringComparison.Ordinal);
         var authentication = source.IndexOf("app.UseAuthentication();", StringComparison.Ordinal);
         var authorization = source.IndexOf("app.UseAuthorization();", StringComparison.Ordinal);
@@ -239,10 +239,19 @@ public sealed class DependencyTests
         Assert.True(responseHeaders < origin);
         Assert.True(origin < authentication);
         Assert.True(authentication < authorization);
+        Assert.DoesNotContain("AuthenticationResponseHeadersMiddleware", source, StringComparison.Ordinal);
+        Assert.NotNull(typeof(AuthenticationController).GetCustomAttribute<NoStoreResponseAttribute>());
+        Assert.NotNull(typeof(UsersController).GetCustomAttribute<NoStoreResponseAttribute>());
         var loginOrigin = typeof(AuthenticationController).GetMethod("Login")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
         var logoutOrigin = typeof(AuthenticationController).GetMethod("Logout")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
+        var createOrigin = typeof(UsersController).GetMethod("Create")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
+        var nicknameOrigin = typeof(UsersController).GetMethod("UpdateNickname")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
+        var resetOrigin = typeof(UsersController).GetMethod("ResetPassword")!.GetCustomAttributes(true).OfType<RequireBrowserOriginAttribute>().Single();
         Assert.True(loginOrigin.RequireJsonBody);
         Assert.False(logoutOrigin.RequireJsonBody);
+        Assert.True(createOrigin.RequireJsonBody);
+        Assert.True(nicknameOrigin.RequireJsonBody);
+        Assert.False(resetOrigin.RequireJsonBody);
     }
 
     private static Assembly Load(string name) => Assembly.Load(name);

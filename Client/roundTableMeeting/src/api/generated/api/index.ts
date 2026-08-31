@@ -6,6 +6,8 @@ import { AuthRequestBuilderNavigationMetadata, type AuthRequestBuilder } from '.
 // @ts-ignore
 import { SystemRequestBuilderNavigationMetadata, type SystemRequestBuilder } from './system/index.js';
 // @ts-ignore
+import { type UsersRequestBuilder, UsersRequestBuilderNavigationMetadata, UsersRequestBuilderRequestsMetadata } from './users/index.js';
+// @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata } from '@microsoft/kiota-abstractions';
 
 /**
@@ -20,6 +22,10 @@ export interface ApiRequestBuilder extends BaseRequestBuilder<ApiRequestBuilder>
      * The system property
      */
     get system(): SystemRequestBuilder;
+    /**
+     * The users property
+     */
+    get users(): UsersRequestBuilder;
 }
 /**
  * Uri template for the request builder.
@@ -34,6 +40,10 @@ export const ApiRequestBuilderNavigationMetadata: Record<Exclude<keyof ApiReques
     },
     system: {
         navigationMetadata: SystemRequestBuilderNavigationMetadata,
+    },
+    users: {
+        requestsMetadata: UsersRequestBuilderRequestsMetadata,
+        navigationMetadata: UsersRequestBuilderNavigationMetadata,
     },
 };
 /* tslint:enable */

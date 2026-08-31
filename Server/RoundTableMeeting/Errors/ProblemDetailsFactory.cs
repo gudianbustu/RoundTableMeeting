@@ -26,6 +26,8 @@ public static class ProblemDetailsFactory
                 "unauthenticated" => "Authentication required",
                 "forbidden" => "Forbidden",
                 "concurrency_conflict" => "Concurrency conflict",
+                "username_conflict" => "Username conflict",
+                "user_not_found" => "User not found",
                 "internal_error" => "Internal server error",
                 _ => code
             },
@@ -39,6 +41,8 @@ public static class ProblemDetailsFactory
                 "unauthenticated" => "Authentication is required.",
                 "forbidden" => "You do not have permission to access this resource.",
                 "concurrency_conflict" => "The requested change could not be saved.",
+                "username_conflict" => "The username is already in use.",
+                "user_not_found" => "The requested user was not found.",
                 "internal_error" => "An unexpected error occurred.",
                 _ => "The request could not be completed."
             },

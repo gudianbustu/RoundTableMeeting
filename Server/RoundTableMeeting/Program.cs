@@ -71,7 +71,7 @@ try
     app.UseRouting();
     app.UseDefaultFiles();
     app.UseStaticFiles();
-    app.UseMiddleware<AuthenticationResponseHeadersMiddleware>();
+    app.UseMiddleware<SensitiveResponseHeadersMiddleware>();
     app.UseMiddleware<OriginValidationMiddleware>();
     app.UseAuthentication();
     app.UseAuthorization();

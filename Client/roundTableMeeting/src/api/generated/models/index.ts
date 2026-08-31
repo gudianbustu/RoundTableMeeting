@@ -61,6 +61,15 @@ export function createApiProblemDetailsFromDiscriminatorValue(parseNode: ParseNo
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {CreateUserRequest}
+ */
+// @ts-ignore
+export function createCreateUserRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoCreateUserRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {CurrentUserDto}
  */
 // @ts-ignore
@@ -93,6 +102,38 @@ export function createLoginRequestFromDiscriminatorValue(parseNode: ParseNode | 
 // @ts-ignore
 export function createSystemStatusDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoSystemStatusDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {UpdateNicknameRequest}
+ */
+// @ts-ignore
+export function createUpdateNicknameRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoUpdateNicknameRequest;
+}
+export interface CreateUserRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The initialPassword property
+     */
+    initialPassword?: string | null;
+    /**
+     * The nickname property
+     */
+    nickname?: string | null;
+    /**
+     * The username property
+     */
+    username?: string | null;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {UserSummaryDto}
+ */
+// @ts-ignore
+export function createUserSummaryDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoUserSummaryDto;
 }
 export interface CurrentUserDto extends AdditionalDataHolder, Parsable {
     /**
@@ -144,6 +185,19 @@ export function deserializeIntoApiProblemDetails_errors(apiProblemDetails_errors
 }
 /**
  * The deserialization information for the current model
+ * @param CreateUserRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoCreateUserRequest(createUserRequest: Partial<CreateUserRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "initialPassword": n => { createUserRequest.initialPassword = n.getStringValue(); },
+        "nickname": n => { createUserRequest.nickname = n.getStringValue(); },
+        "username": n => { createUserRequest.username = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param CurrentUserDto The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -191,6 +245,30 @@ export function deserializeIntoSystemStatusDto(systemStatusDto: Partial<SystemSt
         "status": n => { systemStatusDto.status = n.getStringValue(); },
     }
 }
+/**
+ * The deserialization information for the current model
+ * @param UpdateNicknameRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoUpdateNicknameRequest(updateNicknameRequest: Partial<UpdateNicknameRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "nickname": n => { updateNicknameRequest.nickname = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param UserSummaryDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoUserSummaryDto(userSummaryDto: Partial<UserSummaryDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "nickname": n => { userSummaryDto.nickname = n.getStringValue(); },
+        "userId": n => { userSummaryDto.userId = n.getGuidValue(); },
+        "username": n => { userSummaryDto.username = n.getStringValue(); },
+    }
+}
 export interface LoginRequest extends AdditionalDataHolder, Parsable {
     /**
      * The password property
@@ -230,6 +308,20 @@ export function serializeApiProblemDetails(writer: SerializationWriter, apiProbl
 export function serializeApiProblemDetails_errors(writer: SerializationWriter, apiProblemDetails_errors: Partial<ApiProblemDetails_errors> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!apiProblemDetails_errors || isSerializingDerivedType) { return; }
     writer.writeAdditionalData(apiProblemDetails_errors.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param CreateUserRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeCreateUserRequest(writer: SerializationWriter, createUserRequest: Partial<CreateUserRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!createUserRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("initialPassword", createUserRequest.initialPassword);
+    writer.writeStringValue("nickname", createUserRequest.nickname);
+    writer.writeStringValue("username", createUserRequest.username);
+    writer.writeAdditionalData(createUserRequest.additionalData);
 }
 /**
  * Serializes information the current object
@@ -284,6 +376,32 @@ export function serializeSystemStatusDto(writer: SerializationWriter, systemStat
     writer.writeStringValue("status", systemStatusDto.status);
     writer.writeAdditionalData(systemStatusDto.additionalData);
 }
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param UpdateNicknameRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeUpdateNicknameRequest(writer: SerializationWriter, updateNicknameRequest: Partial<UpdateNicknameRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!updateNicknameRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("nickname", updateNicknameRequest.nickname);
+    writer.writeAdditionalData(updateNicknameRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param UserSummaryDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeUserSummaryDto(writer: SerializationWriter, userSummaryDto: Partial<UserSummaryDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!userSummaryDto || isSerializingDerivedType) { return; }
+    writer.writeStringValue("nickname", userSummaryDto.nickname);
+    writer.writeGuidValue("userId", userSummaryDto.userId);
+    writer.writeStringValue("username", userSummaryDto.username);
+    writer.writeAdditionalData(userSummaryDto.additionalData);
+}
 export interface SystemStatusDto extends AdditionalDataHolder, Parsable {
     /**
      * The database property
@@ -297,6 +415,26 @@ export interface SystemStatusDto extends AdditionalDataHolder, Parsable {
      * The status property
      */
     status?: string | null;
+}
+export interface UpdateNicknameRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The nickname property
+     */
+    nickname?: string | null;
+}
+export interface UserSummaryDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The nickname property
+     */
+    nickname?: string | null;
+    /**
+     * The userId property
+     */
+    userId?: Guid | null;
+    /**
+     * The username property
+     */
+    username?: string | null;
 }
 /* tslint:enable */
 /* eslint-enable */

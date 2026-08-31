@@ -21,6 +21,7 @@ function value(overrides: Partial<AuthenticationContextValue> = {}): Authenticat
     login: vi.fn().mockResolvedValue(user),
     logout: vi.fn().mockResolvedValue(undefined),
     retry: vi.fn().mockResolvedValue(undefined),
+    refreshCurrentUser: vi.fn().mockResolvedValue(undefined),
     isLoggingIn: false,
     isLoggingOut: false,
     ...overrides,

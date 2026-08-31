@@ -243,6 +243,7 @@ public sealed class AuthenticationServiceTests
         public FakeRepository() : base(CreateContext()) { }
         public UserAccount? Account { get; init; }
         public int LookupCount { get; private set; }
+        public Task<IReadOnlyList<UserAccount>> ListAllAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<UserAccount>>(Account is null ? [] : [Account]);
         public Task<UserAccount?> FindByNormalizedUsernameAsync(string normalizedUsername, CancellationToken cancellationToken = default) { LookupCount++; return Task.FromResult(Account?.NormalizedUsername == normalizedUsername ? Account : null); }
         public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Account?.ID == id ? Account : null);
         private static RoundTableMeetingDbContext CreateContext()
@@ -253,6 +254,7 @@ public sealed class AuthenticationServiceTests
     {
         public MultiAccountRepository(params UserAccount[] accounts) : base(CreateContext()) => AddedAccounts.AddRange(accounts);
         public List<UserAccount> AddedAccounts { get; } = [];
+        public Task<IReadOnlyList<UserAccount>> ListAllAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<UserAccount>>(AddedAccounts);
         public Task<UserAccount?> FindByNormalizedUsernameAsync(string normalizedUsername, CancellationToken cancellationToken = default)
             => Task.FromResult(AddedAccounts.SingleOrDefault(account => account.NormalizedUsername == normalizedUsername));
         public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)

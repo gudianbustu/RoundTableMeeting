@@ -192,6 +192,64 @@ public sealed class UserAccountRepositoryTests
         }
     }
 
+    [Fact]
+    public async Task ListAllUsesStableNormalizedUsernameAndIdOrdering()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RoundTableMeetingUserTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "accounts.db");
+        try
+        {
+            Directory.CreateDirectory(root);
+            await using var context = CreateContext(path);
+            await context.Database.MigrateAsync();
+            foreach (var username in new[] { "charlie", "alice", "bob" })
+            {
+                var account = UserAccount.Create(username, username);
+                account.InitializePasswordHash("hash");
+                context.UserAccounts.Add(account);
+            }
+            await context.SaveChangesAsync();
+
+            var result = await new UserAccountRepository(context).ListAllAsync();
+
+            Assert.Equal(["alice", "bob", "charlie"], result.Select(account => account.Username));
+            Assert.All(result, account => Assert.Equal(EntityState.Detached, context.Entry(account).State));
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task UnitOfWorkTranslatesOnlyUsernameUniqueIndexConflict()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RoundTableMeetingUserTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(root, "accounts.db");
+        try
+        {
+            Directory.CreateDirectory(root);
+            await using var context = CreateContext(path);
+            await context.Database.MigrateAsync();
+            var first = UserAccount.Create("alice", "Alice");
+            first.InitializePasswordHash("hash");
+            context.UserAccounts.Add(first);
+            await context.SaveChangesAsync();
+            var duplicate = UserAccount.Create("ALICE", "Other");
+            duplicate.InitializePasswordHash("hash");
+            var unitOfWork = new UnitOfWorkImpl(context);
+            unitOfWork.RegisterAdd(duplicate);
+
+            await Assert.ThrowsAsync<RoundTableMeeting.Domain.Exceptions.UsernameConflictException>(() => unitOfWork.CommitAsync());
+        }
+        finally
+        {
+            SqliteConnection.ClearAllPools();
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
+
     private static RoundTableMeetingDbContext CreateContext(string path)
         => new(new DbContextOptionsBuilder<RoundTableMeetingDbContext>()
             .UseSqlite("Data Source=" + path)

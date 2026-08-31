@@ -6,7 +6,7 @@
 
 本文只为后续主题提供最小可用的人类身份和内部测试账号维护，不建设完整 ASP.NET Core Identity 用户中心，也不实现角色权限、审计和账号生命周期治理。
 
-本轮新增内容属于设计增量，尚未声明现有服务端源码已经提供 `/api/users`。
+当前服务端源码已经提供 `/api/users` 用户列表、添加账号、昵称修改和固定密码重置接口；本设计继续作为后续维护与回归依据。
 
 公共 `OriginValidationMiddleware` 已由提交 `4abd58e` 升级完成：HTTP 方法合法性由 endpoint routing 和 action 特性决定，中间件不硬编码 POST；带 `RequireBrowserOrigin` 元数据的 POST、PATCH、PUT、DELETE 均可复用 Origin 校验，并按 `RequireJsonBody` 决定是否要求 `application/json`。用户管理不再有框架前置阻断。
 

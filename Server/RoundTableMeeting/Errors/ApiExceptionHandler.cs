@@ -28,6 +28,7 @@ public sealed class ApiExceptionHandler(
         var (status, code) = exception switch
         {
             ConcurrencyConflictException => (StatusCodes.Status409Conflict, "concurrency_conflict"),
+            UsernameConflictException => (StatusCodes.Status409Conflict, "username_conflict"),
             _ => (StatusCodes.Status500InternalServerError, "internal_error")
         };
 

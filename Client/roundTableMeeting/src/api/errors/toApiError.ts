@@ -34,6 +34,7 @@ function normalizeFieldErrors(value: unknown): Record<string, string[]> | undefi
 
 /** 将传输错误、problem-details 错误和未知错误转换为 ApiError */
 export function toApiError(error: unknown): ApiError {
+  if (error && typeof error === 'object' && 'kind' in error && typeof error.kind === 'string') return error as ApiError
   if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') throw error
   if (error instanceof TypeError) return { kind: 'network', message: '服务暂时不可访问，请稍后重试。' }
 

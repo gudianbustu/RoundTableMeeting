@@ -15,6 +15,7 @@ namespace RoundTableMeeting.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/auth")]
+[NoStoreResponse]
 public sealed class AuthenticationController(AppAuthenticationService authenticationService) : ControllerBase
 {
     /// <summary>

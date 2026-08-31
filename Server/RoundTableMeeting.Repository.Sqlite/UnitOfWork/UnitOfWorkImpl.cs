@@ -1,4 +1,7 @@
 using Materal.Extensions.DependencyInjection;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using RoundTableMeeting.Domain.Exceptions;
 using RoundTableMeeting.Domain.UnitOfWork;
 using RoundTableMeeting.Repository.Sqlite.Database;
 using TtaEntity = Materal.TTA.Common.IEntity<System.Guid>;
@@ -35,5 +38,21 @@ public sealed class UnitOfWorkImpl(RoundTableMeetingDbContext dbContext)
     /// <summary>
     /// 提交工作单元中的实体变更
     /// </summary>
-    public Task<int> CommitAsync(CancellationToken cancellationToken = default) => core.CommitAsync(cancellationToken);
+    public async Task<int> CommitAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await core.CommitAsync(cancellationToken);
+        }
+        catch (DbUpdateException exception) when (IsUsernameUniqueConflict(exception))
+        {
+            throw new UsernameConflictException("The username is already in use.", exception);
+        }
+    }
+
+    private static bool IsUsernameUniqueConflict(DbUpdateException exception)
+        => exception.InnerException is SqliteException sqlite
+            && sqlite.SqliteErrorCode == 19
+            && (sqlite.Message.Contains("IX_UserAccounts_NormalizedUsername", StringComparison.Ordinal)
+                || sqlite.Message.Contains("UserAccounts.NormalizedUsername", StringComparison.Ordinal));
 }

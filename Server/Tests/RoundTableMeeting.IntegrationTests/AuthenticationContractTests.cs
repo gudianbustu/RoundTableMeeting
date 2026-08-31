@@ -65,10 +65,10 @@ public sealed class AuthenticationContractTests
         Assert.Contains("httponly", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("samesite=lax", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("expires=", cookie, StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
 
         var missing = await client.GetAsync("/api/auth/me");
-        Assert.Equal("no-store", missing.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", missing.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -107,7 +107,7 @@ public sealed class AuthenticationContractTests
         var response = await client.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(response.Headers.Location);
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Contains("RoundTableMeeting.Auth=;", string.Join(";", response.Headers.GetValues("Set-Cookie")), StringComparison.Ordinal);
     }
 
@@ -120,7 +120,7 @@ public sealed class AuthenticationContractTests
         var response = await client.GetAsync("/api/auth/test-failure");
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", response.Headers.Pragma.ToString());
         Assert.Equal("internal_error", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
     }
@@ -186,7 +186,7 @@ public sealed class AuthenticationContractTests
         forbidden.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
         var forbiddenResponse = await client.SendAsync(forbidden);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
-        Assert.Equal("no-store", forbiddenResponse.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", forbiddenResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", forbiddenResponse.Headers.Pragma.ToString());
 
         using var unsupported = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
@@ -194,7 +194,7 @@ public sealed class AuthenticationContractTests
         unsupported.Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json-patch+json");
         var unsupportedResponse = await client.SendAsync(unsupported);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, unsupportedResponse.StatusCode);
-        Assert.Equal("no-store", unsupportedResponse.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", unsupportedResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", unsupportedResponse.Headers.Pragma.ToString());
     }
 

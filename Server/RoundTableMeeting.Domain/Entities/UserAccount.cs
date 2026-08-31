@@ -83,6 +83,27 @@ public sealed class UserAccount : BaseEntity
     }
 
     /// <summary>
+    /// 修改账号昵称。
+    /// </summary>
+    public void ChangeNickname(string nickname)
+    {
+        Nickname = NormalizeNickname(nickname);
+    }
+
+    /// <summary>
+    /// 替换已有账号的密码哈希。
+    /// </summary>
+    public void ReplacePasswordHash(string passwordHash)
+    {
+        if (string.IsNullOrWhiteSpace(passwordHash) || passwordHash.Length > 512)
+        {
+            throw new ArgumentException("Password hash is invalid.", nameof(passwordHash));
+        }
+
+        PasswordHash = passwordHash;
+    }
+
+    /// <summary>
     /// 清理并校验用于显示的用户名
     /// </summary>
     public static string NormalizeDisplayUsername(string value)

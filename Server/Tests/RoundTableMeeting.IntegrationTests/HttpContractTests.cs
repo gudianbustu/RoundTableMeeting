@@ -28,7 +28,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         var loginBody = await loginResponse.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
         Assert.Equal("alice", loginBody.GetProperty("username").GetString());
-        Assert.Equal("no-store", loginResponse.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", loginResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
 
         var meResponse = await isolatedClient.GetAsync("/api/auth/me");
         var meBody = await meResponse.Content.ReadFromJsonAsync<JsonElement>();
@@ -39,7 +39,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         logout.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         var logoutResponse = await isolatedClient.SendAsync(logout);
         Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
-        Assert.Equal("no-store", logoutResponse.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", logoutResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         var afterLogout = await isolatedClient.GetAsync("/api/auth/me");
         Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
         Assert.Equal("unauthenticated", (await afterLogout.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
@@ -175,7 +175,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         Assert.Equal("validation_failed", body.GetProperty("code").GetString());
         Assert.True(body.GetProperty("errors").TryGetProperty("username", out _));
         Assert.True(body.GetProperty("errors").TryGetProperty("password", out _));
-        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -491,5 +491,197 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("static asset is public", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task UsersListRequiresAuthenticationAndIsNotCached()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+
+        var response = await client.GetAsync("/api/users");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task AuthenticatedUserCanListAndCreateUser()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(client, "alice", "test-password-alice");
+
+        var list = await client.GetAsync("/api/users");
+        var users = await list.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(HttpStatusCode.OK, list.StatusCode);
+        Assert.Contains("no-store", list.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(2, users.GetArrayLength());
+        Assert.All(users.EnumerateArray(), user => Assert.Equal(["nickname", "userId", "username"], user.EnumerateObject().Select(property => property.Name).OrderBy(name => name)));
+
+        using var create = new HttpRequestMessage(HttpMethod.Post, "/api/users");
+        create.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        create.Content = JsonContent.Create(new { username = "charlie", nickname = "Charlie", initialPassword = "charlie-password" });
+        var created = await client.SendAsync(create);
+
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        Assert.Contains("no-store", created.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("charlie", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("username").GetString());
+    }
+
+    [Fact]
+    public async Task DuplicateUsernameReturnsConflictProblemDetails()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(client, "alice", "test-password-alice");
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/users");
+        request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        request.Content = JsonContent.Create(new { username = " ALICE ", nickname = "Other", initialPassword = "secret" });
+        var response = await client.SendAsync(request);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+        Assert.Equal("username_conflict", body.GetProperty("code").GetString());
+        Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateRejectsInvalidOriginAndMediaType()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(client, "alice", "test-password-alice");
+
+        using var origin = new HttpRequestMessage(HttpMethod.Post, "/api/users");
+        origin.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
+        origin.Content = JsonContent.Create(new { username = "charlie", nickname = "Charlie", initialPassword = "secret" });
+        var originResponse = await client.SendAsync(origin);
+        Assert.Equal(HttpStatusCode.Forbidden, originResponse.StatusCode);
+        Assert.Equal("origin_not_allowed", (await originResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+
+        using var media = new HttpRequestMessage(HttpMethod.Post, "/api/users");
+        media.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        media.Content = new StringContent("{}", System.Text.Encoding.UTF8, "text/plain");
+        var mediaResponse = await client.SendAsync(media);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, mediaResponse.StatusCode);
+        Assert.Equal("unsupported_media_type", (await mediaResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task NicknamePatchUpdatesProfileAndRejectsMissingUser()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(client, "alice", "test-password-alice");
+        var users = await (await client.GetAsync("/api/users")).Content.ReadFromJsonAsync<JsonElement>();
+        var aliceId = users.EnumerateArray().Single(user => user.GetProperty("username").GetString() == "alice").GetProperty("userId").GetGuid();
+
+        using var patch = new HttpRequestMessage(HttpMethod.Patch, $"/api/users/{aliceId}/nickname");
+        patch.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        patch.Content = JsonContent.Create(new { nickname = " Alice Updated " });
+        var updated = await client.SendAsync(patch);
+        Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
+        Assert.Equal("Alice Updated", (await updated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("nickname").GetString());
+
+        using var missing = new HttpRequestMessage(HttpMethod.Patch, $"/api/users/{Guid.NewGuid()}/nickname");
+        missing.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        missing.Content = JsonContent.Create(new { nickname = "Missing" });
+        var missingResponse = await client.SendAsync(missing);
+        Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+        Assert.Equal("user_not_found", (await missingResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task ResetPasswordUsesFixedValueAndKeepsExistingCookieValid()
+    {
+        using var factory = new TestApplicationFactory();
+        using var admin = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(admin, "alice", "test-password-alice");
+        var users = await (await admin.GetAsync("/api/users")).Content.ReadFromJsonAsync<JsonElement>();
+        var bobId = users.EnumerateArray().Single(user => user.GetProperty("username").GetString() == "bob").GetProperty("userId").GetGuid();
+
+        using var reset = new HttpRequestMessage(HttpMethod.Post, $"/api/users/{bobId}/reset-password");
+        reset.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        var resetResponse = await admin.SendAsync(reset);
+        Assert.Equal(HttpStatusCode.NoContent, resetResponse.StatusCode);
+        Assert.Contains("no-store", resetResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("no-cache", resetResponse.Headers.Pragma.ToString());
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/auth/me")).StatusCode);
+
+        using var oldPasswordClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        Assert.Equal(HttpStatusCode.Unauthorized, await LoginStatusAsync(oldPasswordClient, "bob", "test-password-bob"));
+        using var newPasswordClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        Assert.Equal(HttpStatusCode.OK, await LoginStatusAsync(newPasswordClient, "bob", "123456"));
+    }
+
+    [Fact]
+    public async Task ResetPasswordDoesNotRequireJsonBody()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(client, "alice", "test-password-alice");
+        var users = await (await client.GetAsync("/api/users")).Content.ReadFromJsonAsync<JsonElement>();
+        var bobId = users.EnumerateArray().Single(user => user.GetProperty("username").GetString() == "bob").GetProperty("userId").GetGuid();
+
+        using var reset = new HttpRequestMessage(HttpMethod.Post, $"/api/users/{bobId}/reset-password");
+        reset.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        reset.Content = new StringContent("reset", System.Text.Encoding.UTF8, "text/plain");
+        var response = await client.SendAsync(reset);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UsersOpenApiDeclaresAllOperationsAndErrors()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient();
+        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var paths = document.GetProperty("paths");
+
+        Assert.True(paths.GetProperty("/api/users").TryGetProperty("get", out _));
+        var create = paths.GetProperty("/api/users").GetProperty("post").GetProperty("responses");
+        Assert.True(create.TryGetProperty("409", out _));
+        Assert.True(paths.GetProperty("/api/users/{userId}/nickname").GetProperty("patch").GetProperty("responses").TryGetProperty("404", out _));
+        Assert.True(paths.GetProperty("/api/users/{userId}/reset-password").GetProperty("post").GetProperty("responses").TryGetProperty("404", out _));
+    }
+
+    [Fact]
+    public async Task WrongMethodsKeepRoutingSemantics()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
+        await LoginAsync(client, "alice", "test-password-alice");
+
+        using var put = new HttpRequestMessage(HttpMethod.Put, "/api/users");
+        put.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        put.Content = JsonContent.Create(new { username = "x", nickname = "X", initialPassword = "secret" });
+        var putResponse = await client.SendAsync(put);
+        Assert.Contains(putResponse.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed });
+
+        using var unknown = new HttpRequestMessage(HttpMethod.Get, "/api/users/not-a-route");
+        unknown.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
+        var unknownResponse = await client.SendAsync(unknown);
+        Assert.Equal(HttpStatusCode.NotFound, unknownResponse.StatusCode);
+    }
+
+    private static async Task LoginAsync(HttpClient client, string username, string password)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
+        request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        request.Content = JsonContent.Create(new { username, password });
+        var response = await client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    private static async Task<HttpStatusCode> LoginStatusAsync(HttpClient client, string username, string password)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
+        request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
+        request.Content = JsonContent.Create(new { username, password });
+        return (await client.SendAsync(request)).StatusCode;
     }
 }

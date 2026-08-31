@@ -9,6 +9,11 @@ namespace RoundTableMeeting.Domain.Repositories;
 public interface IUserAccountRepository : IRepository<UserAccount, Guid>
 {
     /// <summary>
+    /// 按规范化用户名和主键稳定列出全部账号。
+    /// </summary>
+    Task<IReadOnlyList<UserAccount>> ListAllAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// 按规范化用户名查找账号
     /// </summary>
     Task<UserAccount?> FindByNormalizedUsernameAsync(string normalizedUsername, CancellationToken cancellationToken = default);

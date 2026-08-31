@@ -17,6 +17,7 @@ export type AuthenticationContextValue = {
   login: (username: string, password: string) => Promise<CurrentUserViewModel>
   logout: () => Promise<void>
   retry: () => Promise<void>
+  refreshCurrentUser: () => Promise<void>
   isLoggingIn: boolean
   isLoggingOut: boolean
   operationError?: ApiError

@@ -32,6 +32,16 @@ public sealed class UserAccountRepository : SqliteRepository<UserAccount, Guid>,
         => dbContext.UserAccounts.SingleOrDefaultAsync(account => account.NormalizedUsername == normalizedUsername, cancellationToken);
 
     /// <summary>
+    /// 稳定排序读取全部账号。
+    /// </summary>
+    public async Task<IReadOnlyList<UserAccount>> ListAllAsync(CancellationToken cancellationToken = default)
+        => await dbContext.UserAccounts
+            .AsNoTracking()
+            .OrderBy(account => account.NormalizedUsername)
+            .ThenBy(account => account.ID)
+            .ToListAsync(cancellationToken);
+
+    /// <summary>
     /// 按用户标识查询账号
     /// </summary>
     public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
