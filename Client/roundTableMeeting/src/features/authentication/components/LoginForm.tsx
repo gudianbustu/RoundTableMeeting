@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import type { ApiError } from '@/api/errors/ApiError'
 import type { LoginInput } from '../types/authentication'
 
+/** 渲染登录表单并将 API 字段错误映射到 Ant Design 字段 */
 export function LoginForm({ onSubmit, loading, error }: { onSubmit: (values: LoginInput) => Promise<void>; loading: boolean; error?: ApiError }) {
   const [form] = Form.useForm<LoginInput>()
   useEffect(() => {

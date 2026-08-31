@@ -2,8 +2,14 @@ using Microsoft.Data.Sqlite;
 
 namespace RoundTableMeeting.Repository.Sqlite.Configuration;
 
+/// <summary>
+/// 解析 SQLite 数据源路径
+/// </summary>
 public static class SqlitePathResolver
 {
+    /// <summary>
+    /// 规范化 SQLite 数据源路径
+    /// </summary>
     public static string NormalizeConnectionString(string connectionString)
     {
         var builder = new SqliteConnectionStringBuilder(connectionString);
@@ -26,6 +32,9 @@ public static class SqlitePathResolver
         return builder.ToString();
     }
 
+    /// <summary>
+    /// 获取 SQLite 数据库所在目录
+    /// </summary>
     public static string GetDatabaseDirectory(string connectionString)
     {
         var dataSource = new SqliteConnectionStringBuilder(connectionString).DataSource;

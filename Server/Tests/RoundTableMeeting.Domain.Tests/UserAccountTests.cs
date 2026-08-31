@@ -75,8 +75,7 @@ public sealed class UserAccountTests
     [Fact]
     public void NormalizedUsernameExpansionBoundaryIsUnreachableForBoundedInvariantCasing()
     {
-        // The display username is capped at 64 characters and .NET invariant casing
-        // does not provide a stable multi-character expansion sample for this path.
+        // 显示用户名上限为 64 个字符，.NET 不变区域大小写规则在此路径没有稳定的多字符扩展示例
         var normalized = UserAccount.NormalizeUsername(new string('a', 64));
 
         Assert.Equal(64, normalized.Length);

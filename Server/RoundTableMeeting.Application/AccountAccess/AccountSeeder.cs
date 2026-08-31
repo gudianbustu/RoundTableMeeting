@@ -8,12 +8,18 @@ using RoundTableMeeting.Domain.UnitOfWork;
 
 namespace RoundTableMeeting.Application.AccountAccess;
 
+/// <summary>
+/// 在应用启动时幂等创建配置的初始账号
+/// </summary>
 public sealed class AccountSeeder(
     IUserAccountRepository userAccountRepository,
     IUnitOfWork unitOfWork,
     IPasswordHasher<UserAccount> passwordHasher)
     : IAccountSeeder, IScopedDependency<IAccountSeeder>
 {
+    /// <summary>
+    /// 校验种子账号，创建缺失账号并提交新增记录
+    /// </summary>
     public async Task SeedAsync(IReadOnlyCollection<SeedAccountInput> accounts, CancellationToken cancellationToken = default)
     {
         if (accounts.Count == 0) throw new InvalidOperationException("At least one authentication seed account is required.");
@@ -36,6 +42,7 @@ public sealed class AccountSeeder(
         }
 
         var changed = false;
+        // 仅登记缺失账号，避免重复启动覆盖已有密码
         foreach (var seed in normalized)
         {
             cancellationToken.ThrowIfCancellationRequested();

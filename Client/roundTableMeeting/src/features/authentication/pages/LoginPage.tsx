@@ -5,6 +5,7 @@ import { LoginForm } from '../components/LoginForm'
 import { useAuthentication } from '../hooks/useAuthentication'
 import type { LoginInput } from '../types/authentication'
 
+/** 在登录后跳转前校验路由提供的返回目标 */
 function getReturnTo(value: unknown) {
   if (!value || typeof value !== 'object') return '/'
   const item = value as { pathname?: unknown; search?: unknown; hash?: unknown }
@@ -13,6 +14,7 @@ function getReturnTo(value: unknown) {
   return item.pathname + item.search + item.hash
 }
 
+/** 协调认证状态与登录页面表单 */
 export function LoginPage() {
   const { state, login, isLoggingIn, operationError, retry } = useAuthentication()
   const location = useLocation()

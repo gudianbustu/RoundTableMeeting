@@ -16,8 +16,14 @@ using RoundTableMeeting.Errors;
 
 namespace RoundTableMeeting.Hosting;
 
+/// <summary>
+/// 注册应用的持久化、认证和 Web 服务
+/// </summary>
 public static class ServiceCollectionExtensions
 {
+    /// <summary>
+    /// 注册应用依赖和 Web 基础设施
+    /// </summary>
     public static WebApplicationBuilder AddRoundTableMeetingServices(this WebApplicationBuilder builder)
     {
         builder.Services.AddAutoService(

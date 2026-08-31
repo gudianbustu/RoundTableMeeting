@@ -3,8 +3,14 @@ using Microsoft.AspNetCore.Mvc.ModelBinding;
 
 namespace RoundTableMeeting.Errors;
 
+/// <summary>
+/// 构建统一的问题详情内容
+/// </summary>
 public static class ProblemDetailsFactory
 {
+    /// <summary>
+    /// 创建统一的问题详情或领域对象
+    /// </summary>
     public static ApiProblemDetails Create(HttpContext context, int status, string code, IReadOnlyDictionary<string, string[]>? errors = null)
         => new()
         {
@@ -42,6 +48,9 @@ public static class ProblemDetailsFactory
             Errors = errors
         };
 
+    /// <summary>
+    /// 将模型状态转换为统一校验问题响应
+    /// </summary>
     public static ApiProblemDetails CreateValidation(HttpContext context, ModelStateDictionary modelState)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -70,6 +79,9 @@ public static class ProblemDetailsFactory
         return Create(context, StatusCodes.Status400BadRequest, "validation_failed", errors);
     }
 
+    /// <summary>
+    /// 将 JSON 和 MVC 字段路径规范化为客户端字段名
+    /// </summary>
     public static string NormalizeKey(string key)
     {
         var normalized = string.IsNullOrWhiteSpace(key) ? "$" : key.Trim();
@@ -84,6 +96,9 @@ public static class ProblemDetailsFactory
         return ToCamelCase(first) + rest;
     }
 
+    /// <summary>
+    /// 将字段名首字母转换为小写
+    /// </summary>
     private static string ToCamelCase(string value)
         => string.IsNullOrEmpty(value) ? value : char.ToLowerInvariant(value[0]) + value[1..];
 }

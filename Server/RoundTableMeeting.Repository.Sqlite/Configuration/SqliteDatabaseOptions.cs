@@ -3,13 +3,25 @@ using Microsoft.Data.Sqlite;
 
 namespace RoundTableMeeting.Repository.Sqlite.Configuration;
 
+/// <summary>
+/// 保存 SQLite 数据库连接配置
+/// </summary>
 public sealed class SqliteDatabaseOptions
 {
+    /// <summary>
+    /// 配置节名称
+    /// </summary>
     public const string SectionName = "Database";
 
+    /// <summary>
+    /// SQLite 数据库连接字符串
+    /// </summary>
     [Required]
     public string ConnectionString { get; set; } = string.Empty;
 
+    /// <summary>
+    /// 校验 SQLite 数据库连接配置
+    /// </summary>
     public static bool TryValidate(string? connectionString, out string error)
     {
         error = string.Empty;

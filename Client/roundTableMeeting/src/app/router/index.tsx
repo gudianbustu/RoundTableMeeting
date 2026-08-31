@@ -5,6 +5,7 @@ import { NotFoundPage, SystemStatusPage } from '@/features/systemStatus'
 import { AuthGate, AuthenticatedHomePage, LoginPage } from '@/features/authentication'
 import { AuthenticatedLayout } from '../layouts/AuthenticatedLayout'
 
+/** 公共页面、认证页面和回退页面的浏览器路由树 */
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginPage /> },
   {

@@ -9,10 +9,12 @@ type ErrorCandidate = {
   responseBody?: unknown
 }
 
+/** 检查未知值是否可以作为对象记录读取 */
 function isRecord(value: unknown): value is object {
   return value !== null && typeof value === 'object'
 }
 
+/** 将 Kiota 或 problem-details 字段错误转换为可预测的记录 */
 function normalizeFieldErrors(value: unknown): Record<string, string[]> | undefined {
   if (!isRecord(value)) return undefined
   const holder = value as { additionalData?: unknown }
@@ -30,6 +32,7 @@ function normalizeFieldErrors(value: unknown): Record<string, string[]> | undefi
   return Object.keys(result).length > 0 ? result : undefined
 }
 
+/** 将传输错误、problem-details 错误和未知错误转换为 ApiError */
 export function toApiError(error: unknown): ApiError {
   if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') throw error
   if (error instanceof TypeError) return { kind: 'network', message: '服务暂时不可访问，请稍后重试。' }

@@ -8,6 +8,7 @@ if (!favicon.includes('<svg') || !favicon.includes('RoundTableMeeting')) throw n
 
 const root = 'src/api/generated'
 const files = []
+/** 收集生成的契约文件并排除 Kiota 诊断文件 */
 const visit = (directory) => {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const file = join(directory, entry.name)

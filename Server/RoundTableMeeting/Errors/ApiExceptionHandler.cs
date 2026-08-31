@@ -4,9 +4,15 @@ using RoundTableMeeting.Domain.Exceptions;
 
 namespace RoundTableMeeting.Errors;
 
+/// <summary>
+/// 将未处理异常转换为统一 API 错误响应
+/// </summary>
 public sealed class ApiExceptionHandler(
     ILogger<ApiExceptionHandler> logger) : IExceptionHandler
 {
+    /// <summary>
+    /// 记录异常并写入统一问题详情响应
+    /// </summary>
     public async ValueTask<bool> TryHandleAsync(
         HttpContext httpContext,
         Exception exception,

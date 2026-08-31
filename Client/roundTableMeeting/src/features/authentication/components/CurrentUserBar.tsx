@@ -1,6 +1,7 @@
 import { Alert, Button, Space, Typography } from 'antd'
 import { useAuthentication } from '../hooks/useAuthentication'
 
+/** 显示已登录用户并提供退出操作 */
 export function CurrentUserBar() {
   const { state, logout, isLoggingOut, operationError } = useAuthentication()
   if (state.status !== 'authenticated') return null

@@ -3,6 +3,7 @@ import { basename } from 'node:path'
 const developmentBaseUrlPattern = /https?:\/\/(?:localhost|127\.0\.0\.1):\d+/gi
 const openApiDocumentUrlPattern = /https?:\/\/(?:localhost|127\.0\.0\.1):\d+\/openapi\/v1\.json/gi
 
+/** 移除 Kiota 输出中的机器相关开发环境 URL */
 export function normalizeGeneratedContent(file, content) {
   let normalized = content
   const name = basename(file).toLowerCase()

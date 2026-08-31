@@ -7,6 +7,7 @@ import { logout as logoutRequest } from '../api/logout'
 import { AuthenticationContext } from '../context/AuthenticationContext'
 import type { AuthenticationState } from '../types/authentication'
 
+/** 管理认证初始化、登录退出操作和取消 */
 export function AuthenticationProvider({ children }: PropsWithChildren) {
   const [state, setState] = useState<AuthenticationState>({ status: 'checking' })
   const [isLoggingIn, setIsLoggingIn] = useState(false)
@@ -14,6 +15,7 @@ export function AuthenticationProvider({ children }: PropsWithChildren) {
   const [operationError, setOperationError] = useState<ApiError>()
   const operationId = useRef(0)
   const controllerRef = useRef<AbortController | undefined>(undefined)
+  // 开始新操作前取消上一个操作，避免过期状态写入
   const beginOperation = useCallback(() => {
     controllerRef.current?.abort()
     setIsLoggingIn(false)

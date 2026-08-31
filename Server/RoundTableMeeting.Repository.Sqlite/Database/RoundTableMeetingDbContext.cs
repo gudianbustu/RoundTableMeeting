@@ -2,30 +2,52 @@ using Microsoft.EntityFrameworkCore;
 
 namespace RoundTableMeeting.Repository.Sqlite.Database;
 
+/// <summary>
+/// 表示应用持久化模型的 EF Core 上下文
+/// </summary>
 public sealed class RoundTableMeetingDbContext(DbContextOptions<RoundTableMeetingDbContext> options)
     : DbContext(options)
 {
+    /// <summary>
+    /// 用户账号实体集合
+    /// </summary>
     public DbSet<RoundTableMeeting.Domain.Entities.UserAccount> UserAccounts => Set<RoundTableMeeting.Domain.Entities.UserAccount>();
 
+    /// <summary>
+    /// 校验账号后同步保存实体变更
+    /// </summary>
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
         ValidateUserAccounts();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
+    /// <summary>
+    /// 校验账号后同步保存实体变更
+    /// </summary>
     public override int SaveChanges() => SaveChanges(true);
 
+    /// <summary>
+    /// 校验账号后异步保存实体变更
+    /// </summary>
     public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
         ValidateUserAccounts();
         return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }
 
+    /// <summary>
+    /// 校验账号后异步保存实体变更
+    /// </summary>
     public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
         => SaveChangesAsync(true, cancellationToken);
 
+    /// <summary>
+    /// 校验待持久化账号的完整性
+    /// </summary>
     private void ValidateUserAccounts()
     {
+        // 在 EF 将已跟踪写入发送到 SQLite 前执行校验
         foreach (var entry in ChangeTracker.Entries<RoundTableMeeting.Domain.Entities.UserAccount>()
             .Where(entry => entry.State is EntityState.Added or EntityState.Modified))
         {
@@ -43,6 +65,9 @@ public sealed class RoundTableMeetingDbContext(DbContextOptions<RoundTableMeetin
         }
     }
 
+    /// <summary>
+    /// 加载仓储程序集中的实体配置
+    /// </summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

@@ -5,6 +5,9 @@ using RoundTableMeeting.Authentication;
 
 namespace RoundTableMeeting.IntegrationTests.Controllers;
 
+/// <summary>
+/// 提供浏览器来源校验测试端点
+/// </summary>
 [ApiController]
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("__test/origin")]
@@ -45,8 +48,14 @@ public sealed class OriginTestController : ControllerBase
     public IActionResult Authorized() => Ok(new { reached = true });
 }
 
+/// <summary>
+/// 表示来源保护端点使用的 JSON 请求体
+/// </summary>
 public sealed class OriginJsonRequest
 {
+    /// <summary>
+    /// 获取来源保护端点使用的必填测试值
+    /// </summary>
     [Required]
     public string? Name { get; init; }
 }

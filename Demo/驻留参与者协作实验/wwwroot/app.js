@@ -1,3 +1,4 @@
+/** 用于渲染实验实时状态的 DOM 引用 */
 const messagesElement = document.querySelector('#messages')
 const inviteCodeElement = document.querySelector('#inviteCode')
 const participantElement = document.querySelector('#participant')
@@ -5,8 +6,10 @@ const statusElement = document.querySelector('#status')
 const feedbackElement = document.querySelector('#feedback')
 const contentElement = document.querySelector('#content')
 
+/** 上次渲染的消息序号，用于避免重建未变化的列表 */
 let lastMessageSequence = 0
 
+/** 发送 JSON 请求并返回解析后的响应体 */
 async function request(url, options) {
   const response = await fetch(url, {
     ...options,
@@ -17,6 +20,7 @@ async function request(url, options) {
   return body
 }
 
+/** 构建消息元素并转义用户提供的内容 */
 function renderMessage(message) {
   const article = document.createElement('article')
   article.className = `message ${message.role}`
@@ -25,12 +29,14 @@ function renderMessage(message) {
   return article
 }
 
+/** 通过浏览器 DOM 转义文本，避免插入原始 HTML */
 function escapeHtml(value) {
   const node = document.createElement('div')
   node.textContent = value
   return node.innerHTML
 }
 
+/** 刷新会话状态，并仅在序号变化时重新渲染消息 */
 async function refresh() {
   try {
     const state = await request('/api/lab')

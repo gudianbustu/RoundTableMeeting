@@ -1,5 +1,6 @@
 import { Outlet } from 'react-router-dom'
 
+/** 公共页面与系统状态页面共用的布局 */
 export function AppLayout() {
   return (
     <main className="app-shell">

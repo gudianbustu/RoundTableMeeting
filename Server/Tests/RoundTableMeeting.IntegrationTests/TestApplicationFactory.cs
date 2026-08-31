@@ -13,17 +13,44 @@ using Serilog.Core;
 
 namespace RoundTableMeeting.IntegrationTests;
 
+/// <summary>
+/// 创建可控的集成测试应用宿主
+/// </summary>
 public sealed class TestApplicationFactory : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// 获取测试期间捕获的结构化日志
+    /// </summary>
     internal StructuredLogSink LogSink { get; } = new();
+    /// <summary>
+    /// 获取 Cookie 认证使用的可控时钟
+    /// </summary>
     internal ManualTimeProvider ManualTimeProvider { get; } = new(DateTimeOffset.UtcNow);
+    /// <summary>
+    /// 测试数据库及网站根目录所在目录
+    /// </summary>
     private readonly string databaseDirectory;
+    /// <summary>
+    /// 测试宿主使用的 SQLite 数据库路径
+    /// </summary>
     private readonly string databasePath;
+    /// <summary>
+    /// 集成测试使用的静态文件根目录
+    /// </summary>
     private readonly string staticDirectory;
+    /// <summary>
+    /// 是否由当前工厂负责清理临时目录
+    /// </summary>
     private readonly bool ownsDatabaseDirectory;
 
+    /// <summary>
+    /// 测试宿主使用的 SQLite 数据库路径
+    /// </summary>
     public string DatabasePath => databasePath;
 
+    /// <summary>
+    /// 创建使用隔离临时数据库的测试工厂
+    /// </summary>
     public TestApplicationFactory()
     {
         databaseDirectory = Path.Combine(
@@ -37,6 +64,9 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         ownsDatabaseDirectory = true;
     }
 
+    /// <summary>
+    /// 创建复用指定数据库的测试工厂
+    /// </summary>
     internal TestApplicationFactory(string sharedDatabasePath)
     {
         databasePath = Path.GetFullPath(sharedDatabasePath);
@@ -45,6 +75,9 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         ownsDatabaseDirectory = false;
     }
 
+    /// <summary>
+    /// 配置集成测试宿主及其替代服务
+    /// </summary>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -79,6 +112,9 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         });
     }
 
+    /// <summary>
+    /// 创建数据库不可用场景的测试工厂
+    /// </summary>
     public TestApplicationFactory WithUnavailableDatabase()
     {
         var replacement = new TestApplicationFactory();
@@ -86,8 +122,14 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         return replacement;
     }
 
+    /// <summary>
+    /// 是否替换为数据库不可用的测试服务
+    /// </summary>
     private bool useUnavailableDatabase;
 
+    /// <summary>
+    /// 清理测试宿主拥有的临时资源
+    /// </summary>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);

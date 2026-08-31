@@ -24,7 +24,7 @@ try {
         break
       }
     } catch {
-      // Keep polling while the service starts.
+      // 服务启动期间持续轮询
     }
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
   }
@@ -46,6 +46,7 @@ try {
   rmSync(join(staging, '.kiota.log'), { force: true })
 
   const files = []
+  /** 收集所有生成文件以执行校验和规范化 */
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const file = join(directory, entry.name)
@@ -63,6 +64,7 @@ try {
     writeFileSync(file, content, { encoding: 'utf8' })
   }
 
+  // 仅在生成完全成功后替换已校验的暂存目录
   replaceGeneratedDirectory(staging, output, {
     failBeforeInstall: process.env.KIOTA_TEST_FAIL_SWAP === '1',
     failAfterBackup: process.env.KIOTA_TEST_FAIL_AFTER_BACKUP === '1',

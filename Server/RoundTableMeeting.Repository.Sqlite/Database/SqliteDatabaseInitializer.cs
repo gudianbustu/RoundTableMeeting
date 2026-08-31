@@ -8,12 +8,18 @@ using RoundTableMeeting.Repository.Sqlite.Configuration;
 
 namespace RoundTableMeeting.Repository.Sqlite.Database;
 
+/// <summary>
+/// 初始化 SQLite 数据库并校验关键参数
+/// </summary>
 public sealed class SqliteDatabaseInitializer(
     RoundTableMeetingDbContext dbContext,
     IOptions<SqliteDatabaseOptions> options,
     ILogger<SqliteDatabaseInitializer> logger)
     : IDatabaseInitializer, IScopedDependency<IDatabaseInitializer>
 {
+    /// <summary>
+    /// 创建目录、应用迁移并校验 SQLite 参数
+    /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         var normalizedConnectionString = SqlitePathResolver.NormalizeConnectionString(options.Value.ConnectionString);
@@ -51,6 +57,7 @@ public sealed class SqliteDatabaseInitializer(
             SqliteConnection.ClearAllPools();
         }
 
+        // 打开全新上下文，独立校验已持久化的 pragma
         var verificationOptions = new DbContextOptionsBuilder<RoundTableMeetingDbContext>()
             .UseSqlite(normalizedConnectionString, sqlite => sqlite.MigrationsAssembly(typeof(RoundTableMeetingDbContext).Assembly.FullName))
             .UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking)

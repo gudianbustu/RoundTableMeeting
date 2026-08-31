@@ -2,6 +2,7 @@ import { cpSync, existsSync, readdirSync, rmSync } from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 
+/** 以事务方式替换生成输出，并在失败时恢复原目录 */
 export function replaceGeneratedDirectory(sourceDirectory, targetDirectory, options = {}) {
   const parentDirectory = dirname(targetDirectory)
   const replacementDirectory = join(parentDirectory, '.generated-replacement-' + randomUUID())
@@ -31,6 +32,7 @@ export function replaceGeneratedDirectory(sourceDirectory, targetDirectory, opti
     installed = true
     if (backedUp) rmSync(backupDirectory, { recursive: true, force: true })
   } catch (error) {
+    // 先移除不完整输出，再在存在备份时恢复完整目录
     if ((installStarted || installed) && existsSync(targetDirectory)) rmSync(targetDirectory, { recursive: true, force: true })
     if (backedUp && existsSync(backupDirectory)) {
       cpSync(backupDirectory, targetDirectory, { recursive: true })

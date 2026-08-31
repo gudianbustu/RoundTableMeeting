@@ -7,12 +7,18 @@ using RoundTableMeeting.Domain.Repositories;
 
 namespace RoundTableMeeting.Application.AccountAccess;
 
+/// <summary>
+/// 执行登录凭据校验和当前用户解析
+/// </summary>
 public sealed class AuthenticationService(
     IUserAccountRepository userAccountRepository,
     ICurrentUserContext currentUserContext,
     PasswordVerificationService passwordVerificationService)
     : IAuthenticationService, IScopedDependency<IAuthenticationService>
 {
+    /// <summary>
+    /// 认证登录请求并返回客户端可用的用户信息
+    /// </summary>
     public async Task<AuthenticateResult> AuthenticateAsync(LoginRequest request, CancellationToken cancellationToken = default)
     {
         var errors = Validate(request);
@@ -31,6 +37,7 @@ public sealed class AuthenticationService(
             return new AuthenticateResult(AuthenticateStatus.ValidationFailed, Errors: new Dictionary<string, string[]> { ["username"] = ["Username is invalid."] });
         }
         var account = await userAccountRepository.FindByNormalizedUsernameAsync(normalizedUsername, cancellationToken);
+        // 为未知账号校验伪哈希，避免通过耗时泄露用户名是否存在
         var verification = passwordVerificationService.Verify(account, request.Password!);
         if (verification != AccountPasswordVerificationResult.Success || account is null)
         {
@@ -40,6 +47,9 @@ public sealed class AuthenticationService(
         return new AuthenticateResult(AuthenticateStatus.Success, ToDto(account));
     }
 
+    /// <summary>
+    /// 根据当前请求声明解析账号信息
+    /// </summary>
     public async Task<CurrentUserResult> GetCurrentUserAsync(CancellationToken cancellationToken = default)
     {
         if (!currentUserContext.IsAuthenticated || currentUserContext.UserId is not { } userId)
@@ -53,6 +63,9 @@ public sealed class AuthenticationService(
             : new CurrentUserResult(CurrentUserStatus.Success, ToDto(account));
     }
 
+    /// <summary>
+    /// 执行领域级登录校验并生成字段错误
+    /// </summary>
     private static Dictionary<string, string[]> Validate(LoginRequest request)
     {
         var errors = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase);
@@ -74,5 +87,8 @@ public sealed class AuthenticationService(
         return errors;
     }
 
+    /// <summary>
+    /// 将领域账号映射为客户端用户资料
+    /// </summary>
     private static CurrentUserDto ToDto(UserAccount account) => new(account.ID, account.Username, account.Nickname);
 }

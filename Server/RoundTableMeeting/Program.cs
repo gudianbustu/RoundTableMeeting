@@ -40,6 +40,7 @@ try
     builder.AddRoundTableMeetingServices();
 
     var app = builder.Build();
+    // 在接受请求前完成迁移和幂等账号播种
     using (var scope = app.Services.CreateScope())
     {
         await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
@@ -81,6 +82,7 @@ try
         await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status404NotFound, "route_not_found");
     }).AllowAnonymous();
     app.MapScalarApiReference("/scalar/v1", options => options.WithOpenApiRoutePattern("/openapi/v1.json")).AllowAnonymous();
+    // 仅对浏览器页面请求提供 SPA，API 和文档路径保持真实的 404 响应
     app.MapFallback(async context =>
     {
         var acceptsHtml = context.Request.GetTypedHeaders().Accept?.Any(value =>
@@ -119,4 +121,7 @@ finally
     await Log.CloseAndFlushAsync();
 }
 
+/// <summary>
+/// 提供应用或实验的顶层启动入口
+/// </summary>
 public partial class Program;

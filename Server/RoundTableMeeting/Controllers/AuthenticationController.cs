@@ -10,10 +10,16 @@ using AppAuthenticationService = RoundTableMeeting.Abstraction.Services.IAuthent
 
 namespace RoundTableMeeting.Controllers;
 
+/// <summary>
+/// 处理登录、当前用户和退出登录请求
+/// </summary>
 [ApiController]
 [Route("api/auth")]
 public sealed class AuthenticationController(AppAuthenticationService authenticationService) : ControllerBase
 {
+    /// <summary>
+    /// 校验凭据并签发认证 Cookie
+    /// </summary>
     [HttpPost("login")]
     [AllowAnonymous]
     [RequireBrowserOrigin(true)]
@@ -33,6 +39,9 @@ public sealed class AuthenticationController(AppAuthenticationService authentica
         return Ok(user);
     }
 
+    /// <summary>
+    /// 返回当前认证 Cookie 对应的用户
+    /// </summary>
     [HttpGet("me")]
     [Authorize]
     [ProducesResponseType(typeof(CurrentUserDto), StatusCodes.Status200OK)]
@@ -49,6 +58,9 @@ public sealed class AuthenticationController(AppAuthenticationService authentica
         return Ok(result.User);
     }
 
+    /// <summary>
+    /// 清除当前认证 Cookie
+    /// </summary>
     [HttpPost("logout")]
     [AllowAnonymous]
     [RequireBrowserOrigin]

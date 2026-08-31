@@ -4,12 +4,18 @@ using RoundTableMeeting.Authentication;
 
 namespace RoundTableMeeting.IntegrationTests.Controllers;
 
+/// <summary>
+/// 提供认证声明契约测试端点
+/// </summary>
 [ApiController]
 [ApiExplorerSettings(IgnoreApi = true)]
 [Route("__test/auth-claims")]
 [Authorize]
 public sealed class AuthenticationClaimsTestController : ControllerBase
 {
+    /// <summary>
+    /// 返回测试端点所需的响应
+    /// </summary>
     [HttpGet]
     public object Get() => new
     {

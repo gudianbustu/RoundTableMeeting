@@ -4,12 +4,27 @@ using RoundTableMeeting.Domain.Exceptions;
 
 namespace RoundTableMeeting.Repository.Sqlite.UnitOfWork;
 
+/// <summary>
+/// 适配 EF Core 实体状态和工作单元操作
+/// </summary>
 internal sealed class EfUnitOfWorkCore<TDbContext>(TDbContext dbContext) where TDbContext : DbContext
 {
+    /// <summary>
+    /// 登记实体新增操作
+    /// </summary>
     public void RegisterAdd(IEntity<Guid> entity) => SetState(entity, Registration.Add);
+    /// <summary>
+    /// 登记实体修改操作
+    /// </summary>
     public void RegisterEdit(IEntity<Guid> entity) => SetState(entity, Registration.Edit);
+    /// <summary>
+    /// 登记实体删除操作
+    /// </summary>
     public void RegisterDelete(IEntity<Guid> entity) => SetState(entity, Registration.Delete);
 
+    /// <summary>
+    /// 提交工作单元中的实体变更
+    /// </summary>
     public async Task<int> CommitAsync(CancellationToken cancellationToken = default)
     {
         try
@@ -22,10 +37,14 @@ internal sealed class EfUnitOfWorkCore<TDbContext>(TDbContext dbContext) where T
         }
         finally
         {
+            // 成功或失败后清理跟踪状态，使作用域上下文可以复用
             dbContext.ChangeTracker.Clear();
         }
     }
 
+    /// <summary>
+    /// 根据登记操作设置 EF Core 实体状态
+    /// </summary>
     private void SetState(IEntity<Guid> entity, Registration registration)
     {
         ArgumentNullException.ThrowIfNull(entity);
@@ -80,6 +99,9 @@ internal sealed class EfUnitOfWorkCore<TDbContext>(TDbContext dbContext) where T
         }
     }
 
+    /// <summary>
+    /// 定义实体登记对应的持久化操作
+    /// </summary>
     private enum Registration
     {
         Add,

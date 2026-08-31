@@ -3,16 +3,31 @@ using RoundTableMeeting.Domain.Entities;
 
 namespace RoundTableMeeting.Authentication;
 
+/// <summary>
+/// 保存浏览器来源和启动账号配置
+/// </summary>
 public sealed class AuthenticationOptions
 {
+    /// <summary>
+    /// 配置节名称
+    /// </summary>
     public const string SectionName = "Authentication";
 
+    /// <summary>
+    /// 允许访问浏览器端点的来源列表
+    /// </summary>
     [MinLength(1)]
     public List<string> AllowedOrigins { get; set; } = [];
 
+    /// <summary>
+    /// 应用启动时需要创建的账号列表
+    /// </summary>
     [MinLength(1)]
     public List<SeedAccountOptions> SeedAccounts { get; set; } = [];
 
+    /// <summary>
+    /// 校验认证配置或登录输入
+    /// </summary>
     public bool Validate(out string error)
     {
         error = string.Empty;
@@ -51,6 +66,9 @@ public sealed class AuthenticationOptions
         return error.Length == 0;
     }
 
+    /// <summary>
+    /// 校验来源是否为纯绝对来源
+    /// </summary>
     private static bool IsPureOrigin(string value)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -69,14 +87,26 @@ public sealed class AuthenticationOptions
     }
 }
 
+/// <summary>
+/// 保存一个启动播种账号的配置
+/// </summary>
 public sealed class SeedAccountOptions
 {
+    /// <summary>
+    /// 账号用户名
+    /// </summary>
     [Required]
     public string? Username { get; set; }
 
+    /// <summary>
+    /// 账号昵称
+    /// </summary>
     [Required]
     public string? Nickname { get; set; }
 
+    /// <summary>
+    /// 账号密码
+    /// </summary>
     [Required]
     public string? Password { get; set; }
 }

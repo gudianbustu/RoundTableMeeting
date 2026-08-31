@@ -6,10 +6,16 @@ using Microsoft.AspNetCore.Authorization;
 
 namespace RoundTableMeeting.Controllers;
 
+/// <summary>
+/// 提供系统运行状态查询端点
+/// </summary>
 [ApiController]
 [Route("api/system")]
 public sealed class SystemController(ISystemStatusService systemStatusService) : ControllerBase
 {
+    /// <summary>
+    /// 返回服务、数据库和环境状态
+    /// </summary>
     [AllowAnonymous]
     [HttpGet("status")]
     [Produces("application/json")]

@@ -1,6 +1,7 @@
 import { Descriptions, Typography } from 'antd'
 import { useAuthentication } from '../hooks/useAuthentication'
 
+/** 显示认证用户的基本资料 */
 export function AuthenticatedHomePage() {
   const { state } = useAuthentication()
   if (state.status !== 'authenticated') return null

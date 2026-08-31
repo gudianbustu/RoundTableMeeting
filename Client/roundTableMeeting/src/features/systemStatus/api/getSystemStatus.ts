@@ -4,6 +4,7 @@ import type { SystemStatusViewModel } from '../types/systemStatus'
 import { AbortRequestOption } from '@/api/client/requestOptions'
 import type { SystemStatusDto } from '@/api/generated/models'
 
+/** 校验生成的状态 DTO 并映射为界面模型 */
 export function toSystemStatusViewModel(value: Partial<SystemStatusDto>): SystemStatusViewModel {
   if (!value.database?.status || !value.status || !value.environment) throw new Error('Invalid status response')
   return {
@@ -13,6 +14,7 @@ export function toSystemStatusViewModel(value: Partial<SystemStatusDto>): System
   }
 }
 
+/** 加载匿名系统状态端点 */
 export async function getSystemStatus(signal?: AbortSignal): Promise<SystemStatusViewModel> {
   try {
     const value = await getApiClient().api.system.status.get(signal ? { options: [new AbortRequestOption(signal)] } : undefined)

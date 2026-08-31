@@ -1,5 +1,6 @@
 import { Link, isRouteErrorResponse, useRouteError } from 'react-router-dom'
 
+/** 为路由级故障渲染稳定的恢复页面 */
 export function RouteErrorElement() {
   const error = useRouteError()
   const message = isRouteErrorResponse(error) ? '页面暂时无法加载。' : '页面发生了意外错误。'

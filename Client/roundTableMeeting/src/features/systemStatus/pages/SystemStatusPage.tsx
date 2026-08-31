@@ -8,6 +8,7 @@ import { ServiceStatus } from '../components/ServiceStatus'
 import type { SystemStatusViewModel } from '../types/systemStatus'
 import type { ApiError } from '@/api/errors/ApiError'
 
+/** 将 API 错误映射为状态页面面向用户的文案 */
 export function getSystemStatusErrorCopy(error: ApiError) {
   if (error.kind === 'network') {
     return { title: '服务暂时不可访问', description: '请检查服务端是否已启动，然后重试。' }
@@ -27,6 +28,7 @@ export function getSystemStatusErrorCopy(error: ApiError) {
   return { title: '请求未能完成', description: '请稍后重试。' }
 }
 
+/** 加载并显示匿名服务健康摘要 */
 export function SystemStatusPage() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [status, setStatus] = useState<SystemStatusViewModel>()
@@ -53,4 +55,5 @@ export function SystemStatusPage() {
   return <section className="status-content"><Typography.Title level={2}>框架运行状态</Typography.Title>{degraded && <Alert type="warning" showIcon title="服务端已连接，但数据库处于不可用状态。" />}<Descriptions bordered column={{ xs: 1, sm: 2 }}><Descriptions.Item label="客户端">已加载</Descriptions.Item><Descriptions.Item label="服务端"><ServiceStatus status={status.status} /></Descriptions.Item><Descriptions.Item label="数据库"><DatabaseStatus status={status.databaseStatus} /></Descriptions.Item><Descriptions.Item label="运行环境">{status.environment}</Descriptions.Item></Descriptions>{error?.traceId && <Typography.Text type="secondary">关联标识：{error.traceId}</Typography.Text>}</section>
 }
 
+/** 为未知路由渲染兜底页面 */
 export function NotFoundPage() { return <section className="page-state"><Typography.Title level={2}>页面不存在</Typography.Title><Typography.Text>请返回系统状态页面。</Typography.Text><Link to="/system/status">返回系统状态</Link></section> }
