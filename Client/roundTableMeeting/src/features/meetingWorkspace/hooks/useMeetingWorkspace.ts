@@ -53,13 +53,12 @@ export function useMeetingWorkspace() {
     }
   }, [navigate, routeId])
 
-  const loadDetails = useCallback(async (id: string) => {
+  const loadDetails = useCallback(async (id: string, preserveCurrent = false) => {
     detailController.current?.abort()
     const controller = new AbortController()
     detailController.current = controller
     const version = ++detailVersion.current
-    setDetails(undefined)
-    setDetailLoading(true)
+    if (!preserveCurrent) { setDetails(undefined); setDetailLoading(true) }
     try {
       const result = await getMeetingDetails(id, controller.signal)
       if (!controller.signal.aborted && version === detailVersion.current) { setDetails(result); setError(undefined) }
@@ -74,7 +73,7 @@ export function useMeetingWorkspace() {
         }
       }
     } finally {
-      if (detailController.current === controller) { detailController.current = undefined; setDetailLoading(false) }
+      if (detailController.current === controller) { detailController.current = undefined; if (!preserveCurrent) setDetailLoading(false) }
     }
   }, [loadList, navigate])
 
@@ -93,6 +92,7 @@ export function useMeetingWorkspace() {
 
   const select = (id: string) => { suppressAutoSelect.current = false; createdInvitation.current = undefined; setInvitation(undefined); navigate(`/meetings/${id}`) }
   const refresh = () => { void loadList(false); if (routeId) void loadDetails(routeId) }
+  const refreshDetails = useCallback(() => { if (routeId) void loadDetails(routeId, true) }, [loadDetails, routeId])
   const revealInvitation = async () => { if (!routeId) return; setOperationLoading(true); try { setInvitation(await getMeetingInvitation(routeId)) } catch (value) { setError(value as MeetingWorkspaceApiError) } finally { setOperationLoading(false) } }
   const hideInvitation = () => { createdInvitation.current = undefined; setInvitation(undefined) }
   const create = async (input: CreateMeetingInput) => {
@@ -137,5 +137,5 @@ export function useMeetingWorkspace() {
     void loadList(false)
   }, [loadList, navigate])
 
-  return { meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, revealInvitation, hideInvitation, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
+  return { meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, revealInvitation, hideInvitation, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
 }

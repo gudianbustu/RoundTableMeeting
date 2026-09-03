@@ -6,7 +6,13 @@ import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { JoinMeetingDialog } from '../components/JoinMeetingDialog'
 import { useMeetingWorkspace } from '../hooks/useMeetingWorkspace'
+import type { Participant } from '../types/meetingWorkspace'
 import { RealtimeChatRegion } from './RealtimeChatRegion'
+
+export function hasUnknownOnlineParticipant(participants: Participant[], presence: Record<string, 'online' | 'offline'>) {
+  const participantIds = new Set(participants.map(participant => participant.participantId))
+  return Object.entries(presence).some(([participantId, state]) => state === 'online' && !participantIds.has(participantId))
+}
 
 export function MeetingWorkspacePage() {
   const workspace = useMeetingWorkspace()
@@ -18,6 +24,9 @@ export function MeetingWorkspacePage() {
   const [messageApi, contextHolder] = message.useMessage()
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
+  useEffect(() => {
+    if (workspace.details && hasUnknownOnlineParticipant(workspace.details.participants, presence)) workspace.refreshDetails()
+  }, [presence, workspace.details?.participants, workspace.refreshDetails])
   const copyInvitation = async () => {
     if (!workspace.invitation) return
     try {

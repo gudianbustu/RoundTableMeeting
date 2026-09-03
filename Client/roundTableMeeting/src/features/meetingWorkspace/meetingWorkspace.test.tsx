@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mapMeetingDetails } from './api/mappers'
 import { JoinMeetingDialog } from './components/JoinMeetingDialog'
 import { MeetingHeader } from './components/MeetingHeader'
+import { hasUnknownOnlineParticipant } from './pages/MeetingWorkspacePage'
 
 afterEach(cleanup)
 
@@ -38,5 +39,17 @@ describe('meeting workspace contracts', () => {
     render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: false, participants: [] }} onInvitation={vi.fn()} onHideInvitation={vi.fn()} onCopy={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
     expect(screen.queryByRole('button', { name: '显示邀请码' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除会议' })).not.toBeInTheDocument()
+  })
+
+  it('detects an online participant missing from the current detail snapshot', () => {
+    const participants = [{ participantId: '11111111-1111-1111-1111-111111111111', displayName: 'Alice', type: 'human' as const, isCreator: true, isCurrentUser: true }]
+    expect(hasUnknownOnlineParticipant(participants, {
+      '11111111-1111-1111-1111-111111111111': 'online',
+      '22222222-2222-2222-2222-222222222222': 'online',
+    })).toBe(true)
+    expect(hasUnknownOnlineParticipant(participants, {
+      '11111111-1111-1111-1111-111111111111': 'online',
+      '22222222-2222-2222-2222-222222222222': 'offline',
+    })).toBe(false)
   })
 })
