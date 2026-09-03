@@ -14,7 +14,9 @@ export function normalizeGeneratedContent(file, content) {
     )
   }
   if (name === 'kiota-lock.json') {
-    normalized = normalized.replace(openApiDocumentUrlPattern, '/openapi/v1.json')
+    const lock = JSON.parse(normalized)
+    lock.descriptionLocation = '/openapi/v1.json'
+    normalized = JSON.stringify(lock, null, 2) + '\n'
   }
   if (developmentBaseUrlPattern.test(normalized)) {
     developmentBaseUrlPattern.lastIndex = 0

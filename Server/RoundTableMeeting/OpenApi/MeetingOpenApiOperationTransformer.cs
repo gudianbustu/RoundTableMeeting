@@ -8,7 +8,9 @@ public sealed class MeetingOpenApiOperationTransformer : IOpenApiOperationTransf
     public Task TransformAsync(OpenApiOperation operation, OpenApiOperationTransformerContext context, CancellationToken cancellationToken)
     {
         var path = context.Description.RelativePath?.TrimStart('/');
-        if (path is not ("api/meetings/join" or "api/meetings/join/preview") || operation.Responses is null || !operation.Responses.TryGetValue("429", out var response))
+        var supportsRetryAfter = path is "api/meetings/join" or "api/meetings/join/preview"
+            || path?.EndsWith("/messages", StringComparison.Ordinal) == true;
+        if (!supportsRetryAfter || operation.Responses is null || !operation.Responses.TryGetValue("429", out var response))
             return Task.CompletedTask;
         var mutableResponse = response as OpenApiResponse ?? new OpenApiResponse { Description = response.Description, Content = new Dictionary<string, OpenApiMediaType>(), Headers = new Dictionary<string, IOpenApiHeader>() };
         if (mutableResponse != response)
@@ -20,7 +22,7 @@ public sealed class MeetingOpenApiOperationTransformer : IOpenApiOperationTransf
         var headers = mutableResponse.Headers ??= new Dictionary<string, IOpenApiHeader>();
         headers["Retry-After"] = new OpenApiHeader
         {
-            Description = "Seconds until another join attempt may be made.",
+            Description = "Seconds until another request may be made.",
             Schema = new OpenApiSchema { Type = JsonSchemaType.String }
         };
         return Task.CompletedTask;

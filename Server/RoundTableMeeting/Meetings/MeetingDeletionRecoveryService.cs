@@ -1,6 +1,7 @@
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.Repositories;
 using RoundTableMeeting.Domain.UnitOfWork;
+using RoundTableMeeting.RealtimeChat;
 
 namespace RoundTableMeeting.Meetings;
 
@@ -8,6 +9,8 @@ public sealed class MeetingDeletionRecoveryService(
     IServiceScopeFactory scopeFactory,
     MeetingDeletionSignal signal,
     TimeProvider timeProvider,
+    IMeetingRealtimeTermination realtimeTermination,
+    IMeetingRealtimeGate realtimeGate,
     ILogger<MeetingDeletionRecoveryService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -40,15 +43,19 @@ public sealed class MeetingDeletionRecoveryService(
     {
         try
         {
+            var deletedAt = timeProvider.GetUtcNow();
+            await realtimeTermination.NotifyAndTerminateAsync(meetingId, deletedAt, cancellationToken);
             await using var scope = scopeFactory.CreateAsyncScope();
             var meetings = scope.ServiceProvider.GetRequiredService<IMeetingRepository>();
             var participants = scope.ServiceProvider.GetRequiredService<IMeetingParticipantRepository>();
+            var messages = scope.ServiceProvider.GetRequiredService<IMessageCleanupService>();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var runner = scope.ServiceProvider.GetRequiredService<IMeetingTransactionRunner>();
             await runner.RunAsync(async token =>
             {
                 var meeting = await meetings.FindByIdAsync(meetingId, token);
                 if (meeting is null) return true;
+                await messages.DeleteForMeetingAsync(meetingId, token);
                 foreach (var participant in await participants.ListAsync(meetingId, token)) unitOfWork.RegisterDelete(participant);
                 var receipt = await meetings.FindActiveReceiptByMeetingIdAsync(meetingId, token);
                 if (receipt is not null)
@@ -59,6 +66,7 @@ public sealed class MeetingDeletionRecoveryService(
                 unitOfWork.RegisterDelete(meeting);
                 return true;
             }, cancellationToken);
+            realtimeGate.Forget(meetingId);
         }
         catch (Exception exception)
         {

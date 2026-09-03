@@ -128,5 +128,14 @@ export function useMeetingWorkspace() {
     navigate('/', { replace: true, state: { suppressMeetingAutoSelect: true } }); setOperationLoading(false); return true
   }
 
-  return { meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, revealInvitation, hideInvitation, create, previewCode, clearJoin, join, remove, clearError: () => setError(undefined) }
+  const handleMeetingUnavailable = useCallback(() => {
+    suppressAutoSelect.current = true
+    setDetails(undefined)
+    setInvitation(undefined)
+    setError(undefined)
+    navigate('/', { replace: true, state: { suppressMeetingAutoSelect: true } })
+    void loadList(false)
+  }, [loadList, navigate])
+
+  return { meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, revealInvitation, hideInvitation, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
 }

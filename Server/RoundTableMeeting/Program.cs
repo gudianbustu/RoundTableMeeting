@@ -11,6 +11,7 @@ using RoundTableMeeting.Abstraction.Contracts.Authentication;
 using Microsoft.Extensions.Options;
 using RoundTableMeeting.Authentication;
 using RoundTableMeeting.OpenApi;
+using RoundTableMeeting.RealtimeChat;
 using Serilog;
 using Serilog.Context;
 
@@ -85,6 +86,9 @@ try
     app.UseAuthorization();
     app.MapOpenApi().AllowAnonymous();
     app.MapControllers();
+    app.MapHub<MeetingChatHub>("/hubs/meeting-chat")
+        .RequireAuthorization()
+        .WithMetadata(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true), new NoStoreResponseAttribute());
     app.Map("/api/{**path}", async (HttpContext context) =>
     {
         await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status404NotFound, "route_not_found");
@@ -98,7 +102,8 @@ try
         var isPageRequest = HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method);
         var excluded = context.Request.Path.StartsWithSegments("/api")
             || context.Request.Path.StartsWithSegments("/openapi")
-            || context.Request.Path.StartsWithSegments("/scalar");
+            || context.Request.Path.StartsWithSegments("/scalar")
+            || context.Request.Path.StartsWithSegments("/hubs");
         if (!isPageRequest || !acceptsHtml || excluded)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

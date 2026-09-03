@@ -77,10 +77,11 @@ Type GetRequiredServiceType(string consumerName);
 ~~~csharp
 Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(
     Guid meetingId,
+    Guid userId,
     CancellationToken cancellationToken = default);
 ~~~
 
-该用例只负责从当前人类上下文验证 Active 会议和 Human Participant，并返回 `ParticipantId` 与 `HighWatermarkSequence`；空历史高水位为 0。Hub 在共享 gate 租约内调用该服务，再由 Web presence registry 生成在线 ParticipantId 快照。Application 不引用 Hub、group 或 presence 实现。
+该用例只负责验证 Hub 已解析的受信 `userId`、Active 会议和 Human Participant，并返回 `ParticipantId` 与 `HighWatermarkSequence`；空历史高水位为 0。Hub 在共享 gate 租约内从 `Context.User` 的固定声明解析 `userId` 后调用该服务，再由 Web presence registry 生成在线 ParticipantId 快照。Application 不引用 Hub、group 或 presence 实现。
 
 ### 3.7 MessageAppendedEnvelope
 

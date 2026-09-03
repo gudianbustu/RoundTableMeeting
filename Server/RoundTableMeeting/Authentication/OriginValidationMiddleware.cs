@@ -30,7 +30,11 @@ public sealed class OriginValidationMiddleware(RequestDelegate next, IOptions<Au
             return;
         }
 
-        if (!HasAllowedOrigin(context))
+        var hasOrigin = context.Request.Headers.Origin.Count > 0;
+        var allowsMissingOrigin = metadata.AllowMissingOriginForGet
+            && HttpMethods.IsGet(context.Request.Method)
+            && !hasOrigin;
+        if (!allowsMissingOrigin && !HasAllowedOrigin(context))
         {
             await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status403Forbidden, "origin_not_allowed");
             return;

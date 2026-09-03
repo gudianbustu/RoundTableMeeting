@@ -103,7 +103,7 @@
 
 ## 8. Application 服务测试
 
-项目：`Server/Tests/RoundTableMeeting.Application.Tests/RealtimeChatServiceTests.cs`。使用 fake current user、会议/参与者/消息/事件仓储、事务 Runner、TimeProvider、Options、gate 和 dispatcher signal。
+项目：`Server/Tests/RoundTableMeeting.IntegrationTests/RealtimeChatContractTests.cs`；Application 纯规则测试位于 `Server/Tests/RoundTableMeeting.Application.Tests/MessageMentionParserTests.cs`，Repository 状态测试位于 `Server/Tests/RoundTableMeeting.Repository.Sqlite.Tests/RealtimeChatDeliveryPersistenceTests.cs`。使用 fake current user、会议/参与者/消息/事件仓储、事务 Runner、TimeProvider、Options、gate 和 dispatcher signal。
 
 | 编号 | 优先级 | 场景 | 预期 |
 | --- | --- | --- | --- |
@@ -317,7 +317,7 @@
 
 ## 15. 客户端 MessageStore 和 Reducer Vitest
 
-测试与 `Client/roundTableMeeting/src/features/meetingWorkspace` colocate。
+测试与 `Client/roundTableMeeting/src/features/meetingWorkspace` colocate；当前 reducer 测试位于 `chat/messageReducer.test.ts`，生成器归一化测试位于 `scripts/normalize-generated-output.test.mjs`。
 
 | 编号 | 优先级 | 场景 | 预期 |
 | --- | --- | --- | --- |
@@ -364,7 +364,7 @@
 
 ## 17. 浏览器验收
 
-开发使用 Vite 5173 + 服务端 API/Hub 代理；所有场景使用真实服务端，不使用 mock 数据。
+开发使用 Vite 5174 + 服务端 API/Hub 代理；所有场景使用真实服务端，不使用 mock 数据。SignalR 传输验收分别强制 WebSocket、ServerSentEvents 和 LongPolling，并在 Network 中确认实际请求类型；同源 SSE/LongPolling GET 缺少 Origin 属于浏览器规范行为，negotiate/写请求仍必须执行 AllowedOrigins 校验。
 
 | 编号 | 优先级 | 场景 | 预期 |
 | --- | --- | --- | --- |

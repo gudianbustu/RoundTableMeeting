@@ -9,8 +9,8 @@ describe('normalizeGeneratedContent', () => {
     )).toBe('requestAdapter.baseUrl = window.location.origin;')
     expect(normalizeGeneratedContent(
       'kiota-lock.json',
-      '{"descriptionUrl":"http://localhost:5055/openapi/v1.json"}',
-    )).toBe('{"descriptionUrl":"/openapi/v1.json"}')
+      '{"descriptionLocation":"C:/Temp/roundtable-openapi/openapi.json"}',
+    )).toBe('{\n  "descriptionLocation": "/openapi/v1.json"\n}\n')
   })
 
   it('rejects development URLs that remain anywhere in generated output', () => {

@@ -31,6 +31,18 @@ a { color: #176b87; }
 .participant-list-items { display: grid; gap: 8px; }
 .participant-list-item { min-width: 0; padding: 10px 0; border-bottom: 1px solid #edf2f3; }
 .conversation-placeholder { min-height: 140px; }
+.realtime-chat-region { display: grid; gap: 12px; min-width: 0; padding: 20px 0; }
+.message-timeline { min-width: 0; border: 1px solid #dbe5e8; border-radius: 6px; background: #fff; }
+.message-timeline-toolbar { min-height: 36px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid #edf2f3; }
+.message-timeline-scroll { max-height: min(54vh, 560px); overflow-y: auto; padding: 0 16px; scroll-behavior: smooth; }
+.message-item { min-width: 0; align-items: flex-start; }
+.message-item > div { min-width: 0; width: 100%; }
+.message-item .ant-typography { overflow-wrap: anywhere; white-space: pre-wrap; }
+.message-author-kind { margin-left: 8px; }
+.message-system { background: #f5f8f9; }
+.message-agent { border-left: 3px solid #5b8c85; padding-left: 12px; }
+.message-composer { display: grid; gap: 8px; }
+.message-composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .meeting-empty { min-height: 360px; justify-content: center; align-items: flex-start; }
 @media (max-width: 560px) { .login-panel { padding: 24px 20px; } .current-user-bar { align-items: flex-start; } }
 @media (max-width: 560px) { .app-shell { padding-top: 24px; } .app-header { align-items: stretch; flex-direction: column; } .framework-badge { align-self: flex-start; } .status-content { padding-top: 32px; } }

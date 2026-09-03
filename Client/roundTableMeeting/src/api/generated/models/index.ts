@@ -193,6 +193,51 @@ export interface CreateMeetingResultDto extends AdditionalDataHolder, Parsable {
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MentionCandidateDto}
+ */
+// @ts-ignore
+export function createMentionCandidateDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMentionCandidateDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MessageAuthorDto}
+ */
+// @ts-ignore
+export function createMessageAuthorDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMessageAuthorDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MessageDto}
+ */
+// @ts-ignore
+export function createMessageDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMessageDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MessageMentionDto}
+ */
+// @ts-ignore
+export function createMessageMentionDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMessageMentionDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {MessagePageDto}
+ */
+// @ts-ignore
+export function createMessagePageDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoMessagePageDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {ParticipantDto}
  */
 // @ts-ignore
@@ -207,6 +252,24 @@ export function createParticipantDtoFromDiscriminatorValue(parseNode: ParseNode 
 // @ts-ignore
 export function createPreviewJoinRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoPreviewJoinRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SubmitMessageRequest}
+ */
+// @ts-ignore
+export function createSubmitMessageRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSubmitMessageRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SubmitMessageResultDto}
+ */
+// @ts-ignore
+export function createSubmitMessageResultDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSubmitMessageResultDto;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -463,6 +526,80 @@ export function deserializeIntoMeetingListItemDto(meetingListItemDto: Partial<Me
 }
 /**
  * The deserialization information for the current model
+ * @param MentionCandidateDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMentionCandidateDto(mentionCandidateDto: Partial<MentionCandidateDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "length": n => { mentionCandidateDto.length = n.getNumberValue(); },
+        "participantId": n => { mentionCandidateDto.participantId = n.getGuidValue(); },
+        "startOffset": n => { mentionCandidateDto.startOffset = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MessageAuthorDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMessageAuthorDto(messageAuthorDto: Partial<MessageAuthorDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "displayName": n => { messageAuthorDto.displayName = n.getStringValue(); },
+        "kind": n => { messageAuthorDto.kind = n.getEnumValue<MessageAuthorKind>(MessageAuthorKindObject); },
+        "participantId": n => { messageAuthorDto.participantId = n.getGuidValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MessageDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMessageDto(messageDto: Partial<MessageDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "author": n => { messageDto.author = n.getObjectValue<MessageAuthorDto>(createMessageAuthorDtoFromDiscriminatorValue); },
+        "content": n => { messageDto.content = n.getStringValue(); },
+        "createdAt": n => { messageDto.createdAt = n.getDateValue(); },
+        "meetingId": n => { messageDto.meetingId = n.getGuidValue(); },
+        "mentions": n => { messageDto.mentions = n.getCollectionOfObjectValues<MessageMentionDto>(createMessageMentionDtoFromDiscriminatorValue); },
+        "messageId": n => { messageDto.messageId = n.getGuidValue(); },
+        "sequence": n => { messageDto.sequence = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MessageMentionDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMessageMentionDto(messageMentionDto: Partial<MessageMentionDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "displayName": n => { messageMentionDto.displayName = n.getStringValue(); },
+        "length": n => { messageMentionDto.length = n.getNumberValue(); },
+        "participantId": n => { messageMentionDto.participantId = n.getGuidValue(); },
+        "startOffset": n => { messageMentionDto.startOffset = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param MessagePageDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoMessagePageDto(messagePageDto: Partial<MessagePageDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "firstSequence": n => { messagePageDto.firstSequence = n.getNumberValue(); },
+        "hasMoreAfter": n => { messagePageDto.hasMoreAfter = n.getBooleanValue(); },
+        "hasMoreBefore": n => { messagePageDto.hasMoreBefore = n.getBooleanValue(); },
+        "items": n => { messagePageDto.items = n.getCollectionOfObjectValues<MessageDto>(createMessageDtoFromDiscriminatorValue); },
+        "lastSequence": n => { messagePageDto.lastSequence = n.getNumberValue(); },
+        "nextAfterSequence": n => { messagePageDto.nextAfterSequence = n.getNumberValue(); },
+        "nextBeforeSequence": n => { messagePageDto.nextBeforeSequence = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param ParticipantDto The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -486,6 +623,31 @@ export function deserializeIntoParticipantDto(participantDto: Partial<Participan
 export function deserializeIntoPreviewJoinRequest(previewJoinRequest: Partial<PreviewJoinRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "meetingCode": n => { previewJoinRequest.meetingCode = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SubmitMessageRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSubmitMessageRequest(submitMessageRequest: Partial<SubmitMessageRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "clientSubmissionId": n => { submitMessageRequest.clientSubmissionId = n.getGuidValue(); },
+        "content": n => { submitMessageRequest.content = n.getStringValue(); },
+        "mentionCandidates": n => { submitMessageRequest.mentionCandidates = n.getCollectionOfObjectValues<MentionCandidateDto>(createMentionCandidateDtoFromDiscriminatorValue); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SubmitMessageResultDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSubmitMessageResultDto(submitMessageResultDto: Partial<SubmitMessageResultDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "message": n => { submitMessageResultDto.message = n.getObjectValue<MessageDto>(createMessageDtoFromDiscriminatorValue); },
+        "replayed": n => { submitMessageResultDto.replayed = n.getBooleanValue(); },
     }
 }
 /**
@@ -636,6 +798,113 @@ export interface MeetingListItemDto extends AdditionalDataHolder, Parsable {
      * The name property
      */
     name?: string | null;
+}
+export interface MentionCandidateDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The length property
+     */
+    length?: number | null;
+    /**
+     * The participantId property
+     */
+    participantId?: Guid | null;
+    /**
+     * The startOffset property
+     */
+    startOffset?: number | null;
+}
+export interface MessageAuthorDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The displayName property
+     */
+    displayName?: string | null;
+    /**
+     * The kind property
+     */
+    kind?: MessageAuthorKind | null;
+    /**
+     * The participantId property
+     */
+    participantId?: Guid | null;
+}
+export type MessageAuthorKind = (typeof MessageAuthorKindObject)[keyof typeof MessageAuthorKindObject];
+export interface MessageDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The author property
+     */
+    author?: MessageAuthorDto | null;
+    /**
+     * The content property
+     */
+    content?: string | null;
+    /**
+     * The createdAt property
+     */
+    createdAt?: Date | null;
+    /**
+     * The meetingId property
+     */
+    meetingId?: Guid | null;
+    /**
+     * The mentions property
+     */
+    mentions?: MessageMentionDto[] | null;
+    /**
+     * The messageId property
+     */
+    messageId?: Guid | null;
+    /**
+     * The sequence property
+     */
+    sequence?: number | null;
+}
+export interface MessageMentionDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The displayName property
+     */
+    displayName?: string | null;
+    /**
+     * The length property
+     */
+    length?: number | null;
+    /**
+     * The participantId property
+     */
+    participantId?: Guid | null;
+    /**
+     * The startOffset property
+     */
+    startOffset?: number | null;
+}
+export interface MessagePageDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The firstSequence property
+     */
+    firstSequence?: number | null;
+    /**
+     * The hasMoreAfter property
+     */
+    hasMoreAfter?: boolean | null;
+    /**
+     * The hasMoreBefore property
+     */
+    hasMoreBefore?: boolean | null;
+    /**
+     * The items property
+     */
+    items?: MessageDto[] | null;
+    /**
+     * The lastSequence property
+     */
+    lastSequence?: number | null;
+    /**
+     * The nextAfterSequence property
+     */
+    nextAfterSequence?: number | null;
+    /**
+     * The nextBeforeSequence property
+     */
+    nextBeforeSequence?: number | null;
 }
 export interface ParticipantDto extends AdditionalDataHolder, Parsable {
     /**
@@ -873,6 +1142,85 @@ export function serializeMeetingListItemDto(writer: SerializationWriter, meeting
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MentionCandidateDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMentionCandidateDto(writer: SerializationWriter, mentionCandidateDto: Partial<MentionCandidateDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!mentionCandidateDto || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("length", mentionCandidateDto.length);
+    writer.writeGuidValue("participantId", mentionCandidateDto.participantId);
+    writer.writeNumberValue("startOffset", mentionCandidateDto.startOffset);
+    writer.writeAdditionalData(mentionCandidateDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MessageAuthorDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMessageAuthorDto(writer: SerializationWriter, messageAuthorDto: Partial<MessageAuthorDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!messageAuthorDto || isSerializingDerivedType) { return; }
+    writer.writeStringValue("displayName", messageAuthorDto.displayName);
+    writer.writeEnumValue<MessageAuthorKind>("kind", messageAuthorDto.kind);
+    writer.writeGuidValue("participantId", messageAuthorDto.participantId);
+    writer.writeAdditionalData(messageAuthorDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MessageDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMessageDto(writer: SerializationWriter, messageDto: Partial<MessageDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!messageDto || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<MessageAuthorDto>("author", messageDto.author, serializeMessageAuthorDto);
+    writer.writeStringValue("content", messageDto.content);
+    writer.writeDateValue("createdAt", messageDto.createdAt);
+    writer.writeGuidValue("meetingId", messageDto.meetingId);
+    writer.writeCollectionOfObjectValues<MessageMentionDto>("mentions", messageDto.mentions, serializeMessageMentionDto);
+    writer.writeGuidValue("messageId", messageDto.messageId);
+    writer.writeNumberValue("sequence", messageDto.sequence);
+    writer.writeAdditionalData(messageDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MessageMentionDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMessageMentionDto(writer: SerializationWriter, messageMentionDto: Partial<MessageMentionDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!messageMentionDto || isSerializingDerivedType) { return; }
+    writer.writeStringValue("displayName", messageMentionDto.displayName);
+    writer.writeNumberValue("length", messageMentionDto.length);
+    writer.writeGuidValue("participantId", messageMentionDto.participantId);
+    writer.writeNumberValue("startOffset", messageMentionDto.startOffset);
+    writer.writeAdditionalData(messageMentionDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param MessagePageDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeMessagePageDto(writer: SerializationWriter, messagePageDto: Partial<MessagePageDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!messagePageDto || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("firstSequence", messagePageDto.firstSequence);
+    writer.writeBooleanValue("hasMoreAfter", messagePageDto.hasMoreAfter);
+    writer.writeBooleanValue("hasMoreBefore", messagePageDto.hasMoreBefore);
+    writer.writeCollectionOfObjectValues<MessageDto>("items", messagePageDto.items, serializeMessageDto);
+    writer.writeNumberValue("lastSequence", messagePageDto.lastSequence);
+    writer.writeNumberValue("nextAfterSequence", messagePageDto.nextAfterSequence);
+    writer.writeNumberValue("nextBeforeSequence", messagePageDto.nextBeforeSequence);
+    writer.writeAdditionalData(messagePageDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param ParticipantDto The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -898,6 +1246,33 @@ export function serializePreviewJoinRequest(writer: SerializationWriter, preview
     if (!previewJoinRequest || isSerializingDerivedType) { return; }
     writer.writeStringValue("meetingCode", previewJoinRequest.meetingCode);
     writer.writeAdditionalData(previewJoinRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SubmitMessageRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSubmitMessageRequest(writer: SerializationWriter, submitMessageRequest: Partial<SubmitMessageRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!submitMessageRequest || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("clientSubmissionId", submitMessageRequest.clientSubmissionId);
+    writer.writeStringValue("content", submitMessageRequest.content);
+    writer.writeCollectionOfObjectValues<MentionCandidateDto>("mentionCandidates", submitMessageRequest.mentionCandidates, serializeMentionCandidateDto);
+    writer.writeAdditionalData(submitMessageRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SubmitMessageResultDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSubmitMessageResultDto(writer: SerializationWriter, submitMessageResultDto: Partial<SubmitMessageResultDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!submitMessageResultDto || isSerializingDerivedType) { return; }
+    writer.writeObjectValue<MessageDto>("message", submitMessageResultDto.message, serializeMessageDto);
+    writer.writeBooleanValue("replayed", submitMessageResultDto.replayed);
+    writer.writeAdditionalData(submitMessageResultDto.additionalData);
 }
 /**
  * Serializes information the current object
@@ -939,6 +1314,30 @@ export function serializeUserSummaryDto(writer: SerializationWriter, userSummary
     writer.writeStringValue("username", userSummaryDto.username);
     writer.writeAdditionalData(userSummaryDto.additionalData);
 }
+export interface SubmitMessageRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The clientSubmissionId property
+     */
+    clientSubmissionId?: Guid | null;
+    /**
+     * The content property
+     */
+    content?: string | null;
+    /**
+     * The mentionCandidates property
+     */
+    mentionCandidates?: MentionCandidateDto[] | null;
+}
+export interface SubmitMessageResultDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The message property
+     */
+    message?: MessageDto | null;
+    /**
+     * The replayed property
+     */
+    replayed?: boolean | null;
+}
 export interface SystemStatusDto extends AdditionalDataHolder, Parsable {
     /**
      * The database property
@@ -973,6 +1372,11 @@ export interface UserSummaryDto extends AdditionalDataHolder, Parsable {
      */
     username?: string | null;
 }
+export const MessageAuthorKindObject = {
+    Human: "human",
+    Agent: "agent",
+    System: "system",
+} as const;
 export const ParticipantKindObject = {
     Human: "human",
     Agent: "agent",

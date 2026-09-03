@@ -190,7 +190,7 @@ OpenAPI 必须声明 200/201 双成功、字符串作者枚举、long sequence�
 
 ### 8.1 Hub 路由与认证
 
-Hub 路由固定为 `/hubs/meeting-chat`，使用现有 Cookie Authentication 和默认授权策略，不允许匿名连接。`MapHub` 必须显式附加 `RequireBrowserOriginAttribute(false)` 与 `NoStoreResponseAttribute` endpoint metadata，使现有 Origin 和敏感响应头中间件同时覆盖 negotiate、WebSocket、SSE 和长轮询请求；不能只在 Hub 方法内部检查。生产同源托管；开发由 Vite 代理 `/hubs` 和 WebSocket。首版不开放跨源 credentialed CORS。
+Hub 路由固定为 `/hubs/meeting-chat`，使用现有 Cookie Authentication 和默认授权策略，不允许匿名连接。`MapHub` 必须显式附加 `RequireBrowserOriginAttribute(allowMissingOriginForGet: true)` 与 `NoStoreResponseAttribute` endpoint metadata：negotiate 和写入请求必须提供白名单 Origin；浏览器同源 SSE/Long Polling GET 可按规范缺失 Origin，但显式外部 Origin 仍返回 403。Origin 和敏感响应头中间件同时覆盖 negotiate、WebSocket、SSE 和长轮询请求；不能只在 Hub 方法内部检查。生产同源托管；开发由 Vite 代理 `/hubs` 和 WebSocket。首版不开放跨源 credentialed CORS。
 
 ### 8.2 订阅方法
 

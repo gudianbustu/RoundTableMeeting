@@ -14,6 +14,9 @@ using RoundTableMeeting.Repository.Sqlite.Configuration;
 using RoundTableMeeting.Repository.Sqlite.Database;
 using RoundTableMeeting.Errors;
 using RoundTableMeeting.Meetings;
+using RoundTableMeeting.Application.RealtimeChat;
+using RoundTableMeeting.RealtimeChat;
+using RoundTableMeeting.Abstraction.Services;
 
 namespace RoundTableMeeting.Hosting;
 
@@ -46,6 +49,28 @@ public static class ServiceCollectionExtensions
             .Bind(builder.Configuration.GetSection(MeetingJoinRateLimitOptions.SectionName))
             .ValidateDataAnnotations()
             .ValidateOnStart();
+        builder.Services.AddOptions<RealtimeChatOptions>()
+            .Bind(builder.Configuration.GetSection(RealtimeChatOptions.SectionName))
+            .ValidateDataAnnotations()
+            .Validate(options => options.HistoryPageSize <= options.MaxHistoryPageSize, "History page size cannot exceed maximum page size.")
+            .Validate(options => options.EventRetryMaxSeconds >= options.EventRetryBaseSeconds, "Event retry maximum must not be lower than the base delay.")
+            .Validate(options => options.SendRateLimit is { WindowSeconds: > 0, PerUserLimit: > 0, PerParticipantLimit: > 0, PerSourceLimit: > 0 }, "Message send rate limits are invalid.")
+            .ValidateOnStart();
+        builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<RealtimeChatOptions>>().Value);
+        builder.Services.AddSignalR();
+        builder.Services.AddSingleton<MeetingPresenceRegistry>();
+        builder.Services.AddSingleton<IMeetingRealtimeTermination, MeetingRealtimeTermination>();
+        builder.Services.AddSingleton<MessageSendRateLimiter>();
+        builder.Services.AddScoped<MessageSendRateLimitFilter>();
+        builder.Services.AddSingleton<IMeetingRealtimeGate, MeetingRealtimeGate>();
+        builder.Services.AddSingleton<IMessageMentionParser, MessageMentionParser>();
+        builder.Services.AddScoped<RealtimeChatService>();
+        builder.Services.AddScoped<IMessageAppendService>(sp => sp.GetRequiredService<RealtimeChatService>());
+        builder.Services.AddScoped<IMessageHistoryService>(sp => sp.GetRequiredService<RealtimeChatService>());
+        builder.Services.AddScoped<IMeetingChatSubscriptionService>(sp => sp.GetRequiredService<RealtimeChatService>());
+        builder.Services.AddSingleton<IMessageEventConsumerCatalog, MessageEventConsumerCatalog>();
+        builder.Services.AddScoped<RealtimeMessageBroadcastConsumer>();
+        builder.Services.AddSingleton(new MessageEventConsumerDescriptor("realtime-broadcast-v1", typeof(RealtimeMessageBroadcastConsumer)));
         builder.Services.AddSingleton<IPasswordHasher<RoundTableMeeting.Domain.Entities.UserAccount>, PasswordHasher<RoundTableMeeting.Domain.Entities.UserAccount>>();
         builder.Services.AddSingleton<PasswordVerificationService>();
         builder.Services.AddHttpContextAccessor();
@@ -64,9 +89,6 @@ public static class ServiceCollectionExtensions
                 options.Events.OnRedirectToAccessDenied = context => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, StatusCodes.Status403Forbidden, "forbidden");
             });
         builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
-        builder.Services.AddSingleton<SensitiveResponseHeadersMiddleware>();
-        builder.Services.AddSingleton<OriginValidationMiddleware>();
-
         builder.Services.AddSingleton<SqliteConnectionInterceptor>();
         builder.Services.AddDbContext<RoundTableMeetingDbContext>((serviceProvider, options) =>
         {
@@ -84,6 +106,7 @@ public static class ServiceCollectionExtensions
         builder.Services.AddSingleton<MeetingDeletionSignal>();
         builder.Services.AddSingleton<RoundTableMeeting.Abstraction.Services.IMeetingDeletionSignal>(services => services.GetRequiredService<MeetingDeletionSignal>());
         builder.Services.AddHostedService<MeetingDeletionRecoveryService>();
+        builder.Services.AddHostedService<MessageEventDispatcherService>();
         builder.Services.AddSingleton<MeetingJoinRateLimiter>();
         builder.Services.AddScoped<MeetingJoinRateLimitFilter>();
         builder.Services.AddExceptionHandler<ApiExceptionHandler>();

@@ -2,6 +2,9 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using RoundTableMeeting.Repository.Sqlite.Database;
 
 namespace RoundTableMeeting.IntegrationTests;
 
@@ -55,6 +58,11 @@ public sealed class MeetingWorkspaceContractTests
         Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync($"/api/meetings/{meetingId}")).StatusCode);
         using var oldCode = JsonPost("/api/meetings/join/preview", new { meetingCode });
         Assert.Equal(HttpStatusCode.NotFound, (await bob.SendAsync(oldCode)).StatusCode);
+        await using var scope = factory.Services.CreateAsyncScope();
+        var context = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
+        Assert.False(await context.MeetingMessages.AnyAsync(message => message.MeetingId == meetingId));
+        Assert.False(await context.MessageMentions.AnyAsync(mention => mention.MeetingId == meetingId));
+        Assert.False(await context.MessageAppendedEvents.AnyAsync(item => item.MeetingId == meetingId));
     }
 
     [Fact]
@@ -77,18 +85,20 @@ public sealed class MeetingWorkspaceContractTests
     }
 
     [Fact]
-    public async Task OpenApiDeclaresRetryAfterOnlyForJoinOperations()
+    public async Task OpenApiDeclaresRetryAfterForRateLimitedOperations()
     {
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient();
         var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
         var paths = document.GetProperty("paths");
-        foreach (var path in new[] { "/api/meetings/join", "/api/meetings/join/preview" })
+        foreach (var path in new[] { "/api/meetings/join", "/api/meetings/join/preview", "/api/meetings/{meetingId}/messages" })
         {
             var headers = paths.GetProperty(path).GetProperty("post").GetProperty("responses").GetProperty("429").GetProperty("headers");
             Assert.True(headers.TryGetProperty("Retry-After", out _));
         }
         Assert.False(paths.GetProperty("/api/meetings").GetProperty("post").GetProperty("responses").TryGetProperty("429", out _));
+        Assert.True(paths.GetProperty("/api/meetings/{meetingId}/deletion").GetProperty("post").GetProperty("responses").TryGetProperty("409", out _));
+        Assert.False(paths.GetProperty("/api/meetings/{meetingId}").GetProperty("get").GetProperty("responses").TryGetProperty("409", out _));
     }
 
     private static async Task LoginAsync(HttpClient client, string username, string password)

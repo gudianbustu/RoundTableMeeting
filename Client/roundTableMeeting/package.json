@@ -23,6 +23,7 @@
     "@microsoft/kiota-serialization-json": "1.0.0-preview.103",
     "@microsoft/kiota-serialization-multipart": "1.0.0-preview.103",
     "@microsoft/kiota-serialization-text": "1.0.0-preview.103",
+    "@microsoft/signalr": "8.0.7",
     "antd": "6.6.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",

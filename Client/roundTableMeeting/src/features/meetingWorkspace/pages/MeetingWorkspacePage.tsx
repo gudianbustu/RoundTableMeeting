@@ -6,6 +6,7 @@ import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { JoinMeetingDialog } from '../components/JoinMeetingDialog'
 import { useMeetingWorkspace } from '../hooks/useMeetingWorkspace'
+import { RealtimeChatRegion } from './RealtimeChatRegion'
 
 export function MeetingWorkspacePage() {
   const workspace = useMeetingWorkspace()
@@ -13,6 +14,7 @@ export function MeetingWorkspacePage() {
   const [joinOpen, setJoinOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
+  const [presence, setPresence] = useState<Record<string, 'online' | 'offline'>>({})
   const [messageApi, contextHolder] = message.useMessage()
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
@@ -32,8 +34,8 @@ export function MeetingWorkspacePage() {
       {workspace.error && <Alert closable type="error" showIcon title={workspace.error.code === 'meeting_not_found' ? '会议已不可访问' : '操作未能完成'} description={workspace.error.message} onClose={workspace.clearError} />}
       {workspace.detailLoading ? <Typography.Text>正在加载会议...</Typography.Text> : workspace.details ? <>
         <MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onInvitation={() => void workspace.revealInvitation()} onHideInvitation={workspace.hideInvitation} onCopy={() => void copyInvitation()} onRefresh={workspace.refresh} onDelete={() => setDeleteOpen(true)} />
-        <ParticipantList participants={workspace.details.participants} />
-        <section className="conversation-placeholder"><Typography.Title level={4}>会议讨论</Typography.Title><Typography.Text type="secondary">消息功能将在后续主题接入。</Typography.Text></section>
+        <ParticipantList participants={workspace.details.participants} presence={presence} />
+        <RealtimeChatRegion meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} />
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />

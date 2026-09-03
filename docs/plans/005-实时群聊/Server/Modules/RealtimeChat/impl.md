@@ -114,8 +114,11 @@ Domain 工厂不接收 HttpContext、ClaimsPrincipal、HubConnection、EF Entity
 ## 8. 模块测试落点
 
 - `Server/Tests/RoundTableMeeting.Domain.Tests/RealtimeChatDomainTests.cs`
-- `Server/Tests/RoundTableMeeting.Application.Tests/RealtimeChatServiceTests.cs`
 - `Server/Tests/RoundTableMeeting.Application.Tests/MessageMentionParserTests.cs`
+- `Server/Tests/RoundTableMeeting.IntegrationTests/RealtimeChatContractTests.cs`
+- `Server/Tests/RoundTableMeeting.Repository.Sqlite.Tests/RealtimeChatDeliveryPersistenceTests.cs`
+- `Server/Tests/RoundTableMeeting.IntegrationTests/MeetingRealtimeGateTests.cs`
+- `Server/Tests/RoundTableMeeting.IntegrationTests/MeetingPresenceRegistryTests.cs`
 
 测试使用 fake current user、repositories、runner、TimeProvider 和事件唤醒器；不引用 Web 或 SignalR。
 

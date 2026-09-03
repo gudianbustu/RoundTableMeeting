@@ -5,6 +5,7 @@ using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.Entities;
 using RoundTableMeeting.Domain.Repositories;
 using RoundTableMeeting.Domain.UnitOfWork;
+using RoundTableMeeting.Application.RealtimeChat;
 
 namespace RoundTableMeeting.Application.Meetings;
 
@@ -16,6 +17,8 @@ public sealed class MeetingWorkspaceService(
     IUnitOfWork unitOfWork,
     IMeetingTransactionRunner transactionRunner,
     IMeetingDeletionSignal deletionSignal,
+    IMeetingRealtimeGate realtimeGate,
+    RealtimeChatOptions realtimeChatOptions,
     TimeProvider timeProvider) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
 {
     public async Task<MeetingOperationResult<CreateMeetingResultDto>> CreateAsync(CreateMeetingRequest request, CancellationToken cancellationToken = default)
@@ -142,6 +145,19 @@ public sealed class MeetingWorkspaceService(
         string normalizedConfirmationName;
         try { normalizedConfirmationName = Meeting.NormalizeName(confirmationName); }
         catch (ArgumentException) { return Invalid<object>("confirmationName"); }
+        var preflightMeeting = await meetings.FindActiveByIdAsync(meetingId, cancellationToken);
+        if (preflightMeeting is null || await participants.FindByUserAsync(meetingId, userId, cancellationToken) is null)
+            return new(MeetingOperationStatus.MeetingNotFound);
+        if (preflightMeeting.CreatorUserId != userId) return new(MeetingOperationStatus.CreatorRequired);
+        if (!string.Equals(normalizedConfirmationName, preflightMeeting.Name, StringComparison.Ordinal))
+            return Invalid<object>("confirmationName");
+
+        using var closeLease = await realtimeGate.AcquireExclusiveCloseAsync(
+            meetingId,
+            TimeSpan.FromSeconds(realtimeChatOptions.GateCloseTimeoutSeconds),
+            cancellationToken);
+        if (closeLease is null) return new(MeetingOperationStatus.DeleteBusy);
+
         var outcome = await transactionRunner.RunAsync(async token =>
         {
             var meeting = await meetings.FindActiveByIdAsync(meetingId, token);
@@ -154,7 +170,11 @@ public sealed class MeetingWorkspaceService(
             unitOfWork.RegisterEdit(meeting);
             return MeetingOperationStatus.Accepted;
         }, cancellationToken);
-        if (outcome == MeetingOperationStatus.Accepted) deletionSignal.Notify();
+        if (outcome == MeetingOperationStatus.Accepted)
+        {
+            closeLease.CommitClosed();
+            deletionSignal.Notify();
+        }
         return outcome switch
         {
             MeetingOperationStatus.ValidationFailed => Invalid<object>("confirmationName"),

@@ -17,6 +17,7 @@ export interface DeletionRequestBuilder extends BaseRequestBuilder<DeletionReque
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
      * @throws {ApiProblemDetails} error when the service returns a 403 status code
      * @throws {ApiProblemDetails} error when the service returns a 404 status code
+     * @throws {ApiProblemDetails} error when the service returns a 409 status code
      * @throws {ApiProblemDetails} error when the service returns a 415 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
      */
@@ -44,6 +45,7 @@ export const DeletionRequestBuilderRequestsMetadata: RequestsMetadata = {
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             403: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            409: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },

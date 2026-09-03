@@ -36,6 +36,11 @@ public sealed class MeetingTransactionRunner(RoundTableMeetingDbContext dbContex
             if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
             throw new MeetingJoinConflictException("The meeting participant conflicts with an existing participant.", exception);
         }
+        catch (DbUpdateException exception) when (exception.InnerException is SqliteException sqlite && sqlite.SqliteErrorCode == 19 && sqlite.Message.Contains("MeetingMessages", StringComparison.Ordinal))
+        {
+            if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);
+            throw new MessageAppendConflictException("The message submission conflicts with an existing message.", exception);
+        }
         catch
         {
             if (transaction is not null) await transaction.RollbackAsync(CancellationToken.None);

@@ -125,6 +125,7 @@ public sealed class MeetingsController(IMeetingWorkspaceService service) : Contr
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status403Forbidden, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status500InternalServerError, "application/problem+json")]
     public async Task<IActionResult> Delete(Guid meetingId, DeleteMeetingRequest request, CancellationToken cancellationToken)
@@ -133,6 +134,7 @@ public sealed class MeetingsController(IMeetingWorkspaceService service) : Contr
         return result.Status switch
         {
             MeetingOperationStatus.Accepted => Accepted(result.Data),
+            MeetingOperationStatus.DeleteBusy => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "meeting_delete_busy"),
             MeetingOperationStatus.CreatorRequired => ApiProblemDetailsWriter.CreateResult(HttpContext, 403, "meeting_creator_required"),
             MeetingOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed", result.Errors),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")

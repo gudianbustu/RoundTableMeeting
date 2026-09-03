@@ -10,6 +10,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repositoryRoot = resolve(root, '..', '..')
 const output = join(root, 'src', 'api', 'generated')
 const staging = mkdtempSync(join(tmpdir(), 'roundtable-kiota-'))
+const inputStaging = mkdtempSync(join(tmpdir(), 'roundtable-openapi-'))
 const url = process.env.OPENAPI_URL || 'http://localhost:5043/openapi/v1.json'
 const timeout = Number(process.env.OPENAPI_READY_TIMEOUT_MS || 30000)
 const started = Date.now()
@@ -33,10 +34,22 @@ try {
     throw new Error('OpenAPI endpoint was not ready or returned an invalid 3.0 document: ' + url)
   }
 
+  const normalizeSchema = (schema) => {
+    if (!schema || typeof schema !== 'object') return
+    if (!('type' in schema) && schema.format === 'int64') schema.type = 'integer'
+    for (const value of Object.values(schema)) {
+      if (Array.isArray(value)) value.forEach(normalizeSchema)
+      else normalizeSchema(value)
+    }
+  }
+  normalizeSchema(document)
+  const normalizedOpenApi = join(inputStaging, 'openapi.json')
+  writeFileSync(normalizedOpenApi, JSON.stringify(document), { encoding: 'utf8' })
+
   execFileSync('dotnet', [
     'tool', 'run', 'kiota', 'generate',
     '--language', 'TypeScript',
-    '--openapi', url,
+    '--openapi', normalizedOpenApi,
     '--output', staging,
     '--class-name', 'RoundTableMeetingApiClient',
     '--clean-output',
@@ -75,4 +88,5 @@ try {
   process.exitCode = 1
 } finally {
   rmSync(staging, { recursive: true, force: true })
+  rmSync(inputStaging, { recursive: true, force: true })
 }

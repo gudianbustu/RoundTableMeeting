@@ -8,6 +8,8 @@ import { DeletionRequestBuilderRequestsMetadata, type DeletionRequestBuilder } f
 // @ts-ignore
 import { InvitationRequestBuilderRequestsMetadata, type InvitationRequestBuilder } from './invitation/index.js';
 // @ts-ignore
+import { MessagesRequestBuilderRequestsMetadata, type MessagesRequestBuilder } from './messages/index.js';
+// @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
 /**
@@ -22,6 +24,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The invitation property
      */
     get invitation(): InvitationRequestBuilder;
+    /**
+     * The messages property
+     */
+    get messages(): MessagesRequestBuilder;
     /**
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<MeetingDetailsDto>}
@@ -49,6 +55,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     },
     invitation: {
         requestsMetadata: InvitationRequestBuilderRequestsMetadata,
+    },
+    messages: {
+        requestsMetadata: MessagesRequestBuilderRequestsMetadata,
     },
 };
 /**

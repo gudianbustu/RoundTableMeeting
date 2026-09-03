@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.DependencyInjection;
 using RoundTableMeeting.Authentication;
 using Serilog.Events;
 
@@ -168,6 +169,45 @@ public sealed class OriginProtectionTests
 
         Assert.True(nextCalled);
         Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExplicitTransportMetadataAllowsOnlyMissingOriginGetRequests()
+    {
+        var nextCalled = false;
+        var middleware = new OriginValidationMiddleware(
+            _ =>
+            {
+                nextCalled = true;
+                return Task.CompletedTask;
+            },
+            Options.Create(new AuthenticationOptions { AllowedOrigins = [AllowedOrigin] }));
+        var context = new DefaultHttpContext();
+        context.Request.Method = HttpMethods.Get;
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true)),
+            "origin-optional transport get"));
+
+        await middleware.InvokeAsync(context);
+
+        Assert.True(nextCalled);
+        Assert.Equal(StatusCodes.Status200OK, context.Response.StatusCode);
+
+        nextCalled = false;
+        context = new DefaultHttpContext();
+        context.RequestServices = new ServiceCollection().AddLogging().AddProblemDetails().BuildServiceProvider();
+        context.Request.Method = HttpMethods.Get;
+        context.Request.Headers.Origin = "https://evil.example";
+        context.SetEndpoint(new Endpoint(
+            _ => Task.CompletedTask,
+            new EndpointMetadataCollection(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true)),
+            "origin-checked transport get"));
+
+        await middleware.InvokeAsync(context);
+
+        Assert.False(nextCalled);
+        Assert.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode);
     }
 
     [Fact]

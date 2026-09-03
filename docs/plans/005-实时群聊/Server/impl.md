@@ -98,11 +98,11 @@ Options 验证：所有数值为正数；默认页大小不大于最大页大小
 
 ### 5.1 IMessageRepository
 
-提供：`FindBySubmissionAsync`、`GetNextSequenceAsync`、`ListPageAsync`、`FindByIdAsync`、`Add`、`ListForMeetingAsync` 和 `DeleteForMeetingAsync`。所有读取投影或 NoTracking；仓储不判断当前用户。
+当前 `MessageRepository` 提供 participant/System 幂等查询、`GetNextSequenceAsync`、历史列表、方向边界判断、按 ID 读取和 mention 投影。消息清理由 `MessageCleanupService` 按外键顺序执行。所有读取投影或 NoTracking；仓储不判断当前用户。
 
-### 5.2 IMessageEventRepository
+### 5.2 Event delivery persistence
 
-提供创建事件 deliveries、按 `(Pending AND AvailableAtUtc <= now) OR (Leased AND LeaseExpiresAtUtc <= now)` 租取、条件完成、失败退回、删除会议 deliveries/events 和查询高水位。租取与确认必须带 ConsumerName/LeaseId 条件，避免迟到消费者覆盖新租约；完成更新匹配 0 行时，资源已删除视为终态完成，LeaseId 已更换视为失去所有权。
+事件和 deliveries 由 Application 在消息事务内注册；到期扫描、租约、条件完成和失败退回由 `MessageEventDispatcherService` 使用 `RoundTableMeetingDbContext` 实现。租取与确认带 deliveryId、ConsumerName、State、LeaseId 条件；更新匹配 0 行时按资源已删除或失去租约处理。显式 Resume 由 Repository.Sqlite 的 `MessageEventRecoveryService` 执行，消息删除由 `MessageCleanupService` 执行。
 
 ### 5.3 GetNextSequenceAsync
 
@@ -169,14 +169,14 @@ Controller 标记 `[ApiController]`、`[Authorize]`、`[NoStoreResponse]`。POST
 
 ### 8.1 注册和管道
 
-在 `ServiceCollectionExtensions` 注册 `AddSignalR`、Hub、presence、`IMeetingRealtimeGate`、消费者注册描述符/目录、Dispatcher 和广播消费者；Catalog 只保存名称到 ServiceType，不持有消费者实例。Dispatcher 每次创建独立 scope 并解析消费者。在 `Program` 中调用 `MapHub<MeetingChatHub>("/hubs/meeting-chat").RequireAuthorization().WithMetadata(new RequireBrowserOriginAttribute(false), new NoStoreResponseAttribute())`。Hub 映射位于授权已启用的管道中，metadata 必须使现有 Origin 和敏感响应头中间件覆盖 negotiate、WebSocket、SSE 和长轮询。SPA fallback 的 excluded 条件必须增加 `/hubs`，使未知 Hub 路径和失败握手保持真实 404/401/403，而不是返回 index.html。
+在 `ServiceCollectionExtensions` 注册 `AddSignalR`、Hub、presence、`IMeetingRealtimeGate`、消费者注册描述符/目录、Dispatcher 和广播消费者；Catalog 只保存名称到 ServiceType，不持有消费者实例。Dispatcher 每次创建独立 scope 并解析消费者。在 `Program` 中调用 `MapHub<MeetingChatHub>("/hubs/meeting-chat").RequireAuthorization().WithMetadata(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true), new NoStoreResponseAttribute())`。Hub 映射位于授权已启用的管道中：negotiate 和写入请求仍必须提供白名单 Origin；浏览器同源 SSE/Long Polling 的 GET 传输请求允许按浏览器规范缺失 Origin，但若显式提供外部 Origin 仍返回 403。metadata 必须使现有 Origin 和敏感响应头中间件覆盖 negotiate、WebSocket、SSE 和长轮询。SPA fallback 的 excluded 条件必须增加 `/hubs`，使未知 Hub 路径和失败握手保持真实 404/401/403，而不是返回 index.html。
 
 ### 8.2 SubscribeMeeting
 
 Hub 方法只接收 Guid meetingId：
 
-1. 取得当前 UserId，验证 Active 会议和 Human Participant。
-2. 通过 gate 获取短共享租约，调用 `IMeetingChatSubscriptionService.AuthorizeAsync` 获取 ParticipantId 与 HighWatermarkSequence。
+1. 从 `Context.User` 的固定用户声明解析 `userId`；声明缺失或格式非法时返回 `meeting_not_found`。
+2. 通过 gate 获取短共享租约，调用 `IMeetingChatSubscriptionService.AuthorizeAsync(meetingId, userId, ...)` 验证 Active 会议和 Human Participant，并获取 ParticipantId 与 HighWatermarkSequence。
 3. 清理该连接既有会议绑定，加入服务端生成的 `meeting:{meetingId:N}` 组并注册 presence。
 4. 读取 registry 当前在线 ParticipantId 列表；缺席参与者由客户端视为 offline。
 5. 返回在线 ParticipantId 列表和 highWatermarkSequence；共享租约在方法返回前释放，不返回服务端连接代次。

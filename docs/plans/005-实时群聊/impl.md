@@ -67,7 +67,7 @@
 1. 在客户端 `package.json` 增加精确版本的 `@microsoft/signalr`，不得使用 `^` 或 `~`；版本必须与 ASP.NET Core SignalR 运行时兼容，并同步 `pnpm-lock.yaml`。
 2. 在 `vite.config.ts` 增加 `/hubs` 代理，开发环境保持 `changeOrigin: false`，允许 WebSocket；不得把 Cookie 或 Origin 由 JavaScript 手工拼接。
 3. 服务端注册 SignalR、不可变 `IMessageEventConsumerCatalog`、`MeetingPresenceRegistry`、`MessageEventDispatcherService`、Suspended delivery 的受信恢复服务和消息 Application 服务。
-4. 在现有 `SensitiveResponseHeadersMiddleware` 范围中纳入消息 HTTP API；`MapHub` 显式 RequireAuthorization 并附加 `RequireBrowserOriginAttribute(false)` 和 `NoStoreResponseAttribute` endpoint metadata，使 negotiate、WebSocket、SSE 和长轮询请求继续执行 AllowedOrigins 校验并禁用缓存；SPA fallback 明确排除 `/hubs`。
+4. 在现有 `SensitiveResponseHeadersMiddleware` 范围中纳入消息 HTTP API；`MapHub` 显式 RequireAuthorization 并附加 `RequireBrowserOriginAttribute(allowMissingOriginForGet: true)` 和 `NoStoreResponseAttribute` endpoint metadata，使 negotiate/写入请求执行 AllowedOrigins 校验，同源 SSE/Long Polling GET 在缺失 Origin 时可继续且显式外部 Origin 仍拒绝；SPA fallback 明确排除 `/hubs`。
 5. 组合根配置 `RealtimeChat` Options，启动时校验正数、默认页大小、最大页大小、正文上限、presence 宽限期、gate 超时、事件租约/退避/告警阈值和限流窗口。
 6. 先添加最小空 Hub 和匿名/非成员拒绝测试，确认不影响 002/003/004 既有 HTTP 路由，再进入消息实现。
 
@@ -111,7 +111,7 @@
 
 ### 4.6 阶段 5：SignalR 和 presence
 
-1. 实现 `MeetingChatHub`，路由固定 `/hubs/meeting-chat`，只负责认证、订阅、退出订阅、事件推送和连接生命周期；`MapHub` 附加授权、`RequireBrowserOriginAttribute(false)` 和 `NoStoreResponseAttribute` metadata。
+1. 实现 `MeetingChatHub`，路由固定 `/hubs/meeting-chat`，只负责认证、订阅、退出订阅、事件推送和连接生命周期；`MapHub` 附加授权、`RequireBrowserOriginAttribute(allowMissingOriginForGet: true)` 和 `NoStoreResponseAttribute` metadata。
 2. `SubscribeMeeting(meetingId)` 通过 `IMeetingChatSubscriptionService` 复查 Active 会议和当前账号 Human Participant，生成服务端组名 `meeting:{meetingId:N}`，返回在线 ParticipantId 列表与 `highWatermarkSequence`；空会议高水位为 0，不返回服务端连接代次。
 3. Hub 连接绑定一个会议；切换必须先 Unsubscribe 旧会议，不能由客户端自选组名或 participantId。
 4. `MeetingPresenceRegistry` 维护 connectionId -> meetingId/participantId 和 participantId 活动连接集合；同一参与者多连接只在首连/最后断开时广播状态变化。
@@ -166,58 +166,36 @@ Server/RoundTableMeeting.Domain/
   Enums/MessageEventDeliveryState.cs
   Exceptions/MessageAppendConflictException.cs
   Repositories/IMessageRepository.cs
-  Repositories/IMessageEventRepository.cs
 
 Server/RoundTableMeeting.Abstraction/
-  Contracts/Messages/MessageDto.cs
-  Contracts/Messages/SubmitMessageResultDto.cs
-  Contracts/Messages/MessageAuthorDto.cs
-  Contracts/Messages/MessageMentionDto.cs
-  Contracts/Messages/MessagePageDto.cs
-  Contracts/Messages/MessagePageRequest.cs
-  Contracts/Messages/SubmitMessageRequest.cs
-  Contracts/Messages/SystemMessageSubmission.cs
-  Contracts/Messages/MentionCandidateDto.cs
-  Contracts/Messages/ParticipantPresenceDto.cs
-  Contracts/Messages/MeetingDeletedDto.cs
-  Contracts/Messages/MessageOperationResult.cs
-  Contracts/Messages/MessageAppendedEnvelope.cs
-  Contracts/Messages/MeetingChatSubscriptionAccessDto.cs
-  Services/IMessageAppendService.cs
-  Services/IMessageHistoryService.cs
-  Services/IMeetingChatSubscriptionService.cs
-  Services/IMessageEventConsumer.cs
-  Services/IMessageEventConsumerCatalog.cs
-  Services/IMessageEventRecoveryService.cs
-  Services/IMeetingRealtimeGate.cs
+  Contracts/RealtimeChat/RealtimeChatContracts.cs
+  Contracts/RealtimeChat/MessageOperationResult.cs
+  Contracts/RealtimeChat/MessageAuthorKind.cs
+  Services/IRealtimeChatServices.cs
 
 Server/RoundTableMeeting.Application/RealtimeChat/
   RealtimeChatService.cs
-  MeetingChatSubscriptionService.cs
-  MessageEventRecoveryService.cs
   MessageMentionParser.cs
-  HumanMessageAuthorResolver.cs
-  MessageDtoMapper.cs
+  MessageEventConsumerCatalog.cs
+  RealtimeChatOptions.cs
 
 Server/RoundTableMeeting.Repository.Sqlite/
-  Database/Configurations/MeetingMessageConfiguration.cs
-  Database/Configurations/MessageMentionConfiguration.cs
-  Database/Configurations/MessageAppendedEventConfiguration.cs
-  Database/Configurations/MessageEventDeliveryConfiguration.cs
+  Database/Configurations/RealtimeChatConfigurations.cs
   Repositories/MessageRepository.cs
-  Repositories/MessageEventRepository.cs
+  Services/MessageCleanupService.cs
+  Services/MessageEventRecoveryService.cs
   Migrations/<timestamp>_AddRealtimeChat.cs
 
 Server/RoundTableMeeting/
   Controllers/MeetingMessagesController.cs
-  Hubs/MeetingChatHub.cs
-  Meetings/MeetingRealtimeGate.cs
-  Meetings/MeetingPresenceRegistry.cs
-  Meetings/MessageEventDispatcherService.cs
-  Meetings/MessageEventConsumerDescriptor.cs
-  Meetings/MessageEventConsumerCatalog.cs
-  Meetings/RealtimeMessageBroadcastConsumer.cs
-  OpenApi/MessageOpenApiOperationTransformer.cs
+  RealtimeChat/MeetingChatHub.cs
+  RealtimeChat/MeetingRealtimeGate.cs
+  RealtimeChat/MeetingPresenceRegistry.cs
+  RealtimeChat/MessageEventDispatcherService.cs
+  RealtimeChat/MeetingRealtimeTermination.cs
+  RealtimeChat/MessageSendRateLimiter.cs
+  RealtimeChat/MessageSendRateLimitFilter.cs
+  RealtimeChat/RealtimeMessageBroadcastConsumer.cs
 
 Client/roundTableMeeting/src/features/meetingWorkspace/
   api/listMessages.ts
@@ -234,6 +212,7 @@ Client/roundTableMeeting/src/features/meetingWorkspace/
 ~~~
 
 文件名是实施基线。若实现中把同一职责合并到相邻文件，必须同步更新本主题文档和测试定位；不得因为合并而把消息规则、授权或事务移入 Controller/Hub。
+本主题当前采用以下职责合并：Abstraction 的实时聊天 DTO 合并在 `Contracts/RealtimeChat/RealtimeChatContracts.cs`，服务接口合并在 `Services/IRealtimeChatServices.cs`；Repository 的四套 EF 配置合并在 `Database/Configurations/RealtimeChatConfigurations.cs`；delivery 租约扫描/条件更新由 Web 层 `RealtimeChat/MessageEventDispatcherService.cs` 负责，消息删除与显式 Resume 分别由 Repository.Sqlite 的 `MessageCleanupService.cs`、`MessageEventRecoveryService.cs` 负责。
 
 ## 6. 命令基线
 
