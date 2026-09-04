@@ -36,7 +36,7 @@ Task<MessageOperationResult<MessageDto>> AppendSystemAsync(
     CancellationToken cancellationToken = default);
 ~~~
 
-本主题公开 Human 和受信 System 路径；统一的 `AppendResolvedAsync` 保持 Application 内部，不在 Abstraction 中公开可直接提交 meetingId/participantId 的 Agent DTO。总体计划主题五实现受信 Agent resolver 后，再增加只接受不可伪造连接上下文的适配器并调用该内部追加核心。
+本主题公开 Human 和受信 System 路径；统一的 `AppendResolvedAsync` 作为 Application 内部的事务敏感追加核心，由 `IResolvedMessageAppendCore` 承载其受信调用契约，不在 Abstraction 中公开可直接提交 meetingId/participantId 的 Agent DTO。公开 `IMessageAppendService` 负责 Human/System 的 gate 与事务；主题五的受信 Agent 适配器在自己的外层事务中调用 `IResolvedMessageAppendCore`，不调用公开入口，避免嵌套事务。
 
 ### 3.2 IMessageHistoryService
 

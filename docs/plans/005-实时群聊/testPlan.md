@@ -113,7 +113,7 @@
 | RC-A004 | P0 | 非成员发送 | 返回 MeetingNotFound，不写入消息 |
 | RC-A005 | P0 | Deleting 会议历史/发送 | 统一 MeetingNotFound，不返回 Deleting 状态细节 |
 | RC-A006 | P0 | Human 作者解析 | 只按当前 UserId 找会议内 Human Participant，忽略客户端作者字段 |
-| RC-A007 | P0 | Agent 公共入口范围 | 本主题 Abstraction 不公开可伪造 participantId 的 Agent 提交 DTO；内部 AppendResolvedAsync 不可由 Web 直接调用 |
+| RC-A007 | P0 | Agent 公共入口范围 | 本主题 Abstraction 不公开可伪造 participantId 的 Agent 提交 DTO；内部 `IResolvedMessageAppendCore/AppendResolvedAsync` 只能由服务端受信适配器在已有事务内调用，不可由 Web 直接调用 |
 | RC-A008 | P0 | System 作者 | 受信系统用例可写入，普通浏览器上下文不能伪造 |
 | RC-A009 | P0 | 首次 Human 发送 | 同一事务注册 Message、Mentions、Event 和 broadcast Delivery |
 | RC-A010 | P0 | 同作者同会议同 ID 重放 | 返回 Replayed 和原 MessageDto，不分配新 Sequence、不写新 Event |
@@ -186,7 +186,7 @@
 | RC-C001 | P0 | Application 引用扫描 | 不引用 Web、SignalR、EF Core、Repository.Sqlite、IConfiguration、IHubContext |
 | RC-C002 | P0 | Abstraction 契约扫描 | 不暴露 DbContext、SqliteConnection、HubConnection、领域实体或 Cookie 类型 |
 | RC-C003 | P0 | Domain 引用扫描 | 不引用 ASP.NET Core、SignalR、EF Core、JSON transport 类型 |
-| RC-C004 | P0 | 单一追加边界 | Controller、Hub、MCP 预留代码只能依赖 IMessageAppendService，不能直接 RegisterAdd/DbContext |
+| RC-C004 | P0 | 单一追加边界 | Controller、Hub 只能依赖 `IMessageAppendService`；MCP/Agent 适配器只能依赖服务端受信的 `IResolvedMessageAppendCore`，不能直接 RegisterAdd/DbContext 或调用会自行开事务的公开入口 |
 | RC-C005 | P0 | 单一消息模型 | 不存在 AgentMessage/AI 专用消息表/AI 专用历史 Controller |
 | RC-C006 | P0 | 作者类型契约 | ParticipantKind 只允许 human/agent；MessageAuthorKind 允许 human/agent/system，system 不进入参与者枚举 |
 | RC-C007 | P0 | 事件消费者边界 | 广播消费者和未来处理器通过 IMessageEventConsumer/Dispatcher，不在追加请求内同步调用；ConsumerName 只来自注册描述符 |
@@ -253,7 +253,7 @@
 | RC-S002B | P0 | Subscribe 租约生命周期 | Subscribe 共享租约只覆盖单次方法调用，连接存续期不持有；Closing 后新订阅立即拒绝 |
 | RC-S003 | P0 | 非成员 SubscribeMeeting | HubException 只含 `meeting_not_found`，不返回会议存在性或参与者列表 |
 | RC-S004 | P0 | Deleting 会议订阅 | HubException 只含 `meeting_not_found`，不加入 group |
-| RC-S005 | P0 | 合法订阅 | 加入服务端生成 group，返回在线 ParticipantId 列表和 highWatermarkSequence；空历史高水位为 0 |
+| RC-S005 | P0 | 合法订阅 | 加入服务端生成 group，返回 `MeetingChatSubscriptionDto` 的 OnlineParticipantIds（`Guid[]`）和 HighWatermarkSequence（`long`）；空历史高水位为 0，主题五再向后兼容追加 AgentActivities |
 | RC-S006 | P0 | 客户端自选 group/participantId | Hub 不接受自选值，服务端按上下文绑定 |
 | RC-S007 | P0 | 一个连接切换会议 | 先移除旧组/presence，再绑定新会议；旧事件不再到达 |
 | RC-S008 | P1 | 双浏览器消息广播 | 已提交消息广播给同会议在线成员，不广播给其他会议 |

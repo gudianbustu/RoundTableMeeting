@@ -88,7 +88,7 @@
 
 1. 实现 `MeetingMessage.NormalizeContent` 和 `MessageMentionParser`，统一使用 NFC、Trim、不区分大小写和参与者名称最长匹配。
 2. 实现 `HumanMessageAuthorResolver`，从 `ICurrentUserContext.UserId` 解析会议内 Human Participant；不接受客户端提交的作者字段。
-3. 实现统一私有 `AppendResolvedAsync`，本主题只有 Human 和 System 公共入口调用它；不在 Abstraction 中公开可伪造 participantId 的 Agent DTO，后续“单 AI 入会与 @ 回复”主题通过受信连接 resolver 接入该内部核心。
+3. 实现统一私有 `AppendResolvedAsync`，本主题只有 Human 和 System 公共入口调用它；不在 Abstraction 中公开可伪造 participantId 的 Agent DTO，后续“AI 参会”主题通过受信连接 resolver 接入该内部核心。
 4. 追加事务内依次完成 Active/成员屏障、正文 NFC+Trim、幂等查询与 Ordinal 比较；未命中后再执行长度校验、参与者快照、提及解析、Sequence 分配、消息/mentions/event/deliveries 注册和提交。
 5. Sequence 在 `IMeetingTransactionRunner.RunAsync` 的 `BEGIN IMMEDIATE` 事务内按当前会议最大值加一分配；不在客户端或内存中分配。
 6. 幂等重放不重新分配 Sequence、不创建第二个 event、不重复创建 mention；正文不一致返回稳定冲突。

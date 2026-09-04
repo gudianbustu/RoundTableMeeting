@@ -29,7 +29,7 @@ Domain 工厂不接收 HttpContext、ClaimsPrincipal、HubConnection、EF Entity
 
 `MessagePageDto`：Items、HasMoreBefore、HasMoreAfter、FirstSequence、LastSequence、NextBeforeSequence、NextAfterSequence。
 
-`MeetingChatSubscriptionAccessDto`：ParticipantId、HighWatermarkSequence。
+`MeetingChatSubscriptionAccessDto`：ParticipantId、HighWatermarkSequence。Hub 对外返回的 `MeetingChatSubscriptionDto`：OnlineParticipantIds（`IReadOnlyList<Guid>`）、HighWatermarkSequence（`long`）；主题五以向后兼容方式追加 AgentActivities。
 
 `MessageAppendedEnvelope`：EventId、MessageId、MeetingId、Sequence、OccurredAtUtc。
 
@@ -39,7 +39,7 @@ Domain 工厂不接收 HttpContext、ClaimsPrincipal、HubConnection、EF Entity
 
 ### 3.2 服务接口
 
-`IMessageAppendService` 只公开 Human 和 System 两类入口；内部统一到 `AppendResolvedAsync`。Agent 适配器等待主题五提供受信连接上下文后再公开，当前不得接受普通 participant DTO。
+`IMessageAppendService` 只公开 Human 和 System 两类入口；内部统一到事务敏感的 `IResolvedMessageAppendCore`，其实现核心命名为 `AppendResolvedAsync`。Agent 适配器等待主题五提供受信连接上下文后调用该内部核心，当前不得接受普通 participant DTO，也不得调用会自行开启事务的公开入口。
 
 `IMessageHistoryService` 提供按会议和游标读取一页的方法。
 
@@ -124,7 +124,7 @@ Domain 工厂不接收 HttpContext、ClaimsPrincipal、HubConnection、EF Entity
 
 ## 9. 完成门
 
-- Human、System 和未来受信 Agent resolver 最终使用同一个 AppendResolvedAsync；本主题只公开 Human/System 契约。
+- Human、System 和未来受信 Agent resolver 最终使用同一个 `IResolvedMessageAppendCore/AppendResolvedAsync`；本主题只公开 Human/System 的 `IMessageAppendService` 契约。
 - mentions、event、delivery 和 message 在同一事务中注册。
 - 历史游标和序号逻辑可独立测试，Application 不依赖入口层。
 - Agent 预留契约存在但本主题不开放 MCP 入口或 AI 任务状态机。

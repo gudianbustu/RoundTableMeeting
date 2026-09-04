@@ -137,7 +137,7 @@ Migration 命名建议为 `AddRealtimeChat`，同时更新 DbContext、Snapshot 
 
 `HumanMessageAuthorResolver` 使用 `ICurrentUserContext.UserId` 查询 `MeetingId + UserId` 的 Human 参与者。找不到 Active 会议或参与关系时统一返回 `MeetingNotFound`。Controller 不能从请求接收作者参与者 ID。
 
-后续 MCP 主题实现 `AgentMessageAuthorResolver`，根据受信连接会话解析绑定的 Agent 参与者；两种 resolver 最终都生成内部 `ResolvedMessageAuthor` 并调用相同 `IMessageAppendService`。
+后续 MCP 主题实现 `AgentMessageAuthorResolver`，根据受信连接会话解析绑定的 Agent 参与者；两种 resolver 最终都生成内部 `ResolvedMessageAuthor`。Human/System 入口由公开 `IMessageAppendService` 自行取得 gate 和事务；Agent 入口由主题五的受信适配器调用事务敏感的内部 `IResolvedMessageAppendCore`（即统一 `AppendResolvedAsync` 核心），不经过会自行开启事务的公开入口。两条路径共享同一消息、提及、Sequence、幂等、事件和 delivery 算法。
 
 ### 6.2 追加事务
 
@@ -200,7 +200,7 @@ Hub 路由固定为 `/hubs/meeting-chat`，使用现有 Cookie Authentication �
 2. 通过 Active 会议和 Human 参与关系校验。
 3. 一个连接只绑定一个会议；切换时先离开旧组并更新 presence 计数。
 4. 加入名称仅由服务端生成的 `meeting:{meetingId:N}` 组。
-5. 返回当前在线 ParticipantId 列表和数据库中当前最后消息序号 `highWatermarkSequence`；缺席的会议参与者视为 offline，空历史高水位固定为 0。该高水位与先加入组的顺序共同建立有界补齐边界。
+5. 返回 `MeetingChatSubscriptionDto`：`onlineParticipantIds`（`IReadOnlyList<Guid>`，JSON 为 GUID 字符串数组）和 `highWatermarkSequence`（`long`）。缺席的会议参与者视为 offline，空历史高水位固定为 0。该高水位与先加入组的顺序共同建立有界补齐边界。主题五以向后兼容方式增加 `agentActivities`，不改变前两个字段的语义。
 
 `UnsubscribeMeeting` 和 `OnDisconnectedAsync` 幂等释放绑定。Subscribe 共享租约只在 Active/成员复查、加入组、登记 presence、读取高水位的单次方法调用期间持有，方法返回前释放，连接存续期不持有 gate 租约。客户端不能自选组名、参与者 ID 或作者类型。已认证但非成员或 Deleting 会议的 Hub 调用抛出只含稳定 code `meeting_not_found` 的 `HubException`，不返回会议存在性、参与者资料或内部 detail。
 
