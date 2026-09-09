@@ -5,8 +5,43 @@ public interface IMessageAppendService
     Task<MessageOperationResult<MessageDto>> AppendHumanAsync(Guid meetingId, SubmitMessageRequest request, CancellationToken cancellationToken = default);
     Task<MessageOperationResult<MessageDto>> AppendSystemAsync(Guid meetingId, SystemMessageSubmission submission, CancellationToken cancellationToken = default);
 }
+
+public interface IResolvedMessageAppendCore
+{
+    Task<ResolvedMessageAppendResult> AppendAsync(
+        Guid meetingId, ResolvedMessageAuthor author, string content, Guid clientSubmissionId,
+        IReadOnlyList<MentionCandidateDto>? mentionCandidates = null, CancellationToken cancellationToken = default);
+
+    Task<ResolvedMessageAppendResult> AppendAgentAsync(
+        Guid meetingId,
+        Guid participantId,
+        string authorDisplayName,
+        string content,
+        Guid clientSubmissionId,
+        CancellationToken cancellationToken = default);
+}
+
+public sealed record ResolvedMessageAuthor(Guid? ParticipantId, string DisplayName, MessageAuthorKind Kind);
+
+public sealed record ResolvedMessageAppendResult(
+    Guid MessageId,
+    Guid MeetingId,
+    long Sequence,
+    Guid? ParticipantId,
+    string AuthorDisplayName,
+    string Content,
+    DateTimeOffset CreatedAtUtc);
 public interface IMessageHistoryService { Task<MessageOperationResult<MessagePageDto>> GetPageAsync(Guid meetingId, MessagePageRequest request, CancellationToken cancellationToken = default); }
 public interface IMeetingChatSubscriptionService { Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default); }
+public interface IAgentActivityService
+{
+    Task<IReadOnlyList<AgentActivityDto>> ListAsync(Guid meetingId, CancellationToken cancellationToken = default);
+    Task<AgentActivityDto?> FindAsync(Guid meetingId, Guid participantId, CancellationToken cancellationToken = default);
+}
+public interface IAgentActivityNotifier
+{
+    Task NotifyAsync(AgentActivityDto activity, bool notifyPresence = false, CancellationToken cancellationToken = default);
+}
 public interface IMessageCleanupService { Task DeleteForMeetingAsync(Guid meetingId, CancellationToken cancellationToken = default); }
 public interface IMessageEventRecoveryService { Task<bool> ResumeAsync(Guid deliveryId, CancellationToken cancellationToken = default); }
 public interface IMeetingRealtimeTermination { Task NotifyAndTerminateAsync(Guid meetingId, DateTimeOffset deletedAtUtc, CancellationToken cancellationToken = default); }

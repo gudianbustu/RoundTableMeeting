@@ -1,6 +1,15 @@
 import { Avatar, Empty, Flex, Tag, Typography } from 'antd'
+import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 
-export function ParticipantList({ participants, presence = {} }: { participants: Participant[]; presence?: Record<string, 'online' | 'offline'> }) {
-  return <section className="participant-list"><Typography.Title level={4}>参与者</Typography.Title>{participants.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无参与者" /> : <div className="participant-list-items">{participants.map(participant => <Flex key={participant.participantId} align="center" gap="small" className="participant-list-item"><Avatar>{participant.displayName.slice(0, 1)}</Avatar><div><Typography.Text strong>{participant.displayName}</Typography.Text><div>{participant.isCurrentUser && <Tag>我</Tag>}{participant.isCreator && <Tag color="gold">创建者</Tag>}<Tag color={presence[participant.participantId] === 'online' ? 'green' : 'default'}>{presence[participant.participantId] === 'online' ? '在线' : '离线'}</Tag><Typography.Text type="secondary">{participant.type === 'agent' ? 'AI Agent' : '人类参与者'}</Typography.Text></div></div></Flex>)}</div>}</section>
+function agentStatus(activity: AgentActivity | undefined) {
+  if (!activity || activity.state === 'unknown') return { online: false, label: '实时状态未知', color: 'default' as const }
+  if (activity.state === 'waiting') return { online: true, label: '等待中', color: 'green' as const }
+  if (activity.state === 'processing') return { online: true, label: '处理中', color: 'blue' as const }
+  if (activity.state === 'blocked') return { online: true, label: activity.failureCode ? `已阻塞：${activity.failureCode}` : '已阻塞', color: 'orange' as const }
+  return { online: false, label: undefined, color: 'default' as const }
+}
+
+export function ParticipantList({ participants, presence = {}, agentActivities = {} }: { participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
+  return <section className="participant-list"><Typography.Title level={4}>参与者</Typography.Title>{participants.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无参与者" /> : <div className="participant-list-items">{participants.map(participant => { const agent = participant.type === 'agent'; const status = agentStatus(agentActivities[participant.participantId]); const humanOnline = presence[participant.participantId] === 'online'; return <Flex key={participant.participantId} align="center" gap="small" className="participant-list-item"><Avatar>{participant.displayName.slice(0, 1)}</Avatar><div className="participant-list-item-content"><Typography.Text strong>{participant.displayName}</Typography.Text><div>{participant.isCurrentUser && <Tag>我</Tag>}{participant.isCreator && <Tag color="gold">创建者</Tag>}<Tag color={agent ? status.online ? 'green' : 'default' : humanOnline ? 'green' : 'default'}>{agent ? status.online ? '在线' : status.label ? status.label : '离线' : humanOnline ? '在线' : '离线'}</Tag>{agent && status.online && status.label && <Tag color={status.color}>{status.label}</Tag>}<Typography.Text type="secondary">{agent ? 'AI Agent' : '人类参与者'}</Typography.Text></div></div></Flex> })}</div>}</section>
 }

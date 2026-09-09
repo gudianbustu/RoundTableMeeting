@@ -7,7 +7,7 @@ using RoundTableMeeting.Authentication;
 namespace RoundTableMeeting.RealtimeChat;
 
 [Authorize]
-public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions, MeetingPresenceRegistry presence, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider, ILogger<MeetingChatHub> logger) : Hub
+public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions, IAgentActivityService agentActivities, MeetingPresenceRegistry presence, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider, ILogger<MeetingChatHub> logger) : Hub
 {
     public async Task<MeetingChatSubscriptionDto> SubscribeMeeting(Guid meetingId)
     {
@@ -37,7 +37,8 @@ public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions
         var online = presence.GetOnline(meetingId);
         if (becameOnline)
             await Clients.Group(Group(meetingId)).SendAsync("participantPresenceChanged", new ParticipantPresenceDto(result.Data.ParticipantId, "online", timeProvider.GetUtcNow()), cancellationToken);
-        return new MeetingChatSubscriptionDto(online, result.Data.HighWatermarkSequence);
+        var activities = await agentActivities.ListAsync(meetingId, cancellationToken);
+        return new MeetingChatSubscriptionDto(online, result.Data.HighWatermarkSequence, activities);
         }
         catch (Exception exception) when (exception is not HubException)
         {

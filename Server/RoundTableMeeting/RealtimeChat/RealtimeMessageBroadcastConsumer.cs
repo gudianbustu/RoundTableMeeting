@@ -17,9 +17,9 @@ public sealed class RealtimeMessageBroadcastConsumer(
         using var sharedLease = await realtimeGate.AcquireSharedAsync(envelope.MeetingId, cancellationToken);
         if (sharedLease is null) return;
         if (await meetings.FindActiveByIdAsync(envelope.MeetingId, cancellationToken) is null) return;
-        var message = await messages.FindByIdAsync(envelope.MessageId, cancellationToken);
+        var message = await messages.FindByIdAsync(envelope.MeetingId, envelope.MessageId, cancellationToken);
         if (message is null) return;
-        var mentions = await messages.ListMentionsAsync(message.ID, cancellationToken);
+        var mentions = await messages.ListMentionsAsync(envelope.MeetingId, message.ID, cancellationToken);
         var authorKind = message.AuthorKind switch
         {
             Domain.Enums.MessageAuthorKind.Agent => TransportAuthorKind.Agent,

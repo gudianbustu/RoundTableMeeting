@@ -17,6 +17,300 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.11");
 
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentConnectionSession", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("ConnectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DeclaredContextCharacterLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("DisconnectedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("InitialContextConfirmedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InitialContextState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("InitialSnapshotSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("LastActivityAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("McpTransportBinding")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Transport")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("McpTransportBinding")
+                        .IsUnique();
+
+                    b.HasIndex("MeetingId", "ParticipantId")
+                        .IsUnique()
+                        .HasFilter("State = 'Connected'");
+
+                    b.HasIndex("ParticipantId", "MeetingId");
+
+                    b.HasIndex("MeetingId", "ParticipantId", "State");
+
+                    b.ToTable("AgentConnectionSessions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_CharacterLimit", "DeclaredContextCharacterLimit > 0");
+
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_ContextConfirmation", "(InitialContextState = 'Prepared' AND InitialContextConfirmedAtUtc IS NULL) OR (InitialContextState = 'Confirmed' AND InitialContextConfirmedAtUtc IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_InitialContextState", "InitialContextState IN ('Prepared', 'Confirmed')");
+
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_InitialSnapshot", "InitialSnapshotSequence BETWEEN 0 AND 9007199254740991");
+
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_State", "State IN ('Connected', 'Disconnected')");
+
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_StateTimes", "(State = 'Connected' AND DisconnectedAtUtc IS NULL) OR (State = 'Disconnected' AND DisconnectedAtUtc IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentContextCursor", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("AllocatedThroughSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("DeliveredThroughSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ID");
+
+                    b.HasAlternateKey("ID", "MeetingId");
+
+                    b.HasIndex("MeetingId", "ParticipantId")
+                        .IsUnique();
+
+                    b.HasIndex("ParticipantId", "MeetingId");
+
+                    b.ToTable("AgentContextCursors", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentContextCursors_Sequences", "DeliveredThroughSequence BETWEEN 0 AND 9007199254740991 AND AllocatedThroughSequence BETWEEN 0 AND 9007199254740991 AND DeliveredThroughSequence <= AllocatedThroughSequence");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentReplyTask", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("AgentParticipantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("CancelledAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CandidateFromSequenceExclusive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CandidateToSequenceInclusive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("DeliveredAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("FailedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FailureCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ProcessingAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("RepliedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReplyIdempotencyKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ReplyMessageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("SourceAuthorKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SourceParticipantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TriggerMentionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TriggerMessageId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("TriggerSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ReplyIdempotencyKey")
+                        .IsUnique();
+
+                    b.HasIndex("AgentParticipantId", "MeetingId");
+
+                    b.HasIndex("ReplyMessageId", "MeetingId");
+
+                    b.HasIndex("SourceParticipantId", "MeetingId");
+
+                    b.HasIndex("TriggerMentionId", "MeetingId");
+
+                    b.HasIndex("MeetingId", "AgentParticipantId", "TriggerMessageId")
+                        .IsUnique();
+
+                    b.HasIndex("TriggerMessageId", "MeetingId", "TriggerSequence");
+
+                    b.HasIndex("MeetingId", "AgentParticipantId", "State", "TriggerSequence", "ID");
+
+                    b.ToTable("AgentReplyTasks", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentReplyTasks_CandidateRange", "CandidateFromSequenceExclusive BETWEEN 0 AND 9007199254740990 AND CandidateFromSequenceExclusive < CandidateToSequenceInclusive AND CandidateToSequenceInclusive = TriggerSequence AND TriggerSequence BETWEEN 1 AND 9007199254740991");
+
+                            t.HasCheckConstraint("CK_AgentReplyTasks_Source", "(SourceAuthorKind = 'System' AND SourceParticipantId IS NULL) OR (SourceAuthorKind IN ('Human', 'Agent') AND SourceParticipantId IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_AgentReplyTasks_State", "State IN ('Queued', 'Delivered', 'Processing', 'Replied', 'Failed', 'Cancelled')");
+
+                            t.HasCheckConstraint("CK_AgentReplyTasks_Timestamps", "(State != 'Delivered' OR DeliveredAtUtc IS NOT NULL) AND (State != 'Processing' OR ProcessingAtUtc IS NOT NULL) AND (State != 'Replied' OR (RepliedAtUtc IS NOT NULL AND ReplyMessageId IS NOT NULL)) AND (State != 'Failed' OR (FailedAtUtc IS NOT NULL AND FailureCode IS NOT NULL)) AND (State != 'Cancelled' OR CancelledAtUtc IS NOT NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CandidateFirstSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CandidateLastSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ConnectionSessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DeclaredContextCharacterLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("DeliveredAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DeliveredCharacterCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DeliveredFirstSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DeliveredLastSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("OverLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Truncated")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TruncatedMessageCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ConnectionSessionId", "MeetingId");
+
+                    b.HasIndex("TaskId", "ID")
+                        .IsUnique();
+
+                    b.HasIndex("TaskId", "MeetingId");
+
+                    b.HasIndex("MeetingId", "ConnectionSessionId", "State");
+
+                    b.ToTable("AgentTaskDeliveryAttempts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_CandidateRange", "CandidateFirstSequence BETWEEN 1 AND 9007199254740991 AND CandidateFirstSequence <= CandidateLastSequence AND CandidateLastSequence <= 9007199254740991");
+
+                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_CharacterCounts", "DeclaredContextCharacterLimit > 0 AND DeliveredCharacterCount >= 0 AND TruncatedMessageCount >= 0 AND ((Truncated = 0 AND TruncatedMessageCount = 0) OR (Truncated = 1 AND TruncatedMessageCount > 0)) AND ((OverLimit = 0 AND DeliveredCharacterCount <= DeclaredContextCharacterLimit) OR (OverLimit = 1 AND DeliveredCharacterCount > DeclaredContextCharacterLimit))");
+
+                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_DeliveredRange", "(State = 'Prepared' AND DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (State = 'Delivered' AND DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL) OR (State = 'Abandoned' AND ((DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL)))");
+
+                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_State", "State IN ('Prepared', 'Delivered', 'Abandoned')");
+                        });
+                });
+
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.Meeting", b =>
                 {
                     b.Property<Guid>("ID")
@@ -354,6 +648,103 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .IsUnique();
 
                     b.ToTable("UserAccounts", (string)null);
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentConnectionSession", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.Meeting", null)
+                        .WithMany()
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingParticipant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentContextCursor", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.Meeting", null)
+                        .WithMany()
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingParticipant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentReplyTask", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.Meeting", null)
+                        .WithMany()
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingParticipant", null)
+                        .WithMany()
+                        .HasForeignKey("AgentParticipantId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingMessage", null)
+                        .WithMany()
+                        .HasForeignKey("ReplyMessageId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingParticipant", null)
+                        .WithMany()
+                        .HasForeignKey("SourceParticipantId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MessageMention", null)
+                        .WithMany()
+                        .HasForeignKey("TriggerMentionId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingMessage", null)
+                        .WithMany()
+                        .HasForeignKey("TriggerMessageId", "MeetingId", "TriggerSequence")
+                        .HasPrincipalKey("ID", "MeetingId", "Sequence")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.Meeting", null)
+                        .WithMany()
+                        .HasForeignKey("MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentConnectionSession", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectionSessionId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentReplyTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.Meeting", b =>

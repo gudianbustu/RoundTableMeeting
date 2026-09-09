@@ -1,7 +1,7 @@
-import type { ChatMessage, ChatState, ConnectionState, FailedSubmission, HistoryState, MessagePage, PresenceState, SendState } from '../types/realtimeChat'
+import type { AgentActivity, ChatMessage, ChatState, ConnectionState, FailedSubmission, HistoryState, MessagePage, PresenceState, SendState } from '../types/realtimeChat'
 
 export function createInitialChatState(meetingId: string, generation = 1): ChatState {
-  return { meetingId, generation, messagesById: {}, orderedMessageIds: [], liveBaselineSequence: 0, lastAppliedSequence: 0, highWatermarkSequence: 0, hasEarlierMessages: false, connection: 'idle', history: 'idle', presence: {}, draft: '', send: 'idle', newMessageCount: 0 }
+  return { meetingId, generation, messagesById: {}, orderedMessageIds: [], liveBaselineSequence: 0, lastAppliedSequence: 0, highWatermarkSequence: 0, hasEarlierMessages: false, connection: 'idle', history: 'idle', presence: {}, agentActivities: {}, draft: '', send: 'idle', newMessageCount: 0 }
 }
 
 type Scoped = { meetingId: string; generation: number }
@@ -10,6 +10,8 @@ export type ChatAction =
   | (Scoped & { type: 'messageEventReceived'; message: ChatMessage })
   | (Scoped & { type: 'presenceChanged'; participantId: string; state: PresenceState })
   | (Scoped & { type: 'presenceSnapshot'; participantIds: string[]; highWatermarkSequence: number })
+  | (Scoped & { type: 'agentActivitySnapshot'; activities: AgentActivity[] })
+  | (Scoped & { type: 'agentActivityChanged'; activity: AgentActivity })
   | (Scoped & { type: 'connectionStateChanged'; state: ConnectionState })
   | (Scoped & { type: 'historyStateChanged'; state: HistoryState })
   | (Scoped & { type: 'sendStarted'; submission: FailedSubmission })
@@ -48,7 +50,9 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'messageEventReceived': return action.message.meetingId !== state.meetingId || state.messagesById[action.message.messageId] ? state : merge({ ...state, newMessageCount: state.newMessageCount + 1 }, [action.message])
     case 'presenceChanged': return { ...state, presence: { ...state.presence, [action.participantId]: action.state } }
     case 'presenceSnapshot': { const presence: Record<string, PresenceState> = {}; for (const id of action.participantIds) presence[id] = 'online'; return { ...state, presence, highWatermarkSequence: Math.max(state.highWatermarkSequence, action.highWatermarkSequence) } }
-    case 'connectionStateChanged': return { ...state, connection: action.state }
+    case 'agentActivitySnapshot': { const agentActivities: Record<string, AgentActivity> = {}; for (const activity of action.activities) { if (activity.meetingId !== state.meetingId) continue; const current = state.agentActivities[activity.participantId]; agentActivities[activity.participantId] = current && current.changedAt.getTime() > activity.changedAt.getTime() ? current : activity } return { ...state, agentActivities } }
+    case 'agentActivityChanged': { const current = state.agentActivities[action.activity.participantId]; if (action.activity.meetingId !== state.meetingId || current && current.changedAt.getTime() > action.activity.changedAt.getTime()) return state; return { ...state, agentActivities: { ...state.agentActivities, [action.activity.participantId]: action.activity } } }
+    case 'connectionStateChanged': { if (action.state !== 'reconnecting' && action.state !== 'disconnected' && action.state !== 'rejected') return { ...state, connection: action.state }; const agentActivities: Record<string, AgentActivity> = {}; for (const activity of Object.values(state.agentActivities)) agentActivities[activity.participantId] = { ...activity, state: 'unknown' }; return { ...state, connection: action.state, agentActivities } }
     case 'historyStateChanged': return { ...state, history: action.state }
     case 'draftChanged': return { ...state, draft: action.draft, failedSubmission: undefined, send: 'idle' }
     case 'sendStarted': return { ...state, send: 'sending', failedSubmission: action.submission }

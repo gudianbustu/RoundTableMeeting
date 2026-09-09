@@ -2,11 +2,11 @@
 
 ## 1. 文件和输入
 
-文件为 `features/meetingWorkspace/components/MeetingHeader.tsx`。组件接收 `MeetingDetails`、可选 `MeetingInvitation`、`invitationState`、`onLoadInvitation`、`onClearInvitation`、`onRefresh` 和 `onDeleteRequested`。
+文件为 `features/meetingWorkspace/components/MeetingHeader.tsx`。组件接收 `MeetingDetails`、可选 `MeetingInvitation`、`onInvitation`、`onHideInvitation`、`onCopy`、`onInvite`、`onRefresh` 和 `onDelete`。
 
 ## 2. 渲染和权限
 
-显示会议名称、背景、创建时间和当前显示名称。`canManageInvitation` 为 true 时显示“显示邀请码”，邀请码加载成功后显示等宽会议码、复制和隐藏按钮；普通成员不渲染邀请码区域。`canDelete` 为 true 时显示危险删除图标按钮。权限只来自详情字段，不从 participants 推导。
+显示会议名称、背景、创建时间和当前显示名称。所有操作均为图标按钮，通过 `aria-label` 和 `title` 提供可访问名称。`canManageInvitation` 为 true 时显示主色“邀请入会”入口和“显示邀请码”，邀请码加载成功后显示等宽会议码及复制、隐藏按钮；普通成员不渲染邀请码区域。`canDelete` 为 true 时显示危险删除图标按钮。权限只来自详情字段，不从 participants 推导。
 
 ## 3. 操作
 

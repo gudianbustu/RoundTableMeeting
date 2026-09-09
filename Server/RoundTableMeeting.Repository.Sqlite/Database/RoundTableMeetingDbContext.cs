@@ -19,6 +19,10 @@ public sealed class RoundTableMeetingDbContext(DbContextOptions<RoundTableMeetin
     public DbSet<RoundTableMeeting.Domain.Entities.MessageMention> MessageMentions => Set<RoundTableMeeting.Domain.Entities.MessageMention>();
     public DbSet<RoundTableMeeting.Domain.Entities.MessageAppendedEvent> MessageAppendedEvents => Set<RoundTableMeeting.Domain.Entities.MessageAppendedEvent>();
     public DbSet<RoundTableMeeting.Domain.Entities.MessageEventDelivery> MessageEventDeliveries => Set<RoundTableMeeting.Domain.Entities.MessageEventDelivery>();
+    public DbSet<RoundTableMeeting.Domain.Entities.AgentConnectionSession> AgentConnectionSessions => Set<RoundTableMeeting.Domain.Entities.AgentConnectionSession>();
+    public DbSet<RoundTableMeeting.Domain.Entities.AgentContextCursor> AgentContextCursors => Set<RoundTableMeeting.Domain.Entities.AgentContextCursor>();
+    public DbSet<RoundTableMeeting.Domain.Entities.AgentReplyTask> AgentReplyTasks => Set<RoundTableMeeting.Domain.Entities.AgentReplyTask>();
+    public DbSet<RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt> AgentTaskDeliveryAttempts => Set<RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt>();
 
     /// <summary>
     /// 校验账号后同步保存实体变更

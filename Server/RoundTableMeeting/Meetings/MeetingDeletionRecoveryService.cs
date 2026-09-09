@@ -11,15 +11,21 @@ public sealed class MeetingDeletionRecoveryService(
     TimeProvider timeProvider,
     IMeetingRealtimeTermination realtimeTermination,
     IMeetingRealtimeGate realtimeGate,
+    IAgentConnectionRegistry agentConnections,
+    IAgentTaskSignalRegistry agentSignals,
     ILogger<MeetingDeletionRecoveryService> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        try
         {
-            await RecoverAsync(stoppingToken);
-            await signal.WaitAsync(TimeSpan.FromSeconds(30), stoppingToken);
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                await RecoverAsync(stoppingToken);
+                await signal.WaitAsync(TimeSpan.FromSeconds(30), stoppingToken);
+            }
         }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
     }
 
     private async Task RecoverAsync(CancellationToken cancellationToken)
@@ -44,17 +50,21 @@ public sealed class MeetingDeletionRecoveryService(
         try
         {
             var deletedAt = timeProvider.GetUtcNow();
+            agentConnections.TerminateMeeting(meetingId);
+            agentSignals.TerminateMeeting(meetingId);
             await realtimeTermination.NotifyAndTerminateAsync(meetingId, deletedAt, cancellationToken);
             await using var scope = scopeFactory.CreateAsyncScope();
             var meetings = scope.ServiceProvider.GetRequiredService<IMeetingRepository>();
             var participants = scope.ServiceProvider.GetRequiredService<IMeetingParticipantRepository>();
             var messages = scope.ServiceProvider.GetRequiredService<IMessageCleanupService>();
+            var agents = scope.ServiceProvider.GetRequiredService<IAgentCollaborationCleanupService>();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var runner = scope.ServiceProvider.GetRequiredService<IMeetingTransactionRunner>();
             await runner.RunAsync(async token =>
             {
                 var meeting = await meetings.FindByIdAsync(meetingId, token);
                 if (meeting is null) return true;
+                await agents.DeleteForMeetingAsync(meetingId, deletedAt, token);
                 await messages.DeleteForMeetingAsync(meetingId, token);
                 foreach (var participant in await participants.ListAsync(meetingId, token)) unitOfWork.RegisterDelete(participant);
                 var receipt = await meetings.FindActiveReceiptByMeetingIdAsync(meetingId, token);

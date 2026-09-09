@@ -3,9 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { ConfigProvider } from 'antd'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mapMeetingDetails } from './api/mappers'
+import { InviteMeetingDialog } from './components/InviteMeetingDialog'
 import { JoinMeetingDialog } from './components/JoinMeetingDialog'
 import { MeetingHeader } from './components/MeetingHeader'
-import { hasUnknownOnlineParticipant } from './pages/MeetingWorkspacePage'
+import { ParticipantList } from './components/ParticipantList'
+import { buildAgentInvitePrompt } from './invitePrompts'
+import { hasUnknownAgentActivity, hasUnknownOnlineParticipant } from './pages/MeetingWorkspacePage'
 
 afterEach(cleanup)
 
@@ -36,9 +39,47 @@ describe('meeting workspace contracts', () => {
   })
 
   it('does not expose invitation controls to ordinary members', () => {
-    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: false, participants: [] }} onInvitation={vi.fn()} onHideInvitation={vi.fn()} onCopy={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: false, participants: [] }} onInvitation={vi.fn()} onHideInvitation={vi.fn()} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
+    expect(screen.queryByRole('button', { name: '邀请入会' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '显示邀请码' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除会议' })).not.toBeInTheDocument()
+  })
+
+  it('renders icon-only header actions with accessible labels for creators', () => {
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: true, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onInvitation={vi.fn()} onHideInvitation={vi.fn()} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
+    for (const label of ['邀请入会', '刷新会议', '复制邀请码', '隐藏邀请码', '删除会议']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
+    }
+    expect(screen.queryByText('复制邀请码')).not.toBeInTheDocument()
+    expect(screen.queryByText('删除会议')).not.toBeInTheDocument()
+  })
+
+  it('shows site address and meeting code when inviting a human', async () => {
+    const actor = userEvent.setup()
+    render(<ConfigProvider><InviteMeetingDialog open invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCancel={vi.fn()} siteUrl="http://test.local" mcpUrl="http://test.local/mcp" /></ConfigProvider>)
+    await actor.click(screen.getByRole('button', { name: '邀请人类成员' }))
+    expect(screen.getByText('http://test.local')).toBeInTheDocument()
+    expect(screen.getByText('0e04091b-4287-4b4c-8c99-70217a3aeea0')).toBeInTheDocument()
+  })
+
+  it('builds the agent MCP prompt from display name and meeting code', async () => {
+    const actor = userEvent.setup()
+    render(<ConfigProvider><InviteMeetingDialog open invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCancel={vi.fn()} siteUrl="http://test.local" mcpUrl="http://test.local/mcp" /></ConfigProvider>)
+    await actor.click(screen.getByRole('button', { name: '邀请 AI Agent' }))
+    expect(screen.queryByText(/join_meeting/)).not.toBeInTheDocument()
+    await actor.type(screen.getByLabelText('Agent 显示名称'), '助手一号')
+    const prompt = buildAgentInvitePrompt('助手一号', '0e04091b-4287-4b4c-8c99-70217a3aeea0', 'http://test.local/mcp')
+    expect(screen.getByText(prompt.replace(/\s+/g, ' '))).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '复制提示词' })).toBeEnabled()
+  })
+
+  it('builds the agent prompt with MCP address, display name and meeting code', () => {
+    const prompt = buildAgentInvitePrompt('助手一号', '0e04091b', 'http://test.local/mcp')
+    expect(prompt).toContain('地址：http://test.local/mcp')
+    expect(prompt).toContain('你的会议显示名称是：\n助手一号')
+    expect(prompt).toContain('会议代码是：\n0e04091b')
+    expect(prompt).toContain('wait_for_mention')
+    expect(prompt).toContain('reply_to_mention')
   })
 
   it('detects an online participant missing from the current detail snapshot', () => {
@@ -51,5 +92,20 @@ describe('meeting workspace contracts', () => {
       '11111111-1111-1111-1111-111111111111': 'online',
       '22222222-2222-2222-2222-222222222222': 'offline',
     })).toBe(false)
+  })
+
+  it('detects Agent activity that arrives before participant details', () => {
+    const participants = [{ participantId: '11111111-1111-1111-1111-111111111111', displayName: 'Alice', type: 'human' as const, isCreator: true, isCurrentUser: true }]
+    expect(hasUnknownAgentActivity(participants, {
+      '22222222-2222-4222-8222-222222222222': { meetingId: '33333333-3333-4333-8333-333333333333', participantId: '22222222-2222-4222-8222-222222222222', state: 'waiting', changedAt: new Date() },
+    })).toBe(true)
+  })
+
+  it('renders Agent online and activity state independently from human presence', () => {
+    const participant = { participantId: '22222222-2222-4222-8222-222222222222', displayName: 'Assistant', type: 'agent' as const, isCreator: false, isCurrentUser: false }
+    render(<ConfigProvider><ParticipantList participants={[participant]} presence={{ [participant.participantId]: 'offline' }} agentActivities={{ [participant.participantId]: { meetingId: '11111111-1111-4111-8111-111111111111', participantId: participant.participantId, state: 'waiting', changedAt: new Date() } }} /></ConfigProvider>)
+    expect(screen.getByText('在线')).toBeInTheDocument()
+    expect(screen.getByText('等待中')).toBeInTheDocument()
+    expect(screen.queryByText('离线')).not.toBeInTheDocument()
   })
 })

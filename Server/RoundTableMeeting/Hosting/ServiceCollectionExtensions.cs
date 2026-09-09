@@ -1,122 +1,189 @@
+using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Json.Serialization.Metadata;
 using Materal.Extensions.DependencyInjection;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
-using RoundTableMeeting.Authentication;
-using RoundTableMeeting.Application.AccountAccess;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using RoundTableMeeting.Abstraction.Runtime;
+using RoundTableMeeting.Abstraction.Services;
+using RoundTableMeeting.AgentCollaboration;
 using RoundTableMeeting.Application;
+using RoundTableMeeting.Application.AccountAccess;
+using RoundTableMeeting.Application.AgentCollaboration;
+using RoundTableMeeting.Application.RealtimeChat;
+using RoundTableMeeting.Authentication;
+using RoundTableMeeting.Domain.Entities;
+using RoundTableMeeting.Errors;
+using RoundTableMeeting.Meetings;
+using RoundTableMeeting.RealtimeChat;
 using RoundTableMeeting.Repository.Sqlite;
 using RoundTableMeeting.Repository.Sqlite.Configuration;
 using RoundTableMeeting.Repository.Sqlite.Database;
-using RoundTableMeeting.Errors;
-using RoundTableMeeting.Meetings;
-using RoundTableMeeting.Application.RealtimeChat;
-using RoundTableMeeting.RealtimeChat;
-using RoundTableMeeting.Abstraction.Services;
 
 namespace RoundTableMeeting.Hosting;
 
-/// <summary>
-/// 注册应用的持久化、认证和 Web 服务
-/// </summary>
 public static class ServiceCollectionExtensions
 {
-    /// <summary>
-    /// 注册应用依赖和 Web 基础设施
-    /// </summary>
-    public static WebApplicationBuilder AddRoundTableMeetingServices(this WebApplicationBuilder builder)
-    {
-        builder.Services.AddAutoService(
-            typeof(RoundTableMeeting.Application.AssemblyMarker).Assembly,
-            typeof(RoundTableMeeting.Repository.Sqlite.AssemblyMarker).Assembly);
-
-        builder.Services.AddOptions<SqliteDatabaseOptions>()
-            .Bind(builder.Configuration.GetSection(SqliteDatabaseOptions.SectionName))
-            .ValidateDataAnnotations()
-            .Validate(options => SqliteDatabaseOptions.TryValidate(options.ConnectionString, out _), "Database connection settings are invalid.")
-            .ValidateOnStart();
-
-        builder.Services.AddOptions<AuthenticationOptions>()
-            .Bind(builder.Configuration.GetSection(AuthenticationOptions.SectionName))
-            .ValidateDataAnnotations()
-            .Validate(options => options.Validate(out _), "Authentication settings are invalid.")
-            .ValidateOnStart();
-        builder.Services.AddOptions<MeetingJoinRateLimitOptions>()
-            .Bind(builder.Configuration.GetSection(MeetingJoinRateLimitOptions.SectionName))
-            .ValidateDataAnnotations()
-            .ValidateOnStart();
-        builder.Services.AddOptions<RealtimeChatOptions>()
-            .Bind(builder.Configuration.GetSection(RealtimeChatOptions.SectionName))
-            .ValidateDataAnnotations()
-            .Validate(options => options.HistoryPageSize <= options.MaxHistoryPageSize, "History page size cannot exceed maximum page size.")
-            .Validate(options => options.EventRetryMaxSeconds >= options.EventRetryBaseSeconds, "Event retry maximum must not be lower than the base delay.")
-            .Validate(options => options.SendRateLimit is { WindowSeconds: > 0, PerUserLimit: > 0, PerParticipantLimit: > 0, PerSourceLimit: > 0 }, "Message send rate limits are invalid.")
-            .ValidateOnStart();
-        builder.Services.AddSingleton(sp => sp.GetRequiredService<IOptions<RealtimeChatOptions>>().Value);
-        builder.Services.AddSignalR();
-        builder.Services.AddSingleton<MeetingPresenceRegistry>();
-        builder.Services.AddSingleton<IMeetingRealtimeTermination, MeetingRealtimeTermination>();
-        builder.Services.AddSingleton<MessageSendRateLimiter>();
-        builder.Services.AddScoped<MessageSendRateLimitFilter>();
-        builder.Services.AddSingleton<IMeetingRealtimeGate, MeetingRealtimeGate>();
-        builder.Services.AddSingleton<IMessageMentionParser, MessageMentionParser>();
-        builder.Services.AddScoped<RealtimeChatService>();
-        builder.Services.AddScoped<IMessageAppendService>(sp => sp.GetRequiredService<RealtimeChatService>());
-        builder.Services.AddScoped<IMessageHistoryService>(sp => sp.GetRequiredService<RealtimeChatService>());
-        builder.Services.AddScoped<IMeetingChatSubscriptionService>(sp => sp.GetRequiredService<RealtimeChatService>());
-        builder.Services.AddSingleton<IMessageEventConsumerCatalog, MessageEventConsumerCatalog>();
-        builder.Services.AddScoped<RealtimeMessageBroadcastConsumer>();
-        builder.Services.AddSingleton(new MessageEventConsumerDescriptor("realtime-broadcast-v1", typeof(RealtimeMessageBroadcastConsumer)));
-        builder.Services.AddSingleton<IPasswordHasher<RoundTableMeeting.Domain.Entities.UserAccount>, PasswordHasher<RoundTableMeeting.Domain.Entities.UserAccount>>();
-        builder.Services.AddSingleton<PasswordVerificationService>();
-        builder.Services.AddHttpContextAccessor();
-        builder.Services.AddScoped<RoundTableMeeting.Abstraction.Services.ICurrentUserContext, HttpCurrentUserContext>();
-        builder.Services.AddAuthentication(AuthenticationConstants.Scheme)
-            .AddCookie(AuthenticationConstants.Scheme, options =>
-            {
-                options.Cookie.Name = AuthenticationConstants.CookieName;
-                options.Cookie.Path = "/";
-                options.Cookie.HttpOnly = true;
-                options.Cookie.SameSite = SameSiteMode.Lax;
-                options.Cookie.SecurePolicy = builder.Environment.IsProduction() ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
-                options.ExpireTimeSpan = TimeSpan.FromHours(8);
-                options.SlidingExpiration = false;
-                options.Events.OnRedirectToLogin = context => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, StatusCodes.Status401Unauthorized, "unauthenticated");
-                options.Events.OnRedirectToAccessDenied = context => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, StatusCodes.Status403Forbidden, "forbidden");
-            });
-        builder.Services.AddAuthorization(options => options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build());
-        builder.Services.AddSingleton<SqliteConnectionInterceptor>();
-        builder.Services.AddDbContext<RoundTableMeetingDbContext>((serviceProvider, options) =>
-        {
-            var databaseOptions = serviceProvider.GetRequiredService<IOptions<SqliteDatabaseOptions>>().Value;
-            var connectionString = SqlitePathResolver.NormalizeConnectionString(databaseOptions.ConnectionString);
-            options.UseSqlite(connectionString, sqlite => sqlite.MigrationsAssembly(typeof(RoundTableMeetingDbContext).Assembly.FullName));
-            options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
-            options.AddInterceptors(serviceProvider.GetRequiredService<SqliteConnectionInterceptor>());
-            options.EnableDetailedErrors(builder.Environment.IsDevelopment());
-            options.EnableSensitiveDataLogging(false);
-        });
-
-        builder.Services.AddSingleton<IRuntimeEnvironment>(new RuntimeEnvironment(builder.Environment.EnvironmentName));
-        builder.Services.AddSingleton(TimeProvider.System);
-        builder.Services.AddSingleton<MeetingDeletionSignal>();
-        builder.Services.AddSingleton<RoundTableMeeting.Abstraction.Services.IMeetingDeletionSignal>(services => services.GetRequiredService<MeetingDeletionSignal>());
-        builder.Services.AddHostedService<MeetingDeletionRecoveryService>();
-        builder.Services.AddHostedService<MessageEventDispatcherService>();
-        builder.Services.AddSingleton<MeetingJoinRateLimiter>();
-        builder.Services.AddScoped<MeetingJoinRateLimitFilter>();
-        builder.Services.AddExceptionHandler<ApiExceptionHandler>();
-        builder.Services.AddProblemDetails();
-        builder.Services.Configure<ApiBehaviorOptions>(options =>
-        {
-            options.InvalidModelStateResponseFactory = context =>
-                ApiProblemDetailsWriter.CreateValidationResult(context.HttpContext, context.ModelState);
-        });
-
-        return builder;
-    }
+	public static WebApplicationBuilder AddRoundTableMeetingServices(this WebApplicationBuilder builder)
+	{
+		builder.Services.AddAutoService(typeof(RoundTableMeeting.Application.AssemblyMarker).Assembly, typeof(RoundTableMeeting.Repository.Sqlite.AssemblyMarker).Assembly);
+		builder.Services.AddOptions<AgentCollaborationOptions>().Bind(builder.Configuration.GetSection("AgentCollaboration")).ValidateDataAnnotations()
+			.Validate((AgentCollaborationOptions options) => options.MinimumContextCharacterLimit <= options.DefaultContextCharacterLimit, "Minimum context character limit cannot exceed the default.")
+			.Validate((AgentCollaborationOptions options) => options.DefaultContextCharacterLimit <= options.MaximumContextCharacterLimit, "Default context character limit cannot exceed the maximum.")
+			.ValidateOnStart();
+		builder.Services.AddSingleton((IServiceProvider sp) => sp.GetRequiredService<IOptions<AgentCollaborationOptions>>().Value);
+		builder.Services.AddScoped<AgentCollaborationService>();
+		builder.Services.AddScoped((Func<IServiceProvider, IAgentCollaborationService>)((IServiceProvider sp) => sp.GetRequiredService<AgentCollaborationService>()));
+		builder.Services.AddScoped<AgentContextBuilder>();
+		builder.Services.AddScoped<IResolvedMessageAppendCore, ResolvedMessageAppendCore>();
+		builder.Services.AddSingleton<IAgentJoinRateLimiter, AgentJoinRateLimiter>();
+		builder.Services.AddSingleton<IAgentConnectionRegistry, AgentConnectionRegistry>();
+		builder.Services.AddSingleton<IAgentJoinCoordinator, AgentJoinCoordinator>();
+		builder.Services.AddSingleton<IAgentConnectionCompensator, AgentConnectionCompensator>();
+		builder.Services.AddSingleton<IAgentActivityNotifier, AgentActivityNotifier>();
+		builder.Services.AddSingleton<IAgentTaskSignalRegistry, AgentTaskSignalRegistry>();
+		builder.Services.AddScoped<McpTransportSessionAccessor>();
+		builder.Services.AddScoped((Func<IServiceProvider, IMcpTransportSessionAccessor>)((IServiceProvider sp) => sp.GetRequiredService<McpTransportSessionAccessor>()));
+		JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
+		jsonSerializerOptions.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
+		jsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: false));
+		builder.Services.AddMcpServer(delegate(McpServerOptions options)
+		{
+			options.ServerInfo = new Implementation
+			{
+				Name = "round-table-meeting-agent-messaging",
+				Version = "agent-messaging-v1"
+			};
+		})
+#pragma warning disable MCPEXP002
+		.WithHttpTransport(options =>
+		{
+			options.RunSessionHandler = async (context, server, cancellationToken) =>
+			{
+				var connectionRegistry = context.RequestServices.GetRequiredService<IAgentConnectionRegistry>();
+				var connectionCompensator = context.RequestServices.GetRequiredService<IAgentConnectionCompensator>();
+				var activityNotifier = context.RequestServices.GetRequiredService<IAgentActivityNotifier>();
+				var scopeFactory = context.RequestServices.GetRequiredService<IServiceScopeFactory>();
+				var timeProvider = context.RequestServices.GetRequiredService<TimeProvider>();
+				var transportSession = McpTransportSessionAccessor.FromSessionId(server.SessionId);
+				try
+				{
+					await server.RunAsync(cancellationToken);
+				}
+				finally
+				{
+					if (transportSession is { IsEmpty: false } key)
+					{
+						foreach (var registration in connectionRegistry.RemoveRegistrations(key))
+						{
+							await connectionCompensator.DisconnectAsync(registration, timeProvider.GetUtcNow(), CancellationToken.None);
+							await using var scope = scopeFactory.CreateAsyncScope();
+							var activity = await scope.ServiceProvider.GetRequiredService<IAgentActivityService>()
+								.FindAsync(registration.MeetingId, registration.ParticipantId, CancellationToken.None);
+							if (activity is not null) await activityNotifier.NotifyAsync(activity, notifyPresence: true, CancellationToken.None);
+						}
+					}
+				}
+			};
+		})
+#pragma warning restore MCPEXP002
+		.WithTools<McpAgentTools>(jsonSerializerOptions);
+		builder.Services.AddOptions<SqliteDatabaseOptions>().Bind(builder.Configuration.GetSection("Database")).ValidateDataAnnotations()
+			.Validate((SqliteDatabaseOptions options) => SqliteDatabaseOptions.TryValidate(options.ConnectionString, out string _), "Database connection settings are invalid.")
+			.ValidateOnStart();
+		builder.Services.AddOptions<RoundTableMeeting.Authentication.AuthenticationOptions>().Bind(builder.Configuration.GetSection("Authentication")).ValidateDataAnnotations()
+			.Validate((RoundTableMeeting.Authentication.AuthenticationOptions options) => options.Validate(out string _), "Authentication settings are invalid.")
+			.ValidateOnStart();
+		builder.Services.AddOptions<MeetingJoinRateLimitOptions>().Bind(builder.Configuration.GetSection("MeetingJoinRateLimit")).ValidateDataAnnotations()
+			.ValidateOnStart();
+		builder.Services.AddOptions<RealtimeChatOptions>().Bind(builder.Configuration.GetSection("RealtimeChat")).ValidateDataAnnotations()
+			.Validate((RealtimeChatOptions options) => options.HistoryPageSize <= options.MaxHistoryPageSize, "History page size cannot exceed maximum page size.")
+			.Validate((RealtimeChatOptions options) => options.EventRetryMaxSeconds >= options.EventRetryBaseSeconds, "Event retry maximum must not be lower than the base delay.")
+			.Validate(delegate(RealtimeChatOptions options)
+			{
+				MessageSendRateLimitOptions sendRateLimit = options.SendRateLimit;
+				return sendRateLimit != null && sendRateLimit.WindowSeconds > 0 && sendRateLimit.PerUserLimit > 0 && sendRateLimit.PerParticipantLimit > 0 && sendRateLimit.PerSourceLimit > 0;
+			}, "Message send rate limits are invalid.")
+			.ValidateOnStart();
+		builder.Services.AddSingleton((IServiceProvider sp) => sp.GetRequiredService<IOptions<RealtimeChatOptions>>().Value);
+		builder.Services.AddSignalR();
+		builder.Services.AddSingleton<MeetingPresenceRegistry>();
+		builder.Services.AddSingleton<IMeetingRealtimeTermination, MeetingRealtimeTermination>();
+		builder.Services.AddSingleton<MessageSendRateLimiter>();
+		builder.Services.AddScoped<MessageSendRateLimitFilter>();
+		builder.Services.AddSingleton<IMeetingRealtimeGate, MeetingRealtimeGate>();
+		builder.Services.AddSingleton<IMessageMentionParser, MessageMentionParser>();
+		builder.Services.AddScoped<RealtimeChatService>();
+		builder.Services.AddScoped((Func<IServiceProvider, IMessageAppendService>)((IServiceProvider sp) => sp.GetRequiredService<RealtimeChatService>()));
+		builder.Services.AddScoped((Func<IServiceProvider, IMessageHistoryService>)((IServiceProvider sp) => sp.GetRequiredService<RealtimeChatService>()));
+		builder.Services.AddScoped((Func<IServiceProvider, IMeetingChatSubscriptionService>)((IServiceProvider sp) => sp.GetRequiredService<RealtimeChatService>()));
+		builder.Services.AddSingleton<IMessageEventConsumerCatalog, MessageEventConsumerCatalog>();
+		builder.Services.AddScoped<RealtimeMessageBroadcastConsumer>();
+		builder.Services.AddSingleton(new MessageEventConsumerDescriptor("realtime-broadcast-v1", typeof(RealtimeMessageBroadcastConsumer)));
+		builder.Services.AddScoped<AgentMentionTaskConsumer>();
+		builder.Services.AddSingleton(new MessageEventConsumerDescriptor("agent-mention-task-v1", typeof(AgentMentionTaskConsumer)));
+		builder.Services.AddSingleton<IPasswordHasher<UserAccount>, PasswordHasher<UserAccount>>();
+		builder.Services.AddSingleton<PasswordVerificationService>();
+		builder.Services.AddHttpContextAccessor();
+		builder.Services.AddScoped<ICurrentUserContext, HttpCurrentUserContext>();
+		builder.Services.AddAuthentication("RoundTableMeetingCookie").AddCookie("RoundTableMeetingCookie", delegate(CookieAuthenticationOptions options)
+		{
+			options.Cookie.Name = "RoundTableMeeting.Auth";
+			options.Cookie.Path = "/";
+			options.Cookie.HttpOnly = true;
+			options.Cookie.SameSite = SameSiteMode.Lax;
+			options.Cookie.SecurePolicy = (builder.Environment.IsProduction() ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest);
+			options.ExpireTimeSpan = TimeSpan.FromHours(8);
+			options.SlidingExpiration = false;
+			options.Events.OnRedirectToLogin = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 401, "unauthenticated");
+			options.Events.OnRedirectToAccessDenied = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 403, "forbidden");
+		});
+		builder.Services.AddAuthorization(delegate(AuthorizationOptions options)
+		{
+			options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
+		});
+		builder.Services.AddSingleton<SqliteConnectionInterceptor>();
+		builder.Services.AddDbContext<RoundTableMeetingDbContext>(delegate(IServiceProvider serviceProvider, DbContextOptionsBuilder options)
+		{
+			SqliteDatabaseOptions value = serviceProvider.GetRequiredService<IOptions<SqliteDatabaseOptions>>().Value;
+			string connectionString = SqlitePathResolver.NormalizeConnectionString(value.ConnectionString);
+			options.UseSqlite(connectionString, delegate(SqliteDbContextOptionsBuilder sqlite)
+			{
+				sqlite.MigrationsAssembly(typeof(RoundTableMeetingDbContext).Assembly.FullName);
+			});
+			options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
+			options.AddInterceptors(serviceProvider.GetRequiredService<SqliteConnectionInterceptor>());
+			options.EnableDetailedErrors(builder.Environment.IsDevelopment());
+			options.EnableSensitiveDataLogging(sensitiveDataLoggingEnabled: false);
+		});
+		builder.Services.AddSingleton((IRuntimeEnvironment)new RuntimeEnvironment(builder.Environment.EnvironmentName));
+		builder.Services.AddSingleton(TimeProvider.System);
+		builder.Services.AddSingleton<MeetingDeletionSignal>();
+		builder.Services.AddSingleton((Func<IServiceProvider, IMeetingDeletionSignal>)((IServiceProvider services) => services.GetRequiredService<MeetingDeletionSignal>()));
+		builder.Services.AddHostedService<MeetingDeletionRecoveryService>();
+		builder.Services.AddHostedService<AgentConnectionStartupReconciler>();
+		builder.Services.AddHostedService<MessageEventDispatcherService>();
+		builder.Services.AddSingleton<MeetingJoinRateLimiter>();
+		builder.Services.AddScoped<MeetingJoinRateLimitFilter>();
+		builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+		builder.Services.AddProblemDetails();
+		builder.Services.Configure(delegate(ApiBehaviorOptions options)
+		{
+			options.InvalidModelStateResponseFactory = (ActionContext context) => ApiProblemDetailsWriter.CreateValidationResult(context.HttpContext, context.ModelState);
+		});
+		return builder;
+	}
 }

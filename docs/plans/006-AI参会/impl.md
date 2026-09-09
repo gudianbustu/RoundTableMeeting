@@ -25,7 +25,7 @@
 
 1. 不在 Controller、Hub、MCP Tool 或客户端中直接访问 `DbContext`、领域实体或事件 delivery。
 2. 不新增 `AgentMessage`、AI 专用历史表、AI 专用消息广播或平行的回复存储。
-3. 所有 AI 消息最终调用主题四统一消息追加核心；作者身份由服务端根据受信连接会话解析。主题四追加核心提供仅供服务端内部使用的 `IResolvedMessageAppendCore`，只在调用方持有的事务中工作，不开启或提交嵌套事务；Agent 回复服务负责外层事务和任务状态更新。
+3. 所有消息最终调用主题四统一消息追加核心 `IResolvedMessageAppendCore.AppendAsync`；Human/System 由 `RealtimeChatService` 解析作者和持有事务，Agent 由已验证连接解析作者并经 `AppendAgentAsync` 委托同一核心。核心统一写入 Sequence、mentions、event 和 deliveries，不开启或提交嵌套事务；Agent 回复服务同时负责外层事务中的任务状态更新。
 4. 所有跨会议查询首先绑定 `MeetingId`，所有跨参与者操作首先绑定 `AgentParticipantId`，所有跨连接操作还必须匹配当前 MCP 协议会话。
 5. `MessageEventDelivery` 的租约只负责把消息追加事件交给消费者；它不代替 `AgentTaskDeliveryAttempt`，也不表示 Agent 已确认收到上下文。
 6. 新增或修改函数、类、方法前，按仓库约定先执行 GitNexus `impact`；文档阶段不执行代码影响分析。
@@ -65,7 +65,7 @@
 
 1. 在 `Server/RoundTableMeeting.csproj` 增加与 Demo 相同的精确 `ModelContextProtocol.AspNetCore` 包版本；版本统一放入 `Server/Directory.Packages.props` 时，Demo 的现有版本也同步评估，不引入浮动版本。
 2. 在 `Program.cs` 注册 MCP Server、HTTP Transport、主题五工具程序集和 `/mcp` 映射；`/mcp` 显式 `.AllowAnonymous()`，不使用浏览器 Cookie、浏览器 Origin 校验或 SignalR 授权策略，也不能被 SPA fallback 截获。匿名只允许请求进入 MCP 工具分发层：`join_meeting` 自行执行会议码、Active 状态和限流校验，其他工具必须先通过当前 MCP 协议会话绑定校验。MCP SDK 自身的 `JsonSerializerOptions` 必须显式加入 camelCase `JsonStringEnumConverter` 且 `allowIntegerValues=false`；不能假设 MVC `AddJsonOptions` 会影响 MCP Transport。
-3. 在 `Hosting/ServiceCollectionExtensions.cs` 注册 Agent Application、Repository、MCP 上下文适配器、Agent 连接注册表、任务唤醒器、状态事件发布器、Agent 任务消费者和 `AgentConnectionStartupReconciler`。该 HostedService 在对外接收 join 前扫描持久化 `Connected` 记录，把注册表中没有匹配协议绑定的记录条件更新为 `Disconnected`；更新按主键、当前状态和绑定摘要限定，失败记录诊断并重试，不恢复任务或接管参与者。
+3. 在 `Hosting/ServiceCollectionExtensions.cs` 注册 Agent Application、Repository、MCP 上下文适配器、Agent 连接注册表、任务唤醒器、状态事件发布器、Agent 任务消费者和 `AgentConnectionStartupReconciler`。该 HostedService 在对外接收 join 前扫描持久化 `Connected` 记录，并每 30 秒重试遗留补偿，把注册表中没有匹配协议绑定的记录条件更新为 `Disconnected`；扫描与 join 共享名称租约，避免把已提交但尚未注册的正常入会当作遗留连接。更新按主键、当前状态和绑定摘要限定，失败记录诊断，不恢复任务或接管参与者。
 4. 使用 `AgentCollaborationOptions` 的配置节，不能把会议码、MCP 传输令牌或真实测试凭证写入 `appsettings.json`、仓库或普通日志。
 5. 为 MCP 入口建立统一错误映射：领域/数据库异常在 Tool 边界转换为设计中的稳定错误码；不把堆栈、SQL、会议码或完整正文作为 MCP 错误返回。
 6. 为 Agent 模块建立独立的 Application service facade。MCP Tool 只做输入反序列化、当前传输会话读取、取消令牌传递和结果序列化；所有会议、参与者、任务和消息规则进入 facade。
@@ -139,7 +139,7 @@
 
 1. Tool 读取当前 MCP 协议会话，通过 `IMcpTransportSessionAccessor` 与输入的 `connectionSessionId` 做精确匹配，再进入 Agent Collaboration Application。
 2. 先取得短的会议共享 gate 租约并复查绑定、Active 状态与删除屏障；在该短边界内把 `InitialContextState` 从 `Prepared` 原子改为 `Confirmed`，并把该 Agent 的 `DeliveredThroughSequence` 推进到 `InitialSnapshotSequence`。确认事务与任务领取事务分开；确认后进程退出时任务仍为 `Queued`，下一次 wait 不重复推进初始游标。
-3. 初次查询无任务后注册 Agent 级唤醒信号，并在进入长轮询前释放所有会议 gate 租约和数据库事务；等待期间不得持有 `IMeetingRealtimeGate`。唤醒、超时、取消或删除终止后重新取得短租约复查 Active 状态和持久化任务，不能假设 signal 与任务一一对应。
+3. 每次查询前先登记 Agent 级唤醒观察，避免查询与等待之间丢失任务或删除信号；进入长轮询前释放所有会议 gate 租约和数据库事务，等待期间不得持有 `IMeetingRealtimeGate`。唤醒、超时、取消或删除终止后重新取得短租约复查 Active 状态和持久化任务，不能假设 signal 与任务一一对应。
 4. 单次等待达到配置上限且没有任务时返回 `kind=idle`，不修改连接状态；请求取消只结束当前调用，不标记 `Disconnected`。
 5. 在重新取得的短会议租约和 Agent 互斥事务中选择最早可投递任务；队首存在 `Failed`、`Delivered` 或 `Processing` 时，不能越过队首。租约获取、数据库事务和 Agent 互斥的顺序保持一致，响应对象构造不持有会议租约。
 6. 领取事务构造当前任务上下文，创建 `AgentTaskDeliveryAttempt`，提交 `Queued -> Delivered` 和尝试 `Prepared`；完成响应对象构造后，再用短事务提交 `Delivered -> Processing`、尝试 `Prepared -> Delivered` 和 Delivered 游标推进，随后返回 `kind=mention`。
@@ -151,7 +151,7 @@
 1. 验证当前 MCP 协议会话、连接会话、Agent 参与者、任务、投递尝试和幂等键属于同一会议与同一 Agent。
 2. 只允许当前任务为 `Processing`，且投递尝试为当前有效尝试；任务为 `Delivered` 或其他不可回复状态时返回 `task_not_available`，不推进状态或建立替代尝试；已 `Replied` 的任务按回复幂等键返回原消息。
 3. 回复正文使用主题四同一 NFC、Trim 和长度校验，失败返回 `message_validation_failed`，不改变任务状态，允许 Agent 修正后重试同一任务。
-4. 通过受信 `AgentMessageAuthorResolver` 从已验证连接会话取得 ParticipantId 和显示名称，并调用主题四的 `IResolvedMessageAppendCore`；该核心只在当前事务中工作，忽略客户端作者字段。
+4. 在 `AgentCollaborationService` 中从已验证连接会话和参与者记录解析受信 ParticipantId、显示名称，并调用主题四的 `IResolvedMessageAppendCore`；该核心只在当前事务中工作，不接受客户端自选作者身份。
 5. 消息、mentions、追加事件、事件 deliveries 和任务 `Replied` 状态在同一会议事务中提交；不调用会自行开启事务的公开 `IMessageAppendService`。已有回复先按任务 ID 定位，再比较服务端派生幂等键和规范化正文；相同正文返回原消息，正文或幂等键不一致返回 `reply_idempotency_mismatch`。
 6. 提交成功后发布 Agent activity `waiting`，唤醒或允许下一次等待；回复消息中的 Agent `@` 只保存主题四通用提及，主题五消费者不因其创建新任务。
 
@@ -179,6 +179,8 @@
 6. `reply_to_mention` 在删除期间即使持有旧任务 ID 也只能返回 `meeting_not_found`；不能因为幂等记录存在而重新写入消息。
 7. 删除成功后 `MeetingParticipant` 由主题三统一清理；旧会议码、连接会话 ID、任务 ID 和投递尝试 ID 不能重新访问该会议。
 
+删除会移除活动连接登记并唤醒全部等待者；仅保留原 MCP 会话到已终止业务连接的最小绑定，直到协议会话关闭，用于让旧工具调用稳定返回 `meeting_not_found`，不保留任务内容或活动 presence。等待在查询数据库前登记唤醒观察，避免查询与挂起之间丢失删除信号；超时后也重新复查持久化状态。
+
 ### 4.9 阶段 8：网页客户端接入
 
 1. 扩展 `src/features/meetingWorkspace/types/realtimeChat.ts`，增加 `AgentActivityState`、`AgentActivity`、订阅快照的 `agentActivities` 和 ChatState 的 activity Map。
@@ -186,16 +188,21 @@
 3. 扩展 `messageReducer.ts`：处理 activity 快照、activity 增量、会议/代次隔离、删除清空和旧状态丢弃；快照中的 participantId 必须与当前会议详情合并，不创建浏览器侧参与者。对 Agent，activity 是在线和处理状态的权威来源；`OnlineParticipantIds` 及 `participantPresenceChanged` 不得把较新的 activity 覆盖为离线。
 4. 扩展 `ParticipantList.tsx`，Agent 显示类型，以及由 activity 派生的 online/offline 和 waiting/processing/blocked/disconnected 状态；blocked 显示失败码或阻塞摘要，Human 继续使用既有 presence 且不显示 Agent 状态。长名称、失败状态和窄屏布局必须不溢出。
 5. 保持 `RealtimeChatRegion` 的历史高水位和消息去重逻辑不变；AI 回复走既有 `messageAppended`。
-6. 刷新和 SignalR 重连必须依靠 `SubscribeMeeting.agentActivities` 快照恢复，不能假设客户端收到了之前的 activity 事件。
-7. 会议删除、路由切换、注销和组件卸载时清空 activity、取消请求、关闭连接、递增 generation；旧连接回调不得重新写入新会议状态。
+6. 增加邀请入会入口与 `InviteMeetingDialog`：创建者可选人类或 AI Agent，AI 分支输入显示名称后用 `invitePrompts.ts` 生成 MCP 接入提示词并复制，MCP 地址按同源 `origin + /mcp` 推导，`vite.config.ts` 增加 `/mcp` 开发代理；组件设计见主题四客户端组件文档。
+7. 刷新和 SignalR 重连必须依靠 `SubscribeMeeting.agentActivities` 快照恢复，不能假设客户端收到了之前的 activity 事件。
+8. 会议删除、路由切换、注销和组件卸载时清空 activity、取消请求、关闭连接、递增 generation；当前会议变化时关闭创建、加入、邀请和删除弹窗，清空删除确认名称；旧连接回调不得重新写入新会议状态。
 
 ### 4.10 阶段 9：参考 Agent 与联调
 
-1. 在 `docs/plans/006-AI参会/ReferenceAgent/README.md` 记录启动参数、会议码输入、工具调用顺序、环境变量和重复运行方式；不写入真实会议码。
+1. 通用客户端接入、参考 Agent 运行流程、实例级等待配置和错误处理统一维护在 [MCP Agent 接入规范](ReferenceAgent/README.md)，不限定客户端品牌，不写入真实会议码。
 2. 可执行参考客户端放在 `Demo/AI参会联调客户端` 或等价独立 Demo，不修改 `Demo/驻留参与者协作实验` 的业务语义。
 3. 参考客户端按固定顺序调用：`join_meeting` -> 首次 `wait_for_mention` 确认初始上下文 -> 循环等待 -> 处理 `kind=mention` -> `reply_to_mention` -> 再次等待。
 4. 参考客户端记录 TaskId、DeliveryAttemptId 和结果状态，不记录会议码、完整上下文或完整回复正文。
 5. 联调脚本支持普通消息不触发、单次 `@AI`、连续两个 `@AI`、重复回复幂等、idle 超时和删除期间拒绝。
+6. MCP 初始化后复用协议会话；建议每个 Agent 业务连接串行执行 wait/reply，不把该建议扩展成整个 MCP 协议的并发限制。当前已有 get_agent_status，优先使用它诊断任务阻塞。
+7. 服务端 WaitTimeoutSeconds 默认 300 秒；客户端不能给 wait 传入自定义超时参数。需要适配较短客户端时限时，由管理员调整实例级 AgentCollaboration__WaitTimeoutSeconds，并预留客户端、宿主和代理处理余量；不要用反复取消代替正常 idle。
+8. 取消或网络故障后区分连接是否仍有效、任务是否已领取；响应丢失可能导致 Delivered/Processing 队首阻塞，当前不承诺自动恢复。退出时等待远程会话关闭结果，不仅结束本地进程。
+9. 固定回复参考脚本与真实模型 Agent 分开验收；增加至少 10 分钟、跨多次 idle 的驻留测试。连接租约、同名接管和任务恢复仍归主题六，不新增传输协议或恢复错误码。
 
 ### 4.11 阶段 10：生成、测试与发布检查
 
@@ -221,17 +228,19 @@ Server/RoundTableMeeting.Domain/
 
 Server/RoundTableMeeting.Abstraction/
   Contracts/AgentCollaboration/AgentCollaborationContracts.cs
-  Services/IAgentCollaborationServices.cs
+  Services/IAgentCollaborationService.cs
+  Services/IAgentCollaborationCleanupService.cs
+  Services/IAgentConnectionRegistry.cs
+  Services/IAgentTaskSignalRegistry.cs
   Services/IRealtimeChatServices.cs
 
 Server/RoundTableMeeting.Application/AgentCollaboration/
   AgentCollaborationService.cs
   AgentContextBuilder.cs
-  AgentContextFormatter.cs
   AgentReplyIdempotencyKeyFactory.cs
   AgentMentionTaskConsumer.cs
   AgentTaskSignalRegistry.cs
-  AgentConnectionActivityService.cs
+  AgentActivityService.cs
   AgentResidentInstruction.cs
 Server/RoundTableMeeting.Application/RealtimeChat/
   ResolvedMessageAppendCore.cs

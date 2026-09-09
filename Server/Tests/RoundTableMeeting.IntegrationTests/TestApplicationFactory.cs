@@ -42,6 +42,10 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
     /// 是否由当前工厂负责清理临时目录
     /// </summary>
     private readonly bool ownsDatabaseDirectory;
+    /// <summary>
+    /// 可选的 Agent 等待超时覆盖值
+    /// </summary>
+    private readonly int? agentWaitTimeoutSeconds;
 
     /// <summary>
     /// 测试宿主使用的 SQLite 数据库路径
@@ -52,6 +56,14 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
     /// 创建使用隔离临时数据库的测试工厂
     /// </summary>
     public TestApplicationFactory()
+        : this((int?)null)
+    {
+    }
+
+    /// <summary>
+    /// 创建带有 Agent 等待超时覆盖的测试工厂
+    /// </summary>
+    internal TestApplicationFactory(int? agentWaitTimeoutSeconds)
     {
         databaseDirectory = Path.Combine(
             Path.GetTempPath(),
@@ -62,6 +74,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         Directory.CreateDirectory(staticDirectory);
         File.WriteAllText(Path.Combine(staticDirectory, "origin-safe-asset.txt"), "static asset is public");
         ownsDatabaseDirectory = true;
+        this.agentWaitTimeoutSeconds = agentWaitTimeoutSeconds;
     }
 
     /// <summary>
@@ -73,6 +86,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         databaseDirectory = Path.GetDirectoryName(databasePath) ?? throw new ArgumentException("A database directory is required.", nameof(sharedDatabasePath));
         staticDirectory = Path.Combine(databaseDirectory, "wwwroot");
         ownsDatabaseDirectory = false;
+        agentWaitTimeoutSeconds = null;
     }
 
     /// <summary>
@@ -84,7 +98,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         builder.UseWebRoot(staticDirectory);
         builder.ConfigureAppConfiguration((_, configuration) =>
         {
-            configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            var values = new Dictionary<string, string?>
             {
                 ["Database:ConnectionString"] = $"Data Source={DatabasePath};Mode=ReadWriteCreate;Default Timeout=5;Foreign Keys=True;Pooling=False"
                 , ["Authentication:AllowedOrigins:0"] = "http://localhost:5173"
@@ -94,7 +108,12 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
                 , ["Authentication:SeedAccounts:1:Username"] = "bob"
                 , ["Authentication:SeedAccounts:1:Nickname"] = "Bob"
                 , ["Authentication:SeedAccounts:1:Password"] = "test-password-bob"
-            });
+            };
+            if (agentWaitTimeoutSeconds is int waitTimeoutSeconds)
+            {
+                values["AgentCollaboration:WaitTimeoutSeconds"] = waitTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+            configuration.AddInMemoryCollection(values);
         });
         builder.ConfigureServices(services =>
         {

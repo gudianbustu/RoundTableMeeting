@@ -30,6 +30,7 @@ a { color: #176b87; }
 .participant-list, .conversation-placeholder { padding: 20px 0; border-bottom: 1px solid #dbe5e8; }
 .participant-list-items { display: grid; gap: 8px; }
 .participant-list-item { min-width: 0; padding: 10px 0; border-bottom: 1px solid #edf2f3; }
+.participant-list-item-content { min-width: 0; overflow-wrap: anywhere; }
 .conversation-placeholder { min-height: 140px; }
 .realtime-chat-region { display: grid; gap: 12px; min-width: 0; padding: 20px 0; }
 .message-timeline { min-width: 0; border: 1px solid #dbe5e8; border-radius: 6px; background: #fff; }

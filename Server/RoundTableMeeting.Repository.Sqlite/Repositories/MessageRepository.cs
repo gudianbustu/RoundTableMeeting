@@ -21,6 +21,22 @@ public sealed class MessageRepository(RoundTableMeetingDbContext dbContext) : IM
         return current + 1;
     }
 
+    public async Task<MessageSequenceSummary> GetSequenceSummaryAsync(Guid meetingId, CancellationToken cancellationToken = default)
+    {
+        var summary = await dbContext.MeetingMessages.AsNoTracking()
+            .Where(x => x.MeetingId == meetingId)
+            .GroupBy(_ => 1)
+            .Select(group => new MessageSequenceSummary(group.Max(x => x.Sequence), group.Min(x => (long?)x.Sequence), group.Count()))
+            .SingleOrDefaultAsync(cancellationToken);
+        return summary ?? new MessageSequenceSummary(0, null, 0);
+    }
+
+    public async Task<IReadOnlyList<MeetingMessage>> ListThroughSequenceAsync(Guid meetingId, long throughSequence, CancellationToken cancellationToken = default)
+        => await dbContext.MeetingMessages.AsNoTracking()
+            .Where(x => x.MeetingId == meetingId && x.Sequence <= throughSequence)
+            .OrderBy(x => x.Sequence)
+            .ToArrayAsync(cancellationToken);
+
     public async Task<IReadOnlyList<MeetingMessage>> ListAsync(Guid meetingId, long? before, long? after, long? through, int limit, CancellationToken cancellationToken = default)
     {
         var query = dbContext.MeetingMessages.AsNoTracking().Where(x => x.MeetingId == meetingId);
@@ -37,10 +53,19 @@ public sealed class MessageRepository(RoundTableMeetingDbContext dbContext) : IM
     public Task<bool> HasAfterAsync(Guid meetingId, long sequence, long? through, CancellationToken cancellationToken = default)
         => dbContext.MeetingMessages.AnyAsync(x => x.MeetingId == meetingId && x.Sequence > sequence && (!through.HasValue || x.Sequence <= through.Value), cancellationToken);
 
-    public Task<MeetingMessage?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        => dbContext.MeetingMessages.AsNoTracking().SingleOrDefaultAsync(x => x.ID == id, cancellationToken);
+    public Task<MeetingMessage?> FindByIdAsync(Guid meetingId, Guid id, CancellationToken cancellationToken = default)
+        => dbContext.MeetingMessages.AsNoTracking().SingleOrDefaultAsync(x => x.MeetingId == meetingId && x.ID == id, cancellationToken);
 
-    public async Task<IReadOnlyList<MessageMention>> ListMentionsAsync(Guid messageId, CancellationToken cancellationToken = default)
-        => await dbContext.MessageMentions.AsNoTracking().Where(x => x.MessageId == messageId).OrderBy(x => x.StartOffset).ToArrayAsync(cancellationToken);
+    public async Task<IReadOnlyList<MeetingMessage>> ListAfterSequenceThroughAsync(Guid meetingId, long afterSequence, long throughSequence, CancellationToken cancellationToken = default)
+        => await dbContext.MeetingMessages.AsNoTracking()
+            .Where(x => x.MeetingId == meetingId && x.Sequence > afterSequence && x.Sequence <= throughSequence)
+            .OrderBy(x => x.Sequence)
+            .ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<MessageMention>> ListMentionsAsync(Guid meetingId, Guid messageId, CancellationToken cancellationToken = default)
+        => await dbContext.MessageMentions.AsNoTracking()
+            .Where(x => x.MeetingId == meetingId && x.MessageId == messageId)
+            .OrderBy(x => x.StartOffset)
+            .ToArrayAsync(cancellationToken);
 
 }

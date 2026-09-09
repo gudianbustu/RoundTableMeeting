@@ -10,7 +10,7 @@ using RoundTableMeeting.Domain.UnitOfWork;
 using DomainAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
 using TransportAuthorKind = RoundTableMeeting.Abstraction.Contracts.RealtimeChat.MessageAuthorKind;
 namespace RoundTableMeeting.Application.RealtimeChat;
-public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetingRepository meetings, IMeetingParticipantRepository participants, IMessageRepository messages, IUnitOfWork unitOfWork, IMeetingTransactionRunner runner, IMessageMentionParser parser, IMessageEventConsumerCatalog consumerCatalog, RealtimeChatOptions options, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider) : IMessageAppendService, IMessageHistoryService, IMeetingChatSubscriptionService, IScopedDependency<IMessageAppendService>, IScopedDependency<IMessageHistoryService>, IScopedDependency<IMeetingChatSubscriptionService>
+public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetingRepository meetings, IMeetingParticipantRepository participants, IMessageRepository messages, IMeetingTransactionRunner runner, IResolvedMessageAppendCore appendCore, RealtimeChatOptions options, IMeetingRealtimeGate realtimeGate) : IMessageAppendService, IMessageHistoryService, IMeetingChatSubscriptionService, IScopedDependency<IMessageAppendService>, IScopedDependency<IMessageHistoryService>, IScopedDependency<IMeetingChatSubscriptionService>
 {
     public Task<MessageOperationResult<MessageDto>> AppendHumanAsync(Guid meetingId, SubmitMessageRequest request, CancellationToken ct = default) => AppendAsync(meetingId, request, DomainAuthorKind.Human, ct);
     public async Task<MessageOperationResult<MessageDto>> AppendSystemAsync(Guid meetingId, SystemMessageSubmission submission, CancellationToken ct = default)
@@ -38,23 +38,14 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
         {
             var message = await runner.RunAsync(async token =>
             {
-                MeetingMessage.ValidateContentLength(content, options.MaxContentLength);
-                var sequence = await messages.GetNextSequenceAsync(meetingId, token); var authorName = kind == DomainAuthorKind.System ? (systemName ?? "System") : participant!.DisplayName;
-                var entity = kind == DomainAuthorKind.System ? MeetingMessage.CreateSystem(meetingId, sequence, authorName, content, request.ClientSubmissionId, timeProvider.GetUtcNow()) : MeetingMessage.CreateParticipant(meetingId, sequence, participant!.ID, kind, authorName, content, request.ClientSubmissionId, timeProvider.GetUtcNow());
-                unitOfWork.RegisterAdd(entity);
-                if (kind != DomainAuthorKind.System)
-                {
-                    var people = (await participants.ListAsync(meetingId, token)).Select(p => new MentionParticipant(p.ID, p.DisplayName, p.NormalizedDisplayName)).ToArray();
-                    foreach (var mention in parser.Parse(content, people, request.MentionCandidates))
-                        unitOfWork.RegisterAdd(MessageMention.Create(meetingId, entity.ID, mention.ParticipantId, mention.DisplayName, mention.StartOffset, mention.Length));
-                }
-                var appendedEvent = MessageAppendedEvent.Create(meetingId, entity.ID, sequence, entity.CreatedAtUtc);
-                unitOfWork.RegisterAdd(appendedEvent);
-                foreach (var consumerName in consumerCatalog.ConsumerNames)
-                    unitOfWork.RegisterAdd(MessageEventDelivery.Create(appendedEvent.ID, consumerName, entity.CreatedAtUtc));
-                return entity;
+                var author = kind == DomainAuthorKind.System
+                    ? new ResolvedMessageAuthor(null, systemName ?? "System", TransportAuthorKind.System)
+                    : new ResolvedMessageAuthor(participant!.ID, participant.DisplayName, TransportAuthorKind.Human);
+                return await appendCore.AppendAsync(meetingId, author, content, request.ClientSubmissionId, request.MentionCandidates, token);
             }, ct);
-            return new(MessageOperationStatus.Created, await ToDto(message, ct));
+            var persisted = await messages.FindByIdAsync(meetingId, message.MessageId, ct)
+                ?? throw new InvalidOperationException("The committed message could not be read.");
+            return new(MessageOperationStatus.Created, await ToDto(persisted, ct));
         }
         catch (ArgumentException) { return Invalid<MessageDto>("content"); }
         catch (RoundTableMeeting.Domain.Exceptions.MessageAppendConflictException)
@@ -80,6 +71,6 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
     }
     public async Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(Guid meetingId, Guid userId, CancellationToken ct = default)
     { if (userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated); var meeting = await meetings.FindActiveByIdAsync(meetingId, ct); var p = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, ct); if (meeting is null || p is null) return new(MessageOperationStatus.MeetingNotFound); var rows = await messages.ListAsync(meetingId, null, null, null, 1, ct); return new(MessageOperationStatus.Success, new(p.ID, rows.LastOrDefault()?.Sequence ?? 0)); }
-    private async Task<MessageDto> ToDto(MeetingMessage message, CancellationToken ct) { var rows = await messages.ListMentionsAsync(message.ID, ct); var mentions = rows.Select(m => new MessageMentionDto(m.TargetParticipantId, m.TargetDisplayName, m.StartOffset, m.Length)).ToArray(); return new(message.ID, message.MeetingId, message.Sequence, new(message.AuthorParticipantId, message.AuthorKind switch { DomainAuthorKind.Agent => TransportAuthorKind.Agent, DomainAuthorKind.System => TransportAuthorKind.System, _ => TransportAuthorKind.Human }, message.AuthorDisplayName), message.Content, mentions, message.CreatedAtUtc); }
+    private async Task<MessageDto> ToDto(MeetingMessage message, CancellationToken ct) { var rows = await messages.ListMentionsAsync(message.MeetingId, message.ID, ct); var mentions = rows.Select(m => new MessageMentionDto(m.TargetParticipantId, m.TargetDisplayName, m.StartOffset, m.Length)).ToArray(); return new(message.ID, message.MeetingId, message.Sequence, new(message.AuthorParticipantId, message.AuthorKind switch { DomainAuthorKind.Agent => TransportAuthorKind.Agent, DomainAuthorKind.System => TransportAuthorKind.System, _ => TransportAuthorKind.Human }, message.AuthorDisplayName), message.Content, mentions, message.CreatedAtUtc); }
     private static MessageOperationResult<T> Invalid<T>(string field) => new(MessageOperationStatus.ValidationFailed, Errors: new Dictionary<string,string[]> { [field] = ["The value is invalid."] });
 }

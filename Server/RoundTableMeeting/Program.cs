@@ -86,6 +86,7 @@ try
     app.UseAuthorization();
     app.MapOpenApi().AllowAnonymous();
     app.MapControllers();
+    app.MapMcp("/mcp").AllowAnonymous();
     app.MapHub<MeetingChatHub>("/hubs/meeting-chat")
         .RequireAuthorization()
         .WithMetadata(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true), new NoStoreResponseAttribute());
@@ -103,7 +104,8 @@ try
         var excluded = context.Request.Path.StartsWithSegments("/api")
             || context.Request.Path.StartsWithSegments("/openapi")
             || context.Request.Path.StartsWithSegments("/scalar")
-            || context.Request.Path.StartsWithSegments("/hubs");
+            || context.Request.Path.StartsWithSegments("/hubs")
+            || context.Request.Path.StartsWithSegments("/mcp");
         if (!isPageRequest || !acceptsHtml || excluded)
         {
             context.Response.StatusCode = StatusCodes.Status404NotFound;

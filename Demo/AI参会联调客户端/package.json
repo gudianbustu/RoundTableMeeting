@@ -1,0 +1,13 @@
+{
+  "name": "round-table-ai-meeting-reference-agent",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A dependency-free MCP Streamable HTTP reference client for Theme 5 AI meeting participation.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "start": "node index.mjs"
+  }
+}
