@@ -6,7 +6,7 @@ import { CreateUserForm } from './components/CreateUserForm'
 import { ResetPasswordDialog } from './components/ResetPasswordDialog'
 import { UserListTable } from './components/UserListTable'
 
-const user = { userId: 'user-1', username: 'alice', nickname: 'Alice' }
+const user = { userId: 'user-1', username: 'alice', nickname: 'Alice', isAdmin: true }
 
 afterEach(cleanup)
 
@@ -38,7 +38,7 @@ describe('user management components', () => {
   })
 
   it('disables only the busy target row commands', () => {
-    render(<ConfigProvider><UserListTable users={[user, { userId: 'user-2', username: 'bob', nickname: 'Bob' }]} editingUserId="user-1" onEdit={vi.fn()} onReset={vi.fn()} /></ConfigProvider>)
+    render(<ConfigProvider><UserListTable onAdmin={vi.fn()} users={[user, { userId: 'user-2', username: 'bob', nickname: 'Bob', isAdmin: true }]} editingUserId="user-1" onEdit={vi.fn()} onReset={vi.fn()} /></ConfigProvider>)
 
     expect(screen.getByLabelText('修改 alice 的昵称')).toBeDisabled()
     expect(screen.getByLabelText('重置 alice 的密码')).toBeDisabled()

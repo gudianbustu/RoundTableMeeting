@@ -110,9 +110,9 @@ public sealed class AuthenticationServiceTests
     {
         var repository = new MultiAccountRepository();
         var unitOfWork = new FakeUnitOfWork();
-        var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>());
+        var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "secret-a"), new SeedAccountInput("bob", "Bob", "secret-b")]);
+        await seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "secret-a"), new SeedAccountInput("bob", "Bob", "secret-b")], initialAdminUsername: "alice");
 
         Assert.Equal(2, unitOfWork.AddedEntities.Count);
         Assert.Equal(1, unitOfWork.CommitCount);
@@ -145,13 +145,13 @@ public sealed class AuthenticationServiceTests
         existing.InitializePasswordHash("original-hash");
         var repository = new FakeRepository { Account = existing };
         var unitOfWork = new FakeUnitOfWork();
-        var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>());
+        var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-secret")]);
+        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-secret")], initialAdminUsername: "alice");
 
         Assert.Equal("Original", existing.Nickname);
         Assert.Equal("original-hash", existing.PasswordHash);
-        Assert.Equal(0, unitOfWork.CommitCount);
+        Assert.Equal(1, unitOfWork.CommitCount);
     }
 
     [Fact]
@@ -182,9 +182,9 @@ public sealed class AuthenticationServiceTests
     public async Task DuplicateSeedUsernamesFailBeforeAnyRegistration()
     {
         var unitOfWork = new FakeUnitOfWork();
-        var seeder = new AccountSeeder(new MultiAccountRepository(), unitOfWork, new PasswordHasher<UserAccount>());
+        var seeder = new AccountSeeder(new MultiAccountRepository(), unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "a"), new SeedAccountInput(" ALICE ", "Other", "b")]));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "a"), new SeedAccountInput(" ALICE ", "Other", "b")], initialAdminUsername: "alice"));
 
         Assert.Empty(unitOfWork.AddedEntities);
         Assert.Equal(0, unitOfWork.CommitCount);
@@ -197,9 +197,9 @@ public sealed class AuthenticationServiceTests
         existing.InitializePasswordHash("original");
         var repository = new MultiAccountRepository(existing);
         var unitOfWork = new FakeUnitOfWork();
-        var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>());
+        var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Bob", "new-b")]);
+        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Bob", "new-b")], initialAdminUsername: "alice");
 
         Assert.Single(unitOfWork.AddedEntities);
         Assert.Equal(1, unitOfWork.CommitCount);
@@ -210,15 +210,15 @@ public sealed class AuthenticationServiceTests
     public async Task SeedCancellationAndCommitFailurePropagate()
     {
         var cancelled = new CancellationToken(canceled: true);
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new AccountSeeder(new MultiAccountRepository(), new FakeUnitOfWork(), new PasswordHasher<UserAccount>()).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")], cancelled));
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new AccountSeeder(new MultiAccountRepository(), new FakeUnitOfWork(), new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(new FakeUnitOfWork())).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")], cancelled));
 
         var failedUnitOfWork = new FakeUnitOfWork { CommitException = new InvalidOperationException("commit failed") };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new AccountSeeder(new MultiAccountRepository(), failedUnitOfWork, new PasswordHasher<UserAccount>()).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")]));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new AccountSeeder(new MultiAccountRepository(), failedUnitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(failedUnitOfWork)).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")], initialAdminUsername: "alice"));
         Assert.Equal(1, failedUnitOfWork.CommitCount);
     }
 
     [Fact]
-    public async Task SeedRepeatedWithTwoExistingAccountsDoesNotCommit()
+    public async Task SeedRepeatedWithTwoExistingAccountsPreservesProfile()
     {
         var alice = UserAccount.Create("alice", "Alice");
         alice.InitializePasswordHash("hash-a");
@@ -227,10 +227,10 @@ public sealed class AuthenticationServiceTests
         var repository = new MultiAccountRepository(alice, bob);
         var unitOfWork = new FakeUnitOfWork();
 
-        await new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>()).SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Changed", "new-b")]);
+        await new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork)).SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Changed", "new-b")], initialAdminUsername: "alice");
 
         Assert.Empty(unitOfWork.AddedEntities);
-        Assert.Equal(0, unitOfWork.CommitCount);
+        Assert.Equal(1, unitOfWork.CommitCount);
         Assert.Equal("hash-a", alice.PasswordHash);
         Assert.Equal("hash-b", bob.PasswordHash);
     }
@@ -246,6 +246,10 @@ public sealed class AuthenticationServiceTests
         public Task<IReadOnlyList<UserAccount>> ListAllAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<UserAccount>>(Account is null ? [] : [Account]);
         public Task<UserAccount?> FindByNormalizedUsernameAsync(string normalizedUsername, CancellationToken cancellationToken = default) { LookupCount++; return Task.FromResult(Account?.NormalizedUsername == normalizedUsername ? Account : null); }
         public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(Account?.ID == id ? Account : null);
+        public async Task<int> CountAdministratorsAsync(CancellationToken cancellationToken = default) => (await ListAllAsync(cancellationToken)).Count(a => a.IsAdmin);
+        public async Task UpdateNicknameAsync(Guid id, string nickname, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.ChangeNickname(nickname);
+        public async Task UpdatePasswordHashAsync(Guid id, string hash, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.ReplacePasswordHash(hash);
+        public async Task UpdateAdministratorAsync(Guid id, bool value, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.SetAdministrator(value);
         private static RoundTableMeetingDbContext CreateContext()
             => new(new DbContextOptionsBuilder<RoundTableMeetingDbContext>().UseSqlite("Data Source=:memory:").Options);
     }
@@ -259,6 +263,10 @@ public sealed class AuthenticationServiceTests
             => Task.FromResult(AddedAccounts.SingleOrDefault(account => account.NormalizedUsername == normalizedUsername));
         public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
             => Task.FromResult(AddedAccounts.SingleOrDefault(account => account.ID == id));
+        public async Task<int> CountAdministratorsAsync(CancellationToken cancellationToken = default) => (await ListAllAsync(cancellationToken)).Count(a => a.IsAdmin);
+        public async Task UpdateNicknameAsync(Guid id, string nickname, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.ChangeNickname(nickname);
+        public async Task UpdatePasswordHashAsync(Guid id, string hash, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.ReplacePasswordHash(hash);
+        public async Task UpdateAdministratorAsync(Guid id, bool value, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.SetAdministrator(value);
         private static RoundTableMeetingDbContext CreateContext()
             => new(new DbContextOptionsBuilder<RoundTableMeetingDbContext>().UseSqlite("Data Source=:memory:").Options);
     }

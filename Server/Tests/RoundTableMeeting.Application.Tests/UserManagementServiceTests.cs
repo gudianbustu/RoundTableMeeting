@@ -1,3 +1,4 @@
+using RoundTableMeeting.Abstraction.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using RoundTableMeeting.Abstraction.Contracts.UserManagement;
@@ -21,7 +22,7 @@ public sealed class UserManagementServiceTests
         var result = await Service(new FakeRepository(first, second), new FakeUnitOfWork()).ListUsersAsync();
 
         Assert.Equal([first.ID, second.ID], result.Select(item => item.UserId));
-        Assert.All(result, item => Assert.Equal(["UserId", "Username", "Nickname"], item.GetType().GetProperties().Select(property => property.Name)));
+        Assert.All(result, item => Assert.Equal(["UserId", "Username", "Nickname", "IsAdmin"], item.GetType().GetProperties().Select(property => property.Name)));
     }
 
     [Fact]
@@ -47,7 +48,7 @@ public sealed class UserManagementServiceTests
         Assert.Equal(UserManagementStatus.ValidationFailed, result.Status);
         Assert.Equal(["initialPassword", "nickname", "username"], result.Errors!.Keys.OrderBy(key => key));
         Assert.Empty(unitOfWork.Added);
-        Assert.Equal(0, unitOfWork.CommitCount);
+        Assert.Equal(1, unitOfWork.CommitCount);
     }
 
     [Fact]
@@ -99,7 +100,7 @@ public sealed class UserManagementServiceTests
     public async Task ResetPasswordMissingAccountDoesNotHash()
     {
         var hasher = new RecordingHasher();
-        var result = await new UserManagementService(new FakeRepository(), new FakeUnitOfWork(), hasher).ResetPasswordAsync(Guid.NewGuid());
+        var result = await Service(new FakeRepository(), new FakeUnitOfWork(), hasher).ResetPasswordAsync(Guid.NewGuid());
 
         Assert.Equal(UserManagementStatus.UserNotFound, result.Status);
         Assert.Equal(0, hasher.HashCalls);
@@ -114,8 +115,11 @@ public sealed class UserManagementServiceTests
         Assert.Equal(UserManagementStatus.UsernameConflict, result.Status);
     }
 
-    private static UserManagementService Service(FakeRepository repository, FakeUnitOfWork unitOfWork)
-        => new(repository, unitOfWork, new PasswordHasher<UserAccount>());
+    private static UserManagementService Service(FakeRepository repository, FakeUnitOfWork unitOfWork, IPasswordHasher<UserAccount>? hasher = null)
+        {
+        repository.Actor.SetAdministrator(true);
+        return new(repository, unitOfWork, hasher ?? new PasswordHasher<UserAccount>(), new ActorContext(repository.Actor.ID), new TestAccountTransactionRunner(unitOfWork));
+    }
 
     private static UserAccount Account(string username, string nickname, string hash = "hash")
     {
@@ -126,11 +130,16 @@ public sealed class UserManagementServiceTests
 
     private sealed class FakeRepository : SqliteRepository<UserAccount, Guid>, IUserAccountRepository
     {
+        public UserAccount Actor { get; } = Account("operator", "Operator");
         private readonly List<UserAccount> accounts;
         public FakeRepository(params UserAccount[] accounts) : base(CreateContext()) => this.accounts = [.. accounts];
         public Task<IReadOnlyList<UserAccount>> ListAllAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<UserAccount>>(accounts);
         public Task<UserAccount?> FindByNormalizedUsernameAsync(string normalizedUsername, CancellationToken cancellationToken = default) => Task.FromResult(accounts.SingleOrDefault(account => account.NormalizedUsername == normalizedUsername));
-        public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(accounts.SingleOrDefault(account => account.ID == id));
+        public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default) => Task.FromResult(id == Actor.ID ? Actor : accounts.SingleOrDefault(account => account.ID == id));
+        public async Task<int> CountAdministratorsAsync(CancellationToken cancellationToken = default) => (await ListAllAsync(cancellationToken)).Count(a => a.IsAdmin);
+        public async Task UpdateNicknameAsync(Guid id, string nickname, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.ChangeNickname(nickname);
+        public async Task UpdatePasswordHashAsync(Guid id, string hash, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.ReplacePasswordHash(hash);
+        public async Task UpdateAdministratorAsync(Guid id, bool value, CancellationToken cancellationToken = default) => (await FindByIdAsync(id, cancellationToken))!.SetAdministrator(value);
         private static RoundTableMeetingDbContext CreateContext() => new(new DbContextOptionsBuilder<RoundTableMeetingDbContext>().UseSqlite("Data Source=:memory:").Options);
     }
 
@@ -144,6 +153,8 @@ public sealed class UserManagementServiceTests
         public void RegisterDelete(Materal.TTA.Common.IEntity<Guid> entity) { }
         public Task<int> CommitAsync(CancellationToken cancellationToken = default) { CommitCount++; return CommitException is null ? Task.FromResult(1) : Task.FromException<int>(CommitException); }
     }
+
+    private sealed record ActorContext(Guid? UserId) : ICurrentUserContext { public bool IsAuthenticated => true; }
 
     private sealed class RecordingHasher : IPasswordHasher<UserAccount>
     {

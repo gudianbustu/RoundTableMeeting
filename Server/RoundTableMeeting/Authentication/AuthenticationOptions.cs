@@ -9,8 +9,10 @@ namespace RoundTableMeeting.Authentication;
 public sealed class AuthenticationOptions
 {
     /// <summary>
-    /// 配置节名称
+    /// 仅当尚无管理员时使用的显式初始管理员用户名
     /// </summary>
+    public string? InitialAdminUsername { get; set; }
+
     public const string SectionName = "Authentication";
 
     /// <summary>

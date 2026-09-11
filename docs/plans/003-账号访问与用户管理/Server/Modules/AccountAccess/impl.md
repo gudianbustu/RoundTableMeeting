@@ -8,39 +8,22 @@
 
 ## 2. 实施顺序
 
-### 2.1 Domain
+### 2.1 已有实现的复用
 
-1. 新增 UserAccount : BaseEntity。
-2. 新增用户名规范化纯函数：Trim、Unicode NFC、空值拒绝、ToUpperInvariant 比较值。
-3. 新增 IUserAccountRepository，声明按规范化用户名、按 Guid 查询和必要的新增查询能力。
-4. 增加 Domain.Tests 的实体、规范化和主键测试。
+保留 UserAccount 工厂、用户名规范化、PasswordVerificationService、LoginRequest、AuthenticateResult、CurrentUserResult 和当前用户上下文。仅给 UserAccount、CurrentUserDto 增加 IsAdmin，并修改 AuthenticationService 映射；不重新实现登录、dummy hash 或 Cookie。
 
-### 2.2 Abstraction
+### 2.2 初始化增量
 
-新增 LoginRequest、CurrentUserDto、SeedAccountInput、AuthenticateResult、CurrentUserResult、IAuthenticationService、ICurrentUserContext 和 IAccountSeeder。DTO 不包含 PasswordHash、Cookie、Claim 或 EF 类型。
+1. IAccountSeeder.SeedAsync 增加 string? initialAdminUsername 参数，Program 从 Options 传入；同步所有调用与测试 fake。
+2. AccountSeeder 注入账号事务执行器。取得写锁后创建缺失普通用户；无管理员时提升显式指定账号，新增与提升共同提交。
+3. 已有管理员时不覆盖身份；无新增但有提升仍须提交。数据库异常和取消整笔回滚。
+4. 仓储与迁移实施落点见 [服务端实现方案](../../impl.md)第 3、15 节；保留原迁移，仅新增 AddUserAccountAdmin。
 
-接口形状固定为：AuthenticateAsync(LoginRequest, CancellationToken) 返回 AuthenticateResult，状态只含 Success、InvalidCredentials、ValidationFailed；ValidationFailed 携带 Errors 字典，键固定为 username/password。GetCurrentUserAsync(CancellationToken) 返回 CurrentUserResult，状态只含 Success、Unauthenticated；SeedAsync(IReadOnlyCollection<SeedAccountInput>, CancellationToken) 无成功业务返回值，失败直接抛出。Web 只根据状态枚举映射 HTTP，不根据错误文案判断。
+### 2.3 结果与分层
 
-ICurrentUserContext 固定为 `bool IsAuthenticated` 和 `Guid? UserId`。UserAccount 通过 Create 工厂建立用户名和昵称，再由 AccountSeeder 计算哈希并调用一次性 InitializePasswordHash；Repository 不接受 PasswordHash 为空的新增账号。
+AuthenticateAsync 与 GetCurrentUserAsync 的状态枚举保持现有定义，DTO 增加 bool IsAdmin。ICurrentUserContext 仍为 bool IsAuthenticated 与 Guid? UserId。新增管理员查询服务不把权限缓存到 Cookie。
 
-### 2.3 Application
-
-1. 消费由 Web 组合根注册的 IPasswordHasher<UserAccount>。
-2. 实现 PasswordVerificationService，进程启动时生成一次 dummy account/hash；账号不存在时仍执行等价 VerifyHashedPassword，降低用户名时序枚举风险。
-3. 实现 AuthenticationService。
-4. 实现 AccountSeeder。
-5. 所有异步方法传递 CancellationToken。
-6. 认证结果使用统一结果类型，普通无效凭证不使用异常表示。
-7. 数据库、哈希器或工作单元异常向 Web 集中错误处理边界上抛。
-
-### 2.4 Repository.Sqlite
-
-1. 在 DbContext 增加 DbSet<UserAccount>。
-2. 增加 UserAccountConfiguration。
-3. 对 NormalizedUsername 建立精确唯一索引。
-4. 实现按规范化值查询。
-5. 生成并验证 AddUserAccounts Migration。
-6. 使用真实 SQLite 测试 NoTracking、唯一约束、查询和种子持久化。
+Application 不引用 Options、HttpContext 或 EF 类型，Repository 不读取秘密或验证密码。对既有认证异常和取消语义做回归，不以重构扩大本轮范围。
 
 ## 3. 用户名规范化
 
@@ -64,7 +47,7 @@ Application 不创建或清除 Cookie，不访问 HttpContext，不返回 Passwo
 
 ## 5. AccountSeeder
 
-AccountSeeder 接收 Web 已验证的种子输入集合，重新规范化并检查输入内重复，查询已有账号，缺失账号生成哈希并注册新增，已有账号不覆盖资料，有新增时统一 CommitAsync。配置为空、用户名冲突、哈希失败、数据库失败和取消均使初始化失败。
+AccountSeeder 接收种子集合与 initialAdminUsername，在写事务中创建缺失普通用户；无管理员时提升显式指定账号，已有管理员时不覆盖资料或身份。具体顺序与失败回滚按 Server/design.md 第 5.3 节执行。
 
 ## 6. 结果和错误映射
 
@@ -92,3 +75,11 @@ Domain.Tests 只测试纯规范化和实体约束，不引用 Web 或 EF Core。
 - IAccountSeeder 由 Web 在 Migration 后调用。
 - ICurrentUserContext 实现在 Web，不在 Application。
 - AuthenticationController 只通过 Application 服务取得结果。
+
+## 管理员资料与初始管理员
+
+CurrentUserDto 增加必填 bool IsAdmin；登录与 me 都从数据库映射，不从 Cookie 读取管理员快照。ICurrentUserContext 仍只提供 IsAuthenticated 和 UserId；当前身份不存在时保持 401 语义。
+
+种子契约增加可选 initialAdminUsername，由 Web 从 Authentication:InitialAdminUsername 映射。缺失账号默认普通用户；当数据库没有管理员时，必须通过显式配置找到一个账号并在事务中提升，否则启动失败。有管理员时忽略该配置，不覆盖已有昵称、密码和身份。完整初始化顺序以 [服务端设计](../../design.md)第 5.3 节为唯一规则。
+
+管理员运行期查询通过 IAdministratorAccessService 读取当前数据库；不引入角色 Claim 或跨请求缓存。个人修改密码由独立 AccountSettingsService 执行，复用现有 PasswordHasher/密码验证规则，不混入登录返回类型或 Cookie 操作。

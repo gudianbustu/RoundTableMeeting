@@ -410,7 +410,8 @@ public sealed partial class AgentRecoveryMigrationTests
             "Earlier history " + new string('x', 300), Guid.NewGuid(), Now);
         var last = MeetingMessage.CreateParticipant(meeting.ID, 2, human.ID, MessageAuthorKind.Human, human.DisplayName,
             "中文😀\\value\r\nnext", Guid.NewGuid(), Now);
-        db.AddRange(user, meeting, human, agent, first, last);
+        await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({user.ID}, {user.Username}, {user.NormalizedUsername}, {user.Nickname}, {user.PasswordHash})");
+        db.AddRange(meeting, human, agent, first, last);
         await db.SaveChangesAsync();
         var connectionId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""

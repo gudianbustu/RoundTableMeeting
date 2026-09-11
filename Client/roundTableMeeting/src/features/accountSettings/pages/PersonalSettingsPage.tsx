@@ -1,0 +1,109 @@
+import { Alert, Button, Card, Col, Descriptions, Form, Input, Row, Typography } from 'antd'
+import { useEffect, useRef, useState } from 'react'
+import { useAuthentication } from '@/features/authentication'
+import { toApiError } from '@/api/errors/toApiError'
+import { updateMyNickname } from '../api/updateMyNickname'
+import { changeMyPassword } from '../api/changeMyPassword'
+import type { ChangeMyPasswordInput, UpdateMyNicknameInput } from '../types/accountSettings'
+
+export function PersonalSettingsPage() {
+  const { state, identityRevision, refreshCurrentUser } = useAuthentication()
+  const [nicknameForm] = Form.useForm<UpdateMyNicknameInput>()
+  const [passwordForm] = Form.useForm<ChangeMyPasswordInput & { confirmPassword: string }>()
+  const [nicknameBusy, setNicknameBusy] = useState(false)
+  const [passwordBusy, setPasswordBusy] = useState(false)
+  const [nicknameMessage, setNicknameMessage] = useState('')
+  const [passwordMessage, setPasswordMessage] = useState('')
+  const [syncNeeded, setSyncNeeded] = useState(false)
+  const nicknameController = useRef<AbortController | undefined>(undefined)
+  const passwordController = useRef<AbortController | undefined>(undefined)
+  const generation = useRef(0)
+  const syncVersion = useRef(0)
+  useEffect(() => {
+    setNicknameBusy(false); setPasswordBusy(false)
+    passwordForm.resetFields()
+    return () => {
+      generation.current++
+      syncVersion.current++
+      nicknameController.current?.abort(); passwordController.current?.abort()
+    }
+  }, [identityRevision, passwordForm])
+  const syncProfile = async (version = generation.current) => {
+    const sync = ++syncVersion.current
+    try {
+      const result = await refreshCurrentUser()
+      if (version !== generation.current || sync !== syncVersion.current) return
+      const synced = result.status === 'refreshed'
+      setSyncNeeded(!synced)
+      setNicknameMessage(synced ? '昵称已保存' : '昵称已保存，资料同步已取消，请重试同步。')
+    } catch {
+      if (version !== generation.current || sync !== syncVersion.current) return
+      setSyncNeeded(true); setNicknameMessage('昵称已保存，资料同步失败，请重试同步。')
+    }
+  }
+  const saveNickname = async (input: UpdateMyNicknameInput) => {
+    nicknameController.current?.abort()
+    const controller = new AbortController(); nicknameController.current = controller
+    const version = generation.current
+    setNicknameBusy(true); setNicknameMessage(''); setSyncNeeded(false)
+    try {
+      await updateMyNickname(input, controller.signal)
+      if (controller.signal.aborted || version !== generation.current) return
+      setNicknameMessage('昵称已保存')
+      await syncProfile(version)
+    } catch (error) {
+      if (controller.signal.aborted || version !== generation.current) return
+      const apiError = toApiError(error)
+      nicknameForm.setFields([{ name: 'nickname', errors: apiError.fieldErrors?.nickname ?? [] }])
+      setNicknameMessage('昵称保存失败，请检查输入后重试。')
+    } finally {
+      if (!controller.signal.aborted && version === generation.current) setNicknameBusy(false)
+    }
+  }
+  const savePassword = async (input: ChangeMyPasswordInput & { confirmPassword: string }) => {
+    passwordController.current?.abort()
+    const controller = new AbortController(); passwordController.current = controller
+    const version = generation.current
+    setPasswordBusy(true); setPasswordMessage('')
+    try {
+      await changeMyPassword({ currentPassword: input.currentPassword, newPassword: input.newPassword }, controller.signal)
+      if (!controller.signal.aborted && version === generation.current) setPasswordMessage('密码已修改')
+    } catch (error) {
+      if (controller.signal.aborted || version !== generation.current) return
+      const apiError = toApiError(error)
+      setPasswordMessage(apiError.fieldErrors?.currentPassword ? '当前密码不正确，请重新输入。' : '密码修改失败，请重试。')
+    } finally {
+      if (!controller.signal.aborted && version === generation.current) { passwordForm.resetFields(); setPasswordBusy(false) }
+    }
+  }
+  if (state.status !== 'authenticated') return null
+  return <section style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
+    <Typography.Title level={2} style={{ marginTop: 0 }}>个人设置</Typography.Title>
+    <Row gutter={[24, 24]} align="stretch">
+      <Col xs={24} md={12} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        <Card title="基础信息">
+          <Descriptions column={1} items={[{ key: 'username', label: '用户名', children: state.user.username }, { key: 'role', label: '身份', children: state.user.isAdmin ? '管理员' : '普通用户' }]} />
+        </Card>
+      <Card title="修改昵称">
+        <Form form={nicknameForm} layout="vertical" initialValues={{ nickname: state.user.nickname }} onFinish={saveNickname} disabled={nicknameBusy}>
+          <Form.Item name="nickname" label="昵称" rules={[{ required: true, whitespace: true, message: '请输入昵称' }, { max: 64, message: '昵称最多 64 个字符' }]}><Input maxLength={64} autoComplete="nickname" /></Form.Item>
+          <Button htmlType="submit" type="primary" loading={nicknameBusy}>保存昵称</Button>
+        </Form>
+        {nicknameMessage && <Alert style={{ marginTop: 16 }} title={nicknameMessage} type={syncNeeded ? 'warning' : 'info'} />}
+        {syncNeeded && <Button onClick={() => void syncProfile()}>重试资料同步</Button>}
+      </Card>
+      </Col>
+      <Col xs={24} md={12}>
+      <Card title="修改密码" style={{ height: '100%' }}>
+        <Form form={passwordForm} layout="vertical" onFinish={savePassword} disabled={passwordBusy}>
+          <Form.Item name="currentPassword" label="当前密码" rules={[{ required: true, message: '请输入当前密码' }, { max: 256 }]}><Input.Password autoComplete="current-password" /></Form.Item>
+          <Form.Item name="newPassword" label="新密码" rules={[{ required: true, whitespace: true, message: '请输入新密码' }, { max: 256, message: '密码最多 256 个字符' }]}><Input.Password autoComplete="new-password" /></Form.Item>
+          <Form.Item name="confirmPassword" label="确认新密码" dependencies={['newPassword']} rules={[{ required: true, message: '请再次输入新密码' }, ({ getFieldValue }) => ({ validator: (_, value) => value === getFieldValue('newPassword') ? Promise.resolve() : Promise.reject(new Error('两次密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item>
+          <Button htmlType="submit" type="primary" loading={passwordBusy}>修改密码</Button>
+        </Form>
+        {passwordMessage && <Alert style={{ marginTop: 16 }} title={passwordMessage} type="info" />}
+      </Card>
+      </Col>
+    </Row>
+  </section>
+}

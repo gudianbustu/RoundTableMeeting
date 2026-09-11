@@ -25,3 +25,5 @@
 ## 4. 安全边界
 
 密码不写入 URL、localStorage、sessionStorage、日志或错误详情。浏览器自动填充使用 `new-password` 语义。
+
+创建结果固定为普通用户；表单不接受 isAdmin。管理员身份需要在创建成功后通过列表的独立操作授予。

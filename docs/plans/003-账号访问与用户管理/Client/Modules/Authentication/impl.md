@@ -4,7 +4,7 @@
 
 types/authentication.ts 定义 CurrentUserViewModel 和判别联合状态：checking、authenticated、anonymous、error。authenticated 必须携带 user；其他状态不保留过期用户。
 
-Context 对生产代码不公开，只通过 useAuthentication 使用；测试通过 `src/test/authenticationTestUtils.tsx` 中的专用 Provider 注入值。Context 值包含 state、login(username,password)、logout()、retry()、refreshCurrentUser()、isLoggingIn、isLoggingOut 和 operationError。login 返回 Promise<CurrentUserViewModel>，logout/retry/refreshCurrentUser 返回 Promise<void>；页面负责登录成功导航，Provider 负责状态真实性和操作错误。
+Context 对生产代码不公开，只通过 useAuthentication 使用；测试通过 `src/test/authenticationTestUtils.tsx` 中的专用 Provider 注入值。Context 值包含 state、login(username,password)、logout()、retry()、refreshCurrentUser()、isLoggingIn、isLoggingOut 和 operationError。login 返回 Promise<CurrentUserViewModel>，logout/retry 返回 Promise<void>，refreshCurrentUser 返回 Promise<RefreshCurrentUserResult>，Context 额外暴露 identityRevision 和 refreshRevision；页面负责登录成功导航，Provider 负责状态真实性和操作错误。
 
 ## 2. 初始化
 
@@ -54,14 +54,14 @@ Provider 挂载时订阅 unauthorized 事件，卸载时取消订阅。事件到
 
 ### 6.1 refreshCurrentUser
 
-用户管理模块成功修改当前账号昵称后调用 refreshCurrentUser：
+资料同步和 AdminGate 共用 refreshCurrentUser，结果类型及版本规则以 [认证模块设计](design.md)为准：
 
-1. 分配新的 operationId 和 AbortController，但不把 state 改为 checking。
+1. 递增 refreshRevision 并创建 AbortController，使上一资料请求失效；捕获本次 identityRevision，不因普通资料刷新改变身份版本或全局认证 operationId，不把 state 改为 checking。
 2. 调用 getCurrentUser。
-3. 成功时替换 authenticated.user。
-4. 401 时清理状态并转 anonymous。
-5. network/unknown 保留原 authenticated 用户并向调用方抛出错误，不显示假昵称。
-6. 新的登录、退出或全局 401 可以取消资料刷新，旧结果不能覆盖新状态。
+3. 响应仅在 refreshRevision 和捕获的 identityRevision 均有效、当前仍 authenticated 时处理；比较当前与返回的 UserId/IsAdmin，有变化则递增 identityRevision，再同步 user 并返回 refreshed、user 和两个最新版本。只有昵称变化时身份版本不变；首次路由确认检查两个版本，已放行页面只绑定身份版本。
+4. 401 时清理状态并转 anonymous，向调用方抛出 ApiError，不返回 refreshed；当前已非 authenticated 的过期响应返回 cancelled。
+5. network/unknown 保留原 authenticated 用户并向调用方抛出错误；首次确认不得放行，已确认页面的普通资料同步失败不卸载页面。
+6. 新刷新只使旧 refreshRevision 失效；登录、退出、重新初始化或全局 401 使 identityRevision 失效并取消资料请求。旧请求与取消请求返回 { status: cancelled }，不能以 void 或空值表示成功。取消不进入全局错误。
 
 ### 6.2 Hook 约束
 
@@ -79,4 +79,10 @@ features/authentication/index.ts 只导出 AuthenticationProvider、LoginPage、
 - 退出成功、已经未认证、网络失败。
 - 全局 401 清理状态，invalid_credentials 不清理。
 - Provider 卸载后不更新状态。
-- refreshCurrentUser 成功、401、网络失败和被更新操作取消。
+- refreshCurrentUser 的 refreshed/cancelled 区分、401、网络错误、并发刷新替代，以及旧成功结果晚于身份版本变化时不放行。
+
+## 管理员资料同步
+
+CurrentUserViewModel 增加必填 boolean isAdmin，登录和 me 适配必须接受 false。refreshCurrentUser 同步昵称和身份，不存储角色 Claim，不使用 localStorage 持久化权限。AdminGate 在管理页进入时调用此操作确认身份；401 清理登录，forbidden 不等于退出。
+
+个人设置保存昵称、本人管理员身份变更后使用同一刷新入口。Provider 的请求版本与取消机制必须避免旧响应覆盖退出、切换账号或最新身份；管理页收到 forbidden 后即使刷新失败也保持拒绝访问，不能依赖 Provider 保留的旧资料重新放行。

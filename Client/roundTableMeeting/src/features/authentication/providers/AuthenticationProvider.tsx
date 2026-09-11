@@ -5,11 +5,26 @@ import { getCurrentUser } from '../api/getCurrentUser'
 import { login as loginRequest } from '../api/login'
 import { logout as logoutRequest } from '../api/logout'
 import { AuthenticationContext } from '../context/AuthenticationContext'
-import type { AuthenticationState } from '../types/authentication'
+import type { AuthenticationState, RefreshCurrentUserResult } from '../types/authentication'
 
 /** 管理认证初始化、登录退出操作和取消 */
 export function AuthenticationProvider({ children }: PropsWithChildren) {
-  const [state, setState] = useState<AuthenticationState>({ status: 'checking' })
+  const [state, storeState] = useState<AuthenticationState>({ status: 'checking' })
+  const stateRef = useRef<AuthenticationState>({ status: 'checking' })
+  const identity = useRef(0)
+  const refresh = useRef(0)
+  const [identityRevision, setIdentityRevision] = useState(0)
+  const [refreshRevision, setRefreshRevision] = useState(0)
+  const invalidateAdminAccess = useCallback(() => { setIdentityRevision(++identity.current) }, [])
+  const setState = useCallback((next: AuthenticationState) => {
+    const previous = stateRef.current
+    if (previous.status !== next.status || (previous.status === 'authenticated' && next.status === 'authenticated'
+      && (previous.user.userId !== next.user.userId || previous.user.isAdmin !== next.user.isAdmin))) {
+      setIdentityRevision(++identity.current)
+    }
+    stateRef.current = next
+    storeState(next)
+  }, [])
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [operationError, setOperationError] = useState<ApiError>()
@@ -25,6 +40,7 @@ export function AuthenticationProvider({ children }: PropsWithChildren) {
     setOperationError(undefined)
     const controller = new AbortController()
     controllerRef.current = controller
+    setIdentityRevision(++identity.current)
     operationId.current += 1
     return { id: operationId.current, controller }
   }, [])
@@ -32,6 +48,7 @@ export function AuthenticationProvider({ children }: PropsWithChildren) {
     controllerRef.current?.abort()
     refreshControllerRef.current?.abort()
     controllerRef.current = undefined
+    setIdentityRevision(++identity.current)
     operationId.current += 1
     setIsLoggingIn(false)
     setIsLoggingOut(false)
@@ -94,29 +111,31 @@ export function AuthenticationProvider({ children }: PropsWithChildren) {
       }
     }
   }, [beginOperation])
-  const refreshCurrentUser = useCallback(async (): Promise<void> => {
+  const refreshCurrentUser = useCallback(async (): Promise<RefreshCurrentUserResult> => {
+    if (stateRef.current.status !== 'authenticated' || controllerRef.current && (isLoggingIn || isLoggingOut)) return { status: 'cancelled' }
     refreshControllerRef.current?.abort()
     const controller = new AbortController()
     refreshControllerRef.current = controller
-    const id = ++operationId.current
-    const wasAuthenticated = state.status === 'authenticated'
+    const id = ++refresh.current
+    setRefreshRevision(id)
+    const identityAtStart = identity.current
     try {
       const user = await getCurrentUser(controller.signal)
-      if (id !== operationId.current || controller.signal.aborted) return
-      setState((current) => current.status === 'authenticated' ? { status: 'authenticated', user } : current)
+      if (controller.signal.aborted || id !== refresh.current || identityAtStart !== identity.current) return { status: 'cancelled' }
+      setState({ status: 'authenticated', user })
+      return { status: 'refreshed', user, identityRevision: identity.current, refreshRevision: id }
     } catch (error) {
-      if (controller.signal.aborted || id !== operationId.current) return
+      if (controller.signal.aborted || id !== refresh.current || identityAtStart !== identity.current) return { status: 'cancelled' }
       const apiError = error as ApiError
       if (apiError.status === 401 || apiError.code === 'unauthenticated') {
+        cancelOperation()
         setState({ status: 'anonymous' })
-      } else if (wasAuthenticated) {
-        setOperationError(apiError)
       }
       throw error
     } finally {
-      if (id === operationId.current && refreshControllerRef.current === controller) refreshControllerRef.current = undefined
+      if (refreshControllerRef.current === controller) refreshControllerRef.current = undefined
     }
-  }, [state.status])
-  const value = useMemo(() => ({ state, login, logout, retry, refreshCurrentUser, isLoggingIn, isLoggingOut, operationError }), [state, login, logout, retry, refreshCurrentUser, isLoggingIn, isLoggingOut, operationError])
+  }, [cancelOperation, setState, isLoggingIn, isLoggingOut])
+  const value = useMemo(() => ({ state, login, logout, retry, refreshCurrentUser, isLoggingIn, isLoggingOut, operationError, identityRevision, refreshRevision, invalidateAdminAccess }), [state, login, logout, retry, refreshCurrentUser, isLoggingIn, isLoggingOut, operationError, identityRevision, refreshRevision, invalidateAdminAccess])
   return <AuthenticationContext.Provider value={value}>{children}</AuthenticationContext.Provider>
 }

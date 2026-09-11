@@ -29,7 +29,7 @@ public sealed class UserAccountRepository : SqliteRepository<UserAccount, Guid>,
     /// 按规范化用户名查询账号
     /// </summary>
     public Task<UserAccount?> FindByNormalizedUsernameAsync(string normalizedUsername, CancellationToken cancellationToken = default)
-        => dbContext.UserAccounts.SingleOrDefaultAsync(account => account.NormalizedUsername == normalizedUsername, cancellationToken);
+        => dbContext.UserAccounts.AsNoTracking().SingleOrDefaultAsync(account => account.NormalizedUsername == normalizedUsername, cancellationToken);
 
     /// <summary>
     /// 稳定排序读取全部账号。
@@ -45,5 +45,19 @@ public sealed class UserAccountRepository : SqliteRepository<UserAccount, Guid>,
     /// 按用户标识查询账号
     /// </summary>
     public Task<UserAccount?> FindByIdAsync(Guid id, CancellationToken cancellationToken = default)
-        => dbContext.UserAccounts.SingleOrDefaultAsync(account => account.ID == id, cancellationToken);
+        => dbContext.UserAccounts.AsNoTracking().SingleOrDefaultAsync(account => account.ID == id, cancellationToken);
+    public Task<int> CountAdministratorsAsync(CancellationToken cancellationToken = default)
+        => dbContext.UserAccounts.CountAsync(account => account.IsAdmin, cancellationToken);
+
+    public async Task UpdateNicknameAsync(Guid id, string nickname, CancellationToken cancellationToken = default)
+        => await dbContext.UserAccounts.Where(account => account.ID == id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(account => account.Nickname, nickname), cancellationToken);
+
+    public async Task UpdatePasswordHashAsync(Guid id, string passwordHash, CancellationToken cancellationToken = default)
+        => await dbContext.UserAccounts.Where(account => account.ID == id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(account => account.PasswordHash, passwordHash), cancellationToken);
+
+    public async Task UpdateAdministratorAsync(Guid id, bool isAdmin, CancellationToken cancellationToken = default)
+        => await dbContext.UserAccounts.Where(account => account.ID == id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(account => account.IsAdmin, isAdmin), cancellationToken);
 }

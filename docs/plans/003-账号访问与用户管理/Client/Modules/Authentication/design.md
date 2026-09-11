@@ -24,7 +24,6 @@ features/authentication/
     useAuthentication.ts
   pages/
     LoginPage.tsx
-    AuthenticatedHomePage.tsx
   providers/
     AuthenticationProvider.tsx
   types/
@@ -92,7 +91,7 @@ features/authentication/
 资料刷新流程：
 
 1. 用户管理模块成功修改当前账号昵称后调用 `refreshCurrentUser()`。
-2. Provider 重新请求 `/api/auth/me`，成功时只更新当前用户资料，不把页面切换到整页 `checking`。
+2. Provider 重新请求 `/api/auth/me`，成功且请求版本仍有效时更新资料并返回 refreshed（user、identityRevision、refreshRevision）；取消或被新操作替代返回 cancelled，不把页面切换到整页 checking。
 3. 如果返回 `401`，按认证失效流程清理状态；网络或未知错误保留当前已确认资料并返回可重试错误。
 
 ## 7. AuthGate
@@ -109,10 +108,29 @@ features/authentication/
 ## 8. 组件通信
 
 - `LoginPage` 负责页面布局和成功后的导航，`LoginForm` 负责输入和提交。
-- `AuthenticatedLayout` 读取认证状态并统一组合 `CurrentUserBar`；`AuthenticatedHomePage` 只渲染身份确认和后续主题接入主体。
+- `AuthenticatedLayout` 读取认证状态并统一组合 `CurrentUserBar`；会议首页由 MeetingWorkspacePage 承载，不恢复 AuthenticatedHomePage 占位路由。
 - `AuthGate` 由路由配置使用，不被普通业务组件嵌套多次。
 - 认证模块不向页面暴露生成 Kiota 模型；页面使用本 feature 的用户视图模型。
 
 ## 9. 模块非目标
 
 认证模块不实现用户创建、用户列表、用户资料编辑、密码重置、权限判断、会议成员判断、Token 刷新、设备管理或登录审计；这些用户管理操作由独立 feature 实现。`refreshCurrentUser()` 只是认证资料同步入口，不承担用户管理业务。
+
+## 管理员资料同步
+
+CurrentUserViewModel 增加必填 boolean isAdmin，登录和 me 适配必须接受 false。refreshCurrentUser 同步昵称和身份，不存储角色 Claim，不使用 localStorage 持久化权限。AdminGate 在管理页进入时调用此操作确认身份；401 清理登录，forbidden 不等于退出。
+
+个人设置保存昵称、本人管理员身份变更后使用同一刷新入口。Provider 的请求版本与取消机制必须避免旧响应覆盖退出、切换账号或最新身份；管理页收到 forbidden 后即使刷新失败也保持拒绝访问，不能依赖 Provider 保留的旧资料重新放行。
+
+## 刷新结果与版本
+
+refreshCurrentUser 返回 RefreshCurrentUserResult：`{ status: 'refreshed', user: CurrentUserViewModel, identityRevision: number, refreshRevision: number } | { status: 'cancelled' }`。Provider 暴露当前两个版本，它们仅用于客户端请求协调，不是服务端权限凭证。
+
+- refreshRevision：每次资料刷新开始时递增，用于丢弃被后续刷新取代的响应。普通资料刷新不递增 identityRevision，也不取消已确认页面的权限。
+- identityRevision：登录、退出、重新初始化、全局 401 开始时递增；最新资料确认 UserId 或 IsAdmin 改变时也递增。此版本变化才使既有管理员放行失效。改变身份时同时取消在途资料请求，旧响应不能覆盖新身份。
+
+AdminGate 在进入或显式重试时发起确认；首次放行要求 refreshed 的两个版本均匹配 Provider 当前值，当前仍 authenticated 且 isAdmin=true。cancelled、失败或过期结果不能用于首次放行。成功后记录 identityRevision；之后普通资料刷新只更新 refreshRevision，已确认的管理页面继续挂载，不进入整页 checking。
+
+普通资料刷新成功且身份不变时只同步昵称等资料；取消或网络失败时保留此前已确认页面并提供资料重试。若返回 401、确认身份改变或收到管理 forbidden，则立即取消放行并清理管理数据。forbidden 的本地拒绝状态只能通过重新进入或显式重试后的有效确认解除，不能被一次后台资料刷新自动解除。
+
+不在每次版本变化时自动发起刷新，避免循环。首次确认被取消且仍在页面时提供重试。资料同步调用方收到 cancelled 不提示保存失败，也不宣称资料已刷新。管理员修改本人昵称后的资料同步必须保持管理页面与操作反馈，不要求重新确认管理员身份。

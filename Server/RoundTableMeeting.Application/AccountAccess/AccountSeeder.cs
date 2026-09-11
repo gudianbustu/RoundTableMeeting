@@ -14,13 +14,14 @@ namespace RoundTableMeeting.Application.AccountAccess;
 public sealed class AccountSeeder(
     IUserAccountRepository userAccountRepository,
     IUnitOfWork unitOfWork,
-    IPasswordHasher<UserAccount> passwordHasher)
+    IPasswordHasher<UserAccount> passwordHasher,
+    IAccountTransactionRunner transactionRunner)
     : IAccountSeeder, IScopedDependency<IAccountSeeder>
 {
     /// <summary>
     /// 校验种子账号，创建缺失账号并提交新增记录
     /// </summary>
-    public async Task SeedAsync(IReadOnlyCollection<SeedAccountInput> accounts, CancellationToken cancellationToken = default)
+    public async Task SeedAsync(IReadOnlyCollection<SeedAccountInput> accounts, CancellationToken cancellationToken = default, string? initialAdminUsername = null)
     {
         if (accounts.Count == 0) throw new InvalidOperationException("At least one authentication seed account is required.");
 
@@ -41,20 +42,34 @@ public sealed class AccountSeeder(
             throw new InvalidOperationException("Authentication seed usernames must be unique.");
         }
 
-        var changed = false;
-        // 仅登记缺失账号，避免重复启动覆盖已有密码
-        foreach (var seed in normalized)
+        await transactionRunner.RunAsync(async token =>
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var existing = await userAccountRepository.FindByNormalizedUsernameAsync(seed.normalizedUsername, cancellationToken);
-            if (existing is not null) continue;
+            var added = new List<UserAccount>();
+            foreach (var seed in normalized)
+            {
+                token.ThrowIfCancellationRequested();
+                if (await userAccountRepository.FindByNormalizedUsernameAsync(seed.normalizedUsername, token) is not null) continue;
+                var account = UserAccount.Create(seed.username, seed.nickname);
+                account.InitializePasswordHash(passwordHasher.HashPassword(account, seed.Password));
+                unitOfWork.RegisterAdd(account);
+                added.Add(account);
+            }
 
-            var account = UserAccount.Create(seed.username, seed.nickname);
-            account.InitializePasswordHash(passwordHasher.HashPassword(account, seed.Password));
-            unitOfWork.RegisterAdd(account);
-            changed = true;
-        }
-
-        if (changed) await unitOfWork.CommitAsync(cancellationToken);
+            if (await userAccountRepository.CountAdministratorsAsync(token) == 0)
+            {
+                string adminName;
+                try { adminName = UserAccount.NormalizeUsername(initialAdminUsername ?? string.Empty); }
+                catch (ArgumentException) { throw new InvalidOperationException("Authentication:InitialAdminUsername is required when no administrator exists."); }
+                var newAdmin = added.SingleOrDefault(account => account.NormalizedUsername == adminName);
+                if (newAdmin is not null) newAdmin.SetAdministrator(true);
+                else
+                {
+                    var existing = await userAccountRepository.FindByNormalizedUsernameAsync(adminName, token)
+                        ?? throw new InvalidOperationException("The configured initial administrator does not exist.");
+                    await userAccountRepository.UpdateAdministratorAsync(existing.ID, true, token);
+                }
+            }
+            return true;
+        }, cancellationToken);
     }
 }

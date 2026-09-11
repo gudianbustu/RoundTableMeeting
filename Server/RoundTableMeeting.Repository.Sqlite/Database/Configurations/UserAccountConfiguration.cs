@@ -20,6 +20,7 @@ public sealed class UserAccountConfiguration : IEntityTypeConfiguration<UserAcco
         builder.Property(account => account.NormalizedUsername).HasMaxLength(128).IsRequired();
         builder.Property(account => account.Nickname).HasMaxLength(64).IsRequired();
         builder.Property(account => account.PasswordHash).HasMaxLength(512).IsRequired();
+        builder.Property(account => account.IsAdmin).HasDefaultValue(false).IsRequired();
         builder.HasIndex(account => account.NormalizedUsername).IsUnique();
     }
 }

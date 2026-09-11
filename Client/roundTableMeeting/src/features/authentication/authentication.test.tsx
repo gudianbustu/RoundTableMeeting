@@ -21,7 +21,7 @@ vi.mock('./api/getCurrentUser', () => ({ getCurrentUser }))
 vi.mock('./api/login', () => ({ login }))
 vi.mock('./api/logout', () => ({ logout }))
 
-const user = { userId: 'user-1', username: 'alice', nickname: 'Alice' }
+const user = { userId: 'user-1', username: 'alice', nickname: 'Alice', isAdmin: true }
 const invalidCredentials: ApiError = { kind: 'problemDetails', status: 401, code: 'invalid_credentials', message: 'invalid' }
 const networkError: ApiError = { kind: 'network', message: 'network' }
 
@@ -208,7 +208,7 @@ describe('authentication provider', () => {
     await userEvent.setup().click(screen.getByRole('button', { name: 'refresh-user' }))
 
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('authenticated|Alice'))
-    expect(screen.getByTestId('state')).toHaveTextContent('network')
+    expect(screen.getByTestId('state')).not.toHaveTextContent('network')
   })
 })
 
@@ -243,7 +243,7 @@ describe('authentication views', () => {
   })
 
   it('renders AuthGate outlet only when authenticated and keeps safe returnTo query/hash', () => {
-    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
+    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), identityRevision: 0, refreshRevision: 0, invalidateAdminAccess: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
     render(<AuthenticationContext.Provider value={value}><MemoryRouter initialEntries={['/room?tab=chat#messages']}><Routes><Route element={<AuthGate />}><Route path="*" element={<span>protected outlet</span>} /></Route></Routes></MemoryRouter></AuthenticationContext.Provider>)
     expect(screen.getByText('protected outlet')).toBeInTheDocument()
 
@@ -252,13 +252,13 @@ describe('authentication views', () => {
   })
 
   it('navigates once to a safe returnTo containing query and hash', async () => {
-    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
+    const value = { state: { status: 'authenticated' as const, user }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), identityRevision: 0, refreshRevision: 0, invalidateAdminAccess: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
     render(<AuthenticationContext.Provider value={value}><MemoryRouter initialEntries={[{ pathname: '/login', state: { returnTo: { pathname: '/room', search: '?tab=chat', hash: '#messages' } } }]}><Routes><Route path="/login" element={<LoginPage />} /><Route path="/room" element={<span>room page</span>} /></Routes></MemoryRouter></AuthenticationContext.Provider>)
     expect(await screen.findByText('room page')).toBeInTheDocument()
   })
 
   it('keeps public login page independent from authentication errors', () => {
-    const value = { state: { status: 'error' as const, error: networkError }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
+    const value = { state: { status: 'error' as const, error: networkError }, login: vi.fn(), logout: vi.fn(), retry: vi.fn(), identityRevision: 0, refreshRevision: 0, invalidateAdminAccess: vi.fn(), refreshCurrentUser: vi.fn(), isLoggingIn: false, isLoggingOut: false }
     renderWithAuthentication(value, ['/login'])
     expect(screen.getByText('服务暂时不可访问')).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: '用户名' })).not.toBeInTheDocument()

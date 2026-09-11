@@ -96,11 +96,14 @@ public sealed class DependencyTests
     }
 
     [Fact]
-    public void DomainRepositoriesDoNotExposeWriteMethods()
+    public void DomainRepositoriesOnlyExposeExplicitAccountColumnWrites()
     {
         foreach (var type in Load("RoundTableMeeting.Domain").GetTypes().Where(type => type.IsInterface && type.Name.EndsWith("Repository", StringComparison.Ordinal)))
         {
-            Assert.DoesNotContain(type.GetMethods(), method => method.Name.StartsWith("Add", StringComparison.Ordinal) || method.Name.StartsWith("Update", StringComparison.Ordinal) || method.Name.StartsWith("Delete", StringComparison.Ordinal));
+            var allowed = type == typeof(IUserAccountRepository)
+                ? new[] { "UpdateNicknameAsync", "UpdatePasswordHashAsync", "UpdateAdministratorAsync" } : [];
+            Assert.DoesNotContain(type.GetMethods(), method => !allowed.Contains(method.Name)
+                && (method.Name.StartsWith("Add", StringComparison.Ordinal) || method.Name.StartsWith("Update", StringComparison.Ordinal) || method.Name.StartsWith("Delete", StringComparison.Ordinal)));
         }
     }
 
@@ -163,12 +166,12 @@ public sealed class DependencyTests
     }
 
     [Fact]
-    public void UserAccountRepositoryUsesDomainAndSqliteContractsWithoutWriteMethods()
+    public void UserAccountRepositoryUsesDomainAndExplicitColumnContracts()
     {
         Assert.True(typeof(IUserAccountRepository).IsAssignableTo(typeof(IRepository<UserAccount, Guid>)));
         Assert.True(typeof(UserAccountRepository).IsAssignableTo(typeof(SqliteRepository<UserAccount, Guid>)));
         Assert.Contains(typeof(UserAccountRepository).GetInterfaces(), type => type == typeof(IScopedDependency<IUserAccountRepository>));
-        Assert.DoesNotContain(typeof(IUserAccountRepository).GetMethods(), method => method.Name.Contains("Add", StringComparison.Ordinal) || method.Name.Contains("Update", StringComparison.Ordinal) || method.Name.Contains("Delete", StringComparison.Ordinal));
+        Assert.DoesNotContain(typeof(IUserAccountRepository).GetMethods(), method => method.Name.Contains("Add", StringComparison.Ordinal) || method.Name.Contains("Delete", StringComparison.Ordinal));
     }
 
     [Fact]

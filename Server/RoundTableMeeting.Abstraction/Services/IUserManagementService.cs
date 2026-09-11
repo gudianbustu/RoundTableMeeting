@@ -10,5 +10,6 @@ public interface IUserManagementService
     Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(CancellationToken cancellationToken = default);
     Task<UserManagementResult> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default);
     Task<UserManagementResult> UpdateNicknameAsync(Guid userId, UpdateNicknameRequest request, CancellationToken cancellationToken = default);
+    Task<UserManagementResult> UpdateAdminAsync(Guid userId, UpdateAdminRequest request, CancellationToken cancellationToken = default);
     Task<UserManagementResult> ResetPasswordAsync(Guid userId, CancellationToken cancellationToken = default);
 }

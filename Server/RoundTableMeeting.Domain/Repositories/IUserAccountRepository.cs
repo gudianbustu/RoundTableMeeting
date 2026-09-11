@@ -8,6 +8,10 @@ namespace RoundTableMeeting.Domain.Repositories;
 /// </summary>
 public interface IUserAccountRepository : IRepository<UserAccount, Guid>
 {
+    Task<int> CountAdministratorsAsync(CancellationToken cancellationToken = default);
+    Task UpdateNicknameAsync(Guid id, string nickname, CancellationToken cancellationToken = default);
+    Task UpdatePasswordHashAsync(Guid id, string passwordHash, CancellationToken cancellationToken = default);
+    Task UpdateAdministratorAsync(Guid id, bool isAdmin, CancellationToken cancellationToken = default);
     /// <summary>
     /// 按规范化用户名和主键稳定列出全部账号。
     /// </summary>

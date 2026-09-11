@@ -10,5 +10,5 @@ public interface IAccountSeeder
     /// <summary>
     /// 确保指定账号存在且不覆盖已有账号
     /// </summary>
-    Task SeedAsync(IReadOnlyCollection<SeedAccountInput> accounts, CancellationToken cancellationToken = default);
+    Task SeedAsync(IReadOnlyCollection<SeedAccountInput> accounts, CancellationToken cancellationToken = default, string? initialAdminUsername = null);
 }

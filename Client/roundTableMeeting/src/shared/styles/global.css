@@ -55,7 +55,9 @@ a { color: #176b87; }
 .message-composer:focus-within { border-color: #176b87; box-shadow: 0 0 0 2px rgb(23 107 135 / 10%); }
 .message-composer textarea.ant-input:focus, .message-composer textarea.ant-input:focus-visible { outline: none; box-shadow: none; }
 .message-composer-actions { display: flex; justify-content: flex-end; gap: 8px; }
-.meeting-empty { min-height: 360px; justify-content: center; align-items: flex-start; }
+.meeting-main:has(> .meeting-empty) { grid-column: 2 / -1; }
+.meeting-empty { flex: 1; min-height: 0; justify-content: center; align-items: center; text-align: center; }
+.meeting-empty > .ant-typography { margin: 0; }
 /* Only the meeting workspace owns the viewport; other pages keep natural scrolling. */
 .app-shell:has(> .meeting-workspace) { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 .app-shell > .app-header, .meeting-main > :not(.realtime-chat-region), .realtime-chat-region > :not(.message-timeline), .message-timeline-toolbar { flex-shrink: 0; }
@@ -69,6 +71,7 @@ a { color: #176b87; }
   .meeting-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; gap: 18px; }
   .meeting-navigation, .meeting-sidebar { padding: 14px; max-height: 260px; }
   .meeting-main { height: max(520px, 80dvh); }
+  .meeting-main:has(> .meeting-empty) { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
   .login-panel { padding: 24px 20px; }
@@ -81,14 +84,14 @@ a { color: #176b87; }
 .meeting-code-row > .ant-typography { min-width: 0; overflow-wrap: anywhere; }
 .meeting-code-row > .ant-btn { flex-shrink: 0; }
 .authenticated-shell { padding-top: 0; }
-.authenticated-shell .top-navigation { min-height: 56px; padding: 8px 0; align-items: center; flex-direction: row; flex-wrap: wrap; gap: 8px 24px; }
+.authenticated-shell .top-navigation { min-height: 56px; margin-bottom: 24px; padding: 8px 0; align-items: center; flex-direction: row; flex-wrap: wrap; gap: 8px 24px; }
 .top-navigation-links { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 28px; min-width: 0; }
 .top-navigation .app-brand { color: #19313a; font-size: 20px; font-weight: 700; text-decoration: none; white-space: nowrap; }
 .top-navigation nav { display: flex; align-items: center; gap: 4px; }
 .top-navigation nav a { padding: 7px 12px; border-radius: 6px; color: #58727b; text-decoration: none; white-space: nowrap; }
 .top-navigation nav a:hover, .top-navigation nav a[aria-current="page"] { color: #176b87; background: #eaf4f7; }
 .top-navigation .current-user-bar { min-height: 0; margin-left: auto; }
-.authenticated-shell > .meeting-workspace { padding-top: 12px; }
+.authenticated-shell > .meeting-workspace { padding-top: 0; }
 @media (max-width: 560px) {
   .top-navigation-links { gap: 8px 16px; }
   .top-navigation nav a { padding: 7px 8px; }

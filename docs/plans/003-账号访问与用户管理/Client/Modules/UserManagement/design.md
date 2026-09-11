@@ -4,7 +4,7 @@
 
 用户管理模块负责用户列表读取、添加账号、修改昵称和固定密码重置的客户端协调。它位于独立 `features/userManagement/`，不并入认证 Provider，不保存权限状态，也不负责登录和会话恢复。
 
-当前所有已登录用户均可使用此模块。客户端不进行角色或权限判断；未来菜单认证和 API 认证由应用导航与服务端策略接管。
+本模块仅管理员可用；认证 Provider 提供当前用户 isAdmin，应用导航和 AdminGate 控制可见性，服务端独立授权。
 
 ## 2. 目录结构
 
@@ -15,6 +15,7 @@ features/userManagement/
     createUser.ts
     updateNickname.ts
     resetPassword.ts
+    updateAdmin.ts
   components/
     UserListTable.tsx
     CreateUserForm.tsx
@@ -37,7 +38,8 @@ features/userManagement/
 
 - `userId`；
 - `username`；
-- `nickname`。
+- `nickname`；
+- `isAdmin`。
 
 `CreateUserInput` 包含 username、nickname、initialPassword；`UpdateNicknameInput` 只包含 nickname，并通过 PATCH 提交。重置密码不需要输入模型。
 
@@ -49,7 +51,7 @@ features/userManagement/
 - `ready`；
 - `error`。
 
-添加、修改昵称和重置密码各自拥有独立提交状态，不能用一个全局 loading 阻塞全部行操作。操作成功后重新加载列表，避免客户端自行维护排序和并发合并规则。列表请求失败时保留可重试入口。
+添加、修改昵称、重置密码和管理员调整各自拥有独立提交状态，不能用一个全局 loading 阻塞全部行操作。操作成功后重新加载列表，避免客户端自行维护排序和并发合并规则。列表请求失败时保留可重试入口。
 
 ## 5. 与认证模块协作
 
@@ -70,14 +72,15 @@ features/userManagement/
 
 ## 7. 权限边界
 
-- `/users` 只经过现有 `AuthGate`。
-- 用户管理菜单对全部 authenticated 用户可见。
-- 不请求权限接口，不读取角色 Claim，不在本地隐藏行操作。
-- 未来权限接入时只替换菜单可见性和 API 授权策略，本 feature 的用例和组件 Props 不增加角色判断。
+- /users 使用 AuthGate 和 AdminGate，进入时刷新当前用户确认管理员身份。
+- 菜单仅 isAdmin=true 可见，不把本地菜单判断当作服务端授权。
+- 管理 forbidden 清空列表、关闭弹窗并同步当前资料；origin_not_allowed 保留认证状态并显示操作失败。
+- 本人降级成功立即离开管理页，即使后续资料刷新失败也不保留管理交互。
+- 身份调整调用 updateAdmin(userId, { isAdmin })，提交前明确目标与调整结果；last_admin_required 保持现有状态并提示至少保留一名管理员。
 
 ## 8. 模块非目标
 
 - 用户搜索、分页、删除和禁用。
-- 用户名修改或用户自行修改密码。
+- 用户名修改；个人自行改密由 accountSettings feature 负责。
 - 权限树、角色选择和审计信息。
 - 缓存全部用户到认证 Provider 或全局状态。

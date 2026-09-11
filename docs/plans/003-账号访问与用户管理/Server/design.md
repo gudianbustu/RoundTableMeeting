@@ -4,7 +4,7 @@
 
 本文定义账号访问主题在服务端的工程分层、认证方式、账号持久化、初始账号初始化、HTTP 入口、当前用户上下文和最小用户管理。主题范围与跨端契约以[主题总体设计](../design.md)为准；登录和会话用例以[账号访问模块设计](Modules/AccountAccess/design.md)为准，用户列表与管理操作以[用户管理模块设计](Modules/UserManagement/design.md)为准。
 
-本文只为后续主题提供最小可用的人类身份和内部测试账号维护，不建设完整 ASP.NET Core Identity 用户中心，也不实现角色权限、审计和账号生命周期治理。
+本文提供人类身份、管理员授权和个人设置；不建设完整 ASP.NET Core Identity 用户中心、复杂角色体系、审计或账号生命周期治理。
 
 当前服务端源码已经提供 `/api/users` 用户列表、添加账号、昵称修改和固定密码重置接口；本设计继续作为后续维护与回归依据。
 
@@ -20,15 +20,16 @@
 4. 支持当前浏览器退出登录。
 5. 对后续业务入口提供统一认证和授权边界。
 6. 在错误响应和结构化日志中保护密码、Cookie 和内部实现细节。
-7. 允许任意已登录用户查看用户列表、添加账号、修改昵称和固定重置密码。
+7. 仅允许管理员查看用户列表、添加账号、修改昵称、固定重置密码和调整管理员身份。
+8. 所有用户可修改本人昵称和密码；至少保留一名管理员。
 
 ## 3. 分层职责
 
 ### 3.1 Domain
 
-`RoundTableMeeting.Domain` 定义 `UserAccount` 人类账号实体及其不依赖 ASP.NET Core 的基础约束。实体至少具有 `Guid` 类型的稳定主键、用户名、昵称和密码哈希。领域实体不持有 Cookie、`ClaimsPrincipal`、HTTP 上下文或 EF Core 类型。
+`RoundTableMeeting.Domain` 定义 `UserAccount` 人类账号实体及其不依赖 ASP.NET Core 的基础约束。实体至少具有 `Guid` 类型的稳定主键、用户名、昵称、管理员标志和密码哈希。领域实体不持有 Cookie、`ClaimsPrincipal`、HTTP 上下文或 EF Core 类型。
 
-本主题不在 Domain 中加入角色、组织、账号状态机、密码策略、审计字段或会话实体。密码校验由 Application 使用密码哈希器完成，Domain 只保存不可逆凭证摘要。
+Domain 增加 IsAdmin 布尔标志，不加入复杂角色、组织、账号状态机、审计字段或会话实体。密码校验由 Application 使用密码哈希器完成，Domain 保存账号资料和不可逆凭证摘要。
 
 ### 3.2 Abstraction
 
@@ -49,7 +50,7 @@ Abstraction 不暴露 Domain 实体、EF Core 查询类型、Cookie 选项或 AS
 - 将账号实体转换为当前用户 DTO；
 - 判断登录成功或无效凭证；
 - 实现 `IAccountSeeder`，编排账号种子校验、查重、密码哈希和新增提交。
-- 实现最小用户管理应用服务，编排列表、添加、昵称修改和密码重置。
+- 实现用户管理和个人设置服务，编排管理员授权、身份修改、昵称与密码写入及事务内校验。
 
 Application 不直接访问 `HttpContext`，不写入认证 Cookie，不返回 `ClaimsPrincipal`，不引用 Repository 或 EF Core。
 
@@ -73,7 +74,7 @@ Repository 不比较密码、不解析 Cookie、不决定 HTTP 状态码，也�
 - 注册 ASP.NET Core Cookie Authentication；
 - 注册授权和当前用户访问器；
 - 注册认证 Controller；
-- 注册用户管理 Controller；
+- 注册用户管理、个人设置 Controller 和 AdminOnly 策略；
 - 把登录成功的 `UserId` 写入最小认证 Claim；
 - 按统一错误边界返回 `401`、验证错误和无效凭证错误；
 - 在启动阶段触发数据库迁移及账号种子初始化；
@@ -96,7 +97,7 @@ Cookie 至少使用以下约束：
 - 明确的认证 Cookie 名称和根路径；
 - 本主题采用会话级 Cookie，不设置长期持久化登录作为产品承诺。
 
-Cookie 只包含识别账号所需的最小 Claim，至少包含 `UserId`。请求级当前用户上下文只暴露 `IsAuthenticated` 和 `UserId`；用户名和昵称由当前用户查询从服务端读取，不依赖 Cookie Claim 或客户端缓存作为资料事实来源。
+Cookie 只包含识别账号所需的最小 Claim，至少包含 `UserId`。请求级当前用户上下文只暴露 `IsAuthenticated` 和 `UserId`；用户名、昵称和 IsAdmin 由当前用户查询从服务端读取，不依赖 Cookie Claim 或客户端缓存作为资料事实来源。
 
 ### 4.2 认证事件
 
@@ -114,9 +115,9 @@ Cookie 只包含识别账号所需的最小 Claim，至少包含 `UserId`。请�
 - `Username`：唯一登录名称；
 - `Nickname`：后续首次加入会议时使用的默认名称；
 - `PasswordHash`：密码哈希器输出；
-- 本主题账号表只包含上述身份和凭证字段，不预留创建时间、审计、状态或扩展字段。
+- `IsAdmin`：非空布尔值，默认 false；不预留创建时间、审计或账号状态字段。
 
-本主题不增加角色、权限集合、密码重置标志、首次登录标志、禁用标志或完整审计字段。若后续业务需要账号状态，必须另行设计，不以空字段预留的方式扩大当前模型。
+本主题不增加角色表、权限集合、密码重置标志、首次登录标志、禁用标志或完整审计字段。若后续业务需要账号状态，必须另行设计，不以空字段预留的方式扩大当前模型。
 
 账号实体增加明确的昵称修改和密码哈希替换行为。昵称修改复用 Trim + NFC 和 64 字符上限；密码重置由 Application 生成新哈希后替换旧哈希，不允许 Controller 或 Repository 直接写入明文密码。
 
@@ -132,16 +133,17 @@ Development 使用 user-secrets 提供非生产凭证，Testing 使用测试内�
 
 ### 5.3 幂等种子
 
-数据库 Migration 完成后执行账号种子：
+数据库 Migration 完成后执行账号种子和初始管理员初始化，具体顺序如下：
 
-1. 校验配置账号集合非空且配置内用户名不重复。
-2. 按用户名查找已存在账号。
-3. 不存在时使用密码哈希器生成摘要并新增账号。
-4. 已存在时不覆盖昵称、密码或其他已保存资料。
-5. 再次启动不重复新增，也不重置用户密码。
-6. 任何需要提供人类登录的部署环境中，配置缺失、无有效账号或种子执行失败时都终止启动，不开放一个无法登录的应用。
+1. 按现有规则验证非空 SeedAccounts 集合、规范化用户名唯一及密码输入；开启写事务并取得写锁，再查询和创建缺失账号，新账号默认 IsAdmin=false。
+2. 增加独立配置 `Authentication:InitialAdminUsername`，仅在数据库没有任何管理员时使用。空库和旧库升级时，该值必须显式配置，并按同一用户名规范化规则匹配种子执行后的一个账号。
+3. 若数据库没有管理员，在同一写事务中重新检查管理员数量，并仅把指定账号提升为管理员；目标不存在、配置缺失或无效时启动失败，事务回滚，不开放业务请求。不默认选择第一条记录，也不按用户名猜测管理员。
+4. 若数据库已有管理员，不应用 InitialAdminUsername；已存在账号的昵称、密码和管理员身份均不覆盖。后续新建的种子账号仍默认为普通用户。这样正常重启不会恢复已撤销的身份。
+5. 提交前确认至少存在一个管理员。并行启动应串行化初始化写入，等待后重新检查，不能产生重复账号或覆盖在线管理结果。
 
-Web 宿主拥有 Options 绑定和 `ValidateOnStart`，将验证通过的账号配置映射为 Abstraction 中的种子输入 DTO。宿主在同一个启动作用域内先调用现有 `IDatabaseInitializer` 完成 Migration，再把种子输入传给 Application 实现的 `IAccountSeeder`。Application 不引用 Web Options 或配置 Provider；种子用例通过领域仓储和 `IUnitOfWork` 持久化。Repository 不读取配置，也不拥有种子编排。种子失败与 Migration 失败使用同一启动异常边界并向上抛出，宿主不继续监听业务请求。
+本规则在首次升级前要求部署者明确提供 InitialAdminUsername；当前设计不指定任何真实账号。初始管理员配置不作为运行期授权来源。没有管理员时显式配置可以完成恢复，不引入额外初始化标志或自动提升所有旧账号。
+
+Web 绑定并验证 Options，将 SeedAccounts 与可选 InitialAdminUsername 映射到 Abstraction 的种子契约；只有数据库无管理员时才强制要求后者。Application 编排事务和校验，不引用 Web Options；Repository 负责写事务和按列更新。失败沿现有启动异常边界终止启动，不记录配置值或秘密。
 
 ## 6. HTTP API 设计
 
@@ -152,22 +154,22 @@ Web 宿主拥有 Options 绑定和 `ValidateOnStart`，将验证通过的账号�
 | `POST` | `/api/auth/login` | 匿名 | 验证凭证并建立当前浏览器会话 |
 | `GET` | `/api/auth/me` | 必须认证 | 返回当前账号的最小资料 |
 | `POST` | `/api/auth/logout` | 可匿名 | 清除当前浏览器会话，保持幂等 |
-| `GET` | `/api/users` | 已登录 | 返回全部账号的最小列表 |
-| `POST` | `/api/users` | 已登录 | 添加账号 |
-| `PATCH` | `/api/users/{userId}/nickname` | 已登录 | 修改账号昵称 |
-| `POST` | `/api/users/{userId}/reset-password` | 已登录 | 将密码重置为 `123456` |
+| `GET` | `/api/users` | 管理员 | 返回全部账号的最小列表 |
+| `POST` | `/api/users` | 管理员 | 添加账号 |
+| `PATCH` | `/api/users/{userId}/nickname` | 管理员 | 修改账号昵称 |
+| `POST` | `/api/users/{userId}/reset-password` | 管理员 | 将密码重置为 `123456` |
 
 授权配置固定设置 `FallbackPolicy = RequireAuthenticatedUser()`，使没有显式授权元数据的业务端点默认要求认证。登录、退出、系统状态、OpenAPI、Scalar、API 404 fallback 和 SPA 页面 fallback 显式标记 `AllowAnonymous`；静态文件由静态文件中间件直接提供。会议、参与者、消息、实时连接和其他人类业务入口不得使用 `AllowAnonymous`。
 
 无效登录凭证固定返回 `401`，并使用 `code = "invalid_credentials"`；请求字段校验失败固定返回 `400`、`code = "validation_failed"` 和传输字段 `errors`；不支持的请求媒体类型返回 `415`、`code = "unsupported_media_type"`。`GET /api/auth/me` 没有有效会话时返回 `401`、`code = "unauthenticated"`。通用已认证但权限不足错误固定为 `403`、`code = "forbidden"`。用户管理的重复用户名固定返回 `409`、`code = "username_conflict"`；目标账号不存在固定返回 `404`、`code = "user_not_found"`。认证和用户管理 operation 都必须在 OpenAPI 中声明实际可能返回的类型化错误响应，供 Kiota 生成错误映射。
 
-Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为：未认证 Challenge 直接返回 `401` ProblemDetails，禁止重定向到 HTML 登录页；当前主题没有业务权限不足场景，后续出现已认证但无权限时固定使用 `403` ProblemDetails。`username_conflict` 和 `user_not_found` 只属于用户管理业务错误，不代表当前引入角色权限。
+Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为：未认证 Challenge 直接返回 `401` ProblemDetails，禁止重定向到 HTML 登录页；普通用户调用管理接口时使用 `403 forbidden` ProblemDetails。`username_conflict` 和 `user_not_found` 只属于用户管理业务错误，不代表当前引入角色权限。
 
-用户管理 Controller 显式要求认证，但不检查角色、权限或管理员标志。当前所有已登录用户对四个用户管理接口拥有相同访问能力；该开放边界仅适用于少量可信内部测试，进入生产前必须在 Controller/endpoint policy 和客户端菜单同时收紧，并补充审计与会话治理；未来改造不改变 Application 用例契约。
+UsersController 统一使用 AdminOnly 策略，由服务端依据数据库当前 IsAdmin 授权；普通用户不能查询账号目录或管理他人。管理员身份修改与个人设置按下文契约实施。
 
 ### 6.2 登录
 
-请求只包含用户名和密码。服务端先做基本输入验证，再按用户名查询账号并调用密码哈希器验证。成功时建立 Cookie，并返回 `UserId`、用户名和昵称；失败时统一返回无效凭证，不区分用户名不存在和密码不匹配。
+请求只包含用户名和密码。服务端先做基本输入验证，再按用户名查询账号并调用密码哈希器验证。成功时建立 Cookie，并返回 `UserId`、用户名、昵称和 IsAdmin；失败时统一返回无效凭证，不区分用户名不存在和密码不匹配。
 
 用户名不存在时仍必须执行与正常密码验证同类的 dummy hash 验证，再返回统一失败，降低通过响应耗时枚举有效用户名的风险。自动化测试验证 dummy 验证被调用，不对不稳定的绝对耗时设阈值。
 
@@ -202,7 +204,7 @@ Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为
 
 ### 6.6 用户列表与添加
 
-`GET /api/users` 返回按规范化用户名稳定排序的完整数组，元素只包含 `userId`、`username`、`nickname`。当前仅服务内部小规模测试，不增加分页、搜索或总数元数据。
+`GET /api/users` 返回按规范化用户名稳定排序的完整数组，元素只包含 `userId`、`username`、`nickname`、`isAdmin`。面向小规模账号管理，不增加分页、搜索或总数元数据。
 
 `POST /api/users` 接收用户名、昵称和初始密码。用户名冲突返回 `409`、`code = username_conflict`；输入错误返回 `400 validation_failed`。成功返回 `201` 和新账号最小 DTO。新账号立即可以登录，创建过程不修改配置种子。
 
@@ -220,7 +222,7 @@ Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为
 
 密码重置不撤销已有 Cookie，不建立首次登录改密标志，也不记录重置人、时间或历史。这些能力与后续权限、审计和会话治理一起设计。
 
-四个 `/api/users` operation 的成功和错误响应统一设置 `Cache-Control: no-store` 和 `Pragma: no-cache`。用户列表虽然是 GET，也不能被浏览器或中间缓存保存；实现时扩展现有认证响应头中间件的路径/元数据覆盖范围，不能只覆盖 `/api/auth/*`。
+五个 `/api/users` operation 的成功和错误响应统一设置 `Cache-Control: no-store` 和 `Pragma: no-cache`。用户列表虽然是 GET，也不能被浏览器或中间缓存保存；实现时扩展现有认证响应头中间件的路径/元数据覆盖范围，不能只覆盖 `/api/auth/*`。
 
 ## 7. 授权和公开入口
 
@@ -278,8 +280,36 @@ Cookie Authentication 的重定向事件必须针对 `/api/*` 覆盖默认行为
 本主题服务端不实现：
 
 - 用户搜索、分页、删除、禁用、批量导入和公开注册；
-- 用户名修改、用户自行修改密码、找回密码和密码过期；
-- 账号状态管理、角色和组织权限；
+- 用户名修改、自助找回密码和密码过期；
+- 账号状态管理、复杂角色和组织权限；
 - 登录风控、多因素认证、第三方身份源；
 - 持久化会话、设备管理和全局会话撤销；
 - 账号审计和安全运营后台。
+
+## 11. 管理员与个人设置接口
+
+| 方法 | 路径 | 授权 | 请求 | 成功 |
+| --- | --- | --- | --- | --- |
+| PATCH | `/api/users/{userId}/admin` | 管理员 | `{ isAdmin: boolean }`，必填 | 200 UserSummaryDto |
+| PATCH | `/api/account/nickname` | 已登录且账号存在 | `{ nickname: string }` | 200 CurrentUserDto |
+| POST | `/api/account/change-password` | 已登录且账号存在 | `{ currentPassword: string, newPassword: string }` | 204 |
+
+个人设置通过现有 GET `/api/auth/me` 读取 UserId、Username、Nickname、IsAdmin，无需单独资料 GET。本人写接口只从 ICurrentUserContext.UserId 取目标，不接受客户端指定目标 UserId 或 IsAdmin；管理员也不能用该接口修改他人。
+
+所有新增写接口使用 RequireBrowserOrigin(true)，所有响应使用 NoStoreResponse。个人接口未登录或当前账号不存在返回 401 unauthenticated；管理员 API 未登录返回 401，普通用户或无有效管理员账号返回 403 forbidden。权限判断先于目标账号查询，普通用户不能利用 404 枚举账号。
+
+管理员身份设置：目标不存在为 404 user_not_found；取消最后一名管理员为 409 last_admin_required；目标已是请求状态则返回当前摘要，保持幂等。本人降级成功仍返回 200，下一次管理请求被拒绝。
+
+自行改密：currentPassword 按登录相同规则验证，不 Trim 或规范化，长度上限 256；错误返回 400 validation_failed，errors.currentPassword 指明当前密码不正确，不用 401 以免误清登录状态。newPassword 至少包含一个非空白字符且最长 256，原字符串哈希；不要求与旧密码不同。confirmNewPassword 仅为客户端输入，不进入 HTTP 契约。任何校验失败不写库，成功只替换 PasswordHash，不返回密码或哈希。
+
+接口按实际声明 400/401/403/404/409/415/500：个人写入声明 400/401/403（Origin）/415/500；管理员设置声明全部七类；用户列表补充 403。沿用统一 ProblemDetails 的 errors、code 与 traceId，Kiota 同步生成。
+
+## 12. 管理员授权与并发写入
+
+Cookie 保持只含 UserId；AdminOnly 授权处理器调用应用层管理员查询契约，从数据库加载当前账号 IsAdmin，不依赖客户端字段或登录时快照，不引入跨请求权限缓存。请求级共享读取可以复用，但写事务中必须重新判断操作者。
+
+管理员变更事务先取得 SQLite 写锁，再重新读取操作者、目标与管理员数量；确认操作者仍是管理员后才更新。取消管理员时必须保证更新后至少一名管理员，包括两个管理员互相取消、并发自我取消和重复请求。使用数据库事务串行化，不用进程内锁或事务外 Count 代替。撤销提交之后开始的管理请求必须被拒绝；已进入事务的操作按事务提交顺序判定，不承诺撤回已完成操作。
+
+新增用户、昵称和密码管理写入也在写事务内重新验证管理员；个人改密在同一事务内读取最新哈希、验证旧密码并写入新哈希。串行提交的两个改密请求中，第二个必须基于最新密码验证。
+
+账号更新必须只写对应列：昵称只写 Nickname，密码只写 PasswordHash，管理员只写 IsAdmin。不能继续以旧 NoTracking 实体的整行 Modified 覆盖数据库中其他字段，尤其不能在管理员被撤销后被并发改昵称恢复权限。Repository 提供意图明确的按列更新和事务能力，Application 不依赖 EF/SQLite 类型。

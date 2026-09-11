@@ -20,4 +20,8 @@
 
 ## 5. 完成检查
 
-`/users` 只能在 authenticated 路由渲染；三种写操作互不共用 submitting；页面卸载无 late state update；不显示角色或权限文案。
+`/users` 只能在 authenticated 路由渲染；四种写操作互不共用 submitting；页面卸载无 late state update；显示管理员或普通用户身份，并提供管理员设置操作。
+
+## 6. 管理员交互
+
+页面在 AdminGate 放行后才挂载列表加载。增加身份调整确认与 adjustingAdminUserId；同一目标行写入期间禁用其他行内操作。forbidden 立即丢弃 users、关闭所有操作弹窗并刷新当前资料；不能保留旧目录供继续浏览。last_admin_required 由安全文案提示，不显示原始 detail。

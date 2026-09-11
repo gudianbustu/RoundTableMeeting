@@ -40,6 +40,16 @@ export interface ApiProblemDetails extends AdditionalDataHolder, ApiError, Parsa
 }
 export interface ApiProblemDetails_errors extends AdditionalDataHolder, Parsable {
 }
+export interface ChangePasswordRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The currentPassword property
+     */
+    currentPassword?: string | null;
+    /**
+     * The newPassword property
+     */
+    newPassword?: string | null;
+}
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
@@ -57,6 +67,15 @@ export function createApiProblemDetails_errorsFromDiscriminatorValue(parseNode: 
 // @ts-ignore
 export function createApiProblemDetailsFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoApiProblemDetails;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {ChangePasswordRequest}
+ */
+// @ts-ignore
+export function createChangePasswordRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoChangePasswordRequest;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -283,6 +302,15 @@ export function createSystemStatusDtoFromDiscriminatorValue(parseNode: ParseNode
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {UpdateAdminRequest}
+ */
+// @ts-ignore
+export function createUpdateAdminRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoUpdateAdminRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {UpdateNicknameRequest}
  */
 // @ts-ignore
@@ -313,6 +341,10 @@ export function createUserSummaryDtoFromDiscriminatorValue(parseNode: ParseNode 
     return deserializeIntoUserSummaryDto;
 }
 export interface CurrentUserDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The isAdmin property
+     */
+    isAdmin?: boolean | null;
     /**
      * The nickname property
      */
@@ -368,6 +400,18 @@ export function deserializeIntoApiProblemDetails_errors(apiProblemDetails_errors
 }
 /**
  * The deserialization information for the current model
+ * @param ChangePasswordRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoChangePasswordRequest(changePasswordRequest: Partial<ChangePasswordRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "currentPassword": n => { changePasswordRequest.currentPassword = n.getStringValue(); },
+        "newPassword": n => { changePasswordRequest.newPassword = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param CreateMeetingRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -412,6 +456,7 @@ export function deserializeIntoCreateUserRequest(createUserRequest: Partial<Crea
 // @ts-ignore
 export function deserializeIntoCurrentUserDto(currentUserDto: Partial<CurrentUserDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "isAdmin": n => { currentUserDto.isAdmin = n.getBooleanValue(); },
         "nickname": n => { currentUserDto.nickname = n.getStringValue(); },
         "userId": n => { currentUserDto.userId = n.getGuidValue(); },
         "username": n => { currentUserDto.username = n.getStringValue(); },
@@ -665,6 +710,17 @@ export function deserializeIntoSystemStatusDto(systemStatusDto: Partial<SystemSt
 }
 /**
  * The deserialization information for the current model
+ * @param UpdateAdminRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoUpdateAdminRequest(updateAdminRequest: Partial<UpdateAdminRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "isAdmin": n => { updateAdminRequest.isAdmin = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param UpdateNicknameRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -682,6 +738,7 @@ export function deserializeIntoUpdateNicknameRequest(updateNicknameRequest: Part
 // @ts-ignore
 export function deserializeIntoUserSummaryDto(userSummaryDto: Partial<UserSummaryDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "isAdmin": n => { userSummaryDto.isAdmin = n.getBooleanValue(); },
         "nickname": n => { userSummaryDto.nickname = n.getStringValue(); },
         "userId": n => { userSummaryDto.userId = n.getGuidValue(); },
         "username": n => { userSummaryDto.username = n.getStringValue(); },
@@ -971,6 +1028,19 @@ export function serializeApiProblemDetails_errors(writer: SerializationWriter, a
 }
 /**
  * Serializes information the current object
+ * @param ChangePasswordRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeChangePasswordRequest(writer: SerializationWriter, changePasswordRequest: Partial<ChangePasswordRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!changePasswordRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("currentPassword", changePasswordRequest.currentPassword);
+    writer.writeStringValue("newPassword", changePasswordRequest.newPassword);
+    writer.writeAdditionalData(changePasswordRequest.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param CreateMeetingRequest The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -1019,6 +1089,7 @@ export function serializeCreateUserRequest(writer: SerializationWriter, createUs
 // @ts-ignore
 export function serializeCurrentUserDto(writer: SerializationWriter, currentUserDto: Partial<CurrentUserDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!currentUserDto || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("isAdmin", currentUserDto.isAdmin);
     writer.writeStringValue("nickname", currentUserDto.nickname);
     writer.writeGuidValue("userId", currentUserDto.userId);
     writer.writeStringValue("username", currentUserDto.username);
@@ -1291,6 +1362,18 @@ export function serializeSystemStatusDto(writer: SerializationWriter, systemStat
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param UpdateAdminRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeUpdateAdminRequest(writer: SerializationWriter, updateAdminRequest: Partial<UpdateAdminRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!updateAdminRequest || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("isAdmin", updateAdminRequest.isAdmin);
+    writer.writeAdditionalData(updateAdminRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param UpdateNicknameRequest The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -1309,6 +1392,7 @@ export function serializeUpdateNicknameRequest(writer: SerializationWriter, upda
 // @ts-ignore
 export function serializeUserSummaryDto(writer: SerializationWriter, userSummaryDto: Partial<UserSummaryDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!userSummaryDto || isSerializingDerivedType) { return; }
+    writer.writeBooleanValue("isAdmin", userSummaryDto.isAdmin);
     writer.writeStringValue("nickname", userSummaryDto.nickname);
     writer.writeGuidValue("userId", userSummaryDto.userId);
     writer.writeStringValue("username", userSummaryDto.username);
@@ -1352,6 +1436,12 @@ export interface SystemStatusDto extends AdditionalDataHolder, Parsable {
      */
     status?: string | null;
 }
+export interface UpdateAdminRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The isAdmin property
+     */
+    isAdmin?: boolean | null;
+}
 export interface UpdateNicknameRequest extends AdditionalDataHolder, Parsable {
     /**
      * The nickname property
@@ -1359,6 +1449,10 @@ export interface UpdateNicknameRequest extends AdditionalDataHolder, Parsable {
     nickname?: string | null;
 }
 export interface UserSummaryDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The isAdmin property
+     */
+    isAdmin?: boolean | null;
     /**
      * The nickname property
      */

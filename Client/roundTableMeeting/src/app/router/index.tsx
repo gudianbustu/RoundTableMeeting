@@ -1,3 +1,5 @@
+import { AdminGate } from './AdminGate'
+import { PersonalSettingsPage } from '@/features/accountSettings'
 import { createBrowserRouter } from 'react-router-dom'
 import { AppLayout } from '../layouts/AppLayout'
 import { RouteErrorElement } from './RouteErrorElement'
@@ -19,7 +21,7 @@ export const router = createBrowserRouter([
   },
   {
     element: <AuthGate />,
-    children: [{ element: <AuthenticatedLayout />, children: [{ path: '/', element: <MeetingWorkspacePage /> }, { path: '/meetings/:meetingId', element: <MeetingWorkspacePage /> }, { path: '/users', element: <UserManagementPage /> }] }],
+    children: [{ element: <AuthenticatedLayout />, children: [{ path: '/', element: <MeetingWorkspacePage /> }, { path: '/meetings/:meetingId', element: <MeetingWorkspacePage /> }, { path: '/settings/profile', element: <PersonalSettingsPage /> }, { element: <AdminGate />, children: [{ path: '/users', element: <UserManagementPage /> }] }] }],
   },
   { path: '*', element: <NotFoundPage /> },
 ])

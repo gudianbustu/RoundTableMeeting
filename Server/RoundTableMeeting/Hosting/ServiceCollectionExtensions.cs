@@ -152,8 +152,10 @@ public static class ServiceCollectionExtensions
 			options.Events.OnRedirectToLogin = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 401, "unauthenticated");
 			options.Events.OnRedirectToAccessDenied = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 403, "forbidden");
 		});
+		builder.Services.AddScoped<IAuthorizationHandler, AdministratorAuthorizationHandler>();
 		builder.Services.AddAuthorization(delegate(AuthorizationOptions options)
 		{
+			options.AddPolicy("AdminOnly", policy => policy.RequireAuthenticatedUser().AddRequirements(new AdministratorRequirement()));
 			options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
 		});
 		builder.Services.AddSingleton<SqliteConnectionInterceptor>();

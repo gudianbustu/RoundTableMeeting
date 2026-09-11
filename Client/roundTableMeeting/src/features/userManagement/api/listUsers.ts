@@ -5,8 +5,8 @@ import type { UserSummaryDto } from '@/api/generated/models'
 import type { UserSummaryViewModel } from '../types/userManagement'
 
 const toUser = (value: Partial<UserSummaryDto>): UserSummaryViewModel => {
-  if (!value.userId || !value.username || !value.nickname) throw new Error('Invalid user summary response')
-  return { userId: value.userId, username: value.username, nickname: value.nickname }
+  if (!value.userId || !value.username || !value.nickname || typeof value.isAdmin !== 'boolean') throw new Error('Invalid user summary response')
+  return { userId: value.userId, username: value.username, nickname: value.nickname, isAdmin: value.isAdmin }
 }
 
 export async function listUsers(signal?: AbortSignal): Promise<UserSummaryViewModel[]> {

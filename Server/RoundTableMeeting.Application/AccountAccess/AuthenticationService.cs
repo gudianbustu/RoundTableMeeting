@@ -90,5 +90,5 @@ public sealed class AuthenticationService(
     /// <summary>
     /// 将领域账号映射为客户端用户资料
     /// </summary>
-    private static CurrentUserDto ToDto(UserAccount account) => new(account.ID, account.Username, account.Nickname);
+    private static CurrentUserDto ToDto(UserAccount account) => new(account.ID, account.Username, account.Nickname, account.IsAdmin);
 }

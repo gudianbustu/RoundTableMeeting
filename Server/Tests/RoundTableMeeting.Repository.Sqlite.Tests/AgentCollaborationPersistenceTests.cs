@@ -35,7 +35,8 @@ public sealed class AgentCollaborationPersistenceTests
 			Meeting meeting = Meeting.Create("Migration", null, user.ID, BaseTime);
 			MeetingParticipant participant = MeetingParticipant.CreateHuman(meeting.ID, user.ID, "Owner", BaseTime);
 			MeetingMessage message = MeetingMessage.CreateParticipant(meeting.ID, 1L, participant.ID, MessageAuthorKind.Human, "Owner", "hello", Guid.NewGuid(), BaseTime);
-			context.AddRange(user, meeting, participant, message);
+			await context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({user.ID}, {user.Username}, {user.NormalizedUsername}, {user.Nickname}, {user.PasswordHash})");
+            context.AddRange(meeting, participant, message);
 			await context.SaveChangesAsync();
 			await context.Database.MigrateAsync();
 			Assert.Equal(1, await context.MeetingMessages.CountAsync());
