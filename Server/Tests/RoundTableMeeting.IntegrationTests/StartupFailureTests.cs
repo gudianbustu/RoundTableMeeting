@@ -26,9 +26,7 @@ public sealed class StartupFailureTests
         try
         {
             using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start RoundTableMeeting process.");
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-            await process.WaitForExitAsync(timeout.Token);
-            var output = await process.StandardOutput.ReadToEndAsync(timeout.Token) + await process.StandardError.ReadToEndAsync(timeout.Token);
+            var output = await ReadUntilExitAsync(process);
             Assert.NotEqual(0, process.ExitCode);
             Assert.Contains("Application terminated unexpectedly", output, StringComparison.Ordinal);
             Assert.DoesNotContain("SeedAccounts", output, StringComparison.OrdinalIgnoreCase);
@@ -68,10 +66,7 @@ public sealed class StartupFailureTests
         try
         {
             using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Could not start RoundTableMeeting process.");
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-            await process.WaitForExitAsync(timeout.Token);
-            var output = await process.StandardOutput.ReadToEndAsync(timeout.Token)
-                + await process.StandardError.ReadToEndAsync(timeout.Token);
+            var output = await ReadUntilExitAsync(process);
             var decodedOutput = DecodeJsonEscapedPath(output);
 
             Assert.NotEqual(0, process.ExitCode);
@@ -88,6 +83,30 @@ public sealed class StartupFailureTests
         finally
         {
             if (Directory.Exists(directory)) Directory.Delete(directory, true);
+        }
+    }
+
+    private static async Task<string> ReadUntilExitAsync(Process process)
+    {
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var stdout = process.StandardOutput.ReadToEndAsync(timeout.Token);
+        var stderr = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            await process.WaitForExitAsync(timeout.Token);
+            return await stdout + await stderr;
+        }
+        finally
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+                using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                await process.WaitForExitAsync(cleanupTimeout.Token);
+            }
+            // Observe both readers even when the exit deadline is exceeded.
+            try { await Task.WhenAll(stdout, stderr); }
+            catch (OperationCanceledException) when (timeout.IsCancellationRequested) { }
         }
     }
 

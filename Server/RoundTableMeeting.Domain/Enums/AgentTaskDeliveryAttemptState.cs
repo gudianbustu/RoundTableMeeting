@@ -4,5 +4,6 @@ public enum AgentTaskDeliveryAttemptState
 {
 	Prepared,
 	Delivered,
-	Abandoned
+	Abandoned,
+    Confirmed
 }

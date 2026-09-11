@@ -12,7 +12,10 @@ export type MessagePage = { items: ChatMessage[]; hasMoreBefore: boolean; hasMor
 export type MentionCandidate = { participantId: string; startOffset: number; length: number; displayName: string }
 export type FailedSubmission = { clientSubmissionId: string; content: string; candidates: MentionCandidate[]; errorCode?: string; retryAfterSeconds?: number }
 export type PresenceSnapshot = { onlineParticipantIds: string[]; highWatermarkSequence: number }
-export type AgentActivity = { meetingId: string; participantId: string; state: AgentActivityState; activeTaskId?: string; failureCode?: string; changedAt: Date }
+export type AgentActivity = {
+  meetingId: string; participantId: string; state: AgentActivityState; activeTaskId?: string; failureCode?: string; changedAt: Date
+  revision?: number; reason?: string; retryExhausted?: boolean; nextRetryAt?: Date; connectionDisposition?: string
+}
 
 export type ChatState = {
   meetingId: string; generation: number; messagesById: Record<string, ChatMessage>; orderedMessageIds: string[]

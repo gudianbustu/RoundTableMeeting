@@ -26,8 +26,8 @@ public sealed partial class McpAgentContractTests
         var joined = await JoinLifecycleAgentAsync(agent, meeting.MeetingCode, "IdleAgent");
         var wait = CallToolAsync(agent, joined.Session.TransportSessionId, 3, "wait_for_mention",
             new { connectionSessionId = joined.ConnectionId }, useSessionEventStream: true);
-        await EventuallyAsync(factory, async db => await db.AgentConnectionSessions
-            .AnyAsync(item => item.ID == joined.ConnectionId && item.InitialContextState == InitialContextState.Confirmed));
+        await EventuallyAsync(factory, async db => await db.AgentInitialContextDeliveries
+            .AnyAsync(item => item.ConnectionSessionId == joined.ConnectionId && item.State == InitialContextState.Confirmed));
         await DeleteLifecycleMeetingAsync(browser, meeting.MeetingId, "Delete idle Agent");
         AssertToolError(await wait.WaitAsync(TimeSpan.FromSeconds(10)), "meeting_not_found");
         await AssertAgentMeetingGoneAsync(factory, meeting.MeetingId);
@@ -303,6 +303,8 @@ public sealed partial class McpAgentContractTests
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
         Assert.False(await db.AgentTaskDeliveryAttempts.AnyAsync(item => item.MeetingId == meetingId));
+        Assert.False(await db.AgentInitialContextDeliveries.AnyAsync(item => item.MeetingId == meetingId));
+        Assert.False(await db.AgentRecoveryOperations.AnyAsync(item => item.MeetingId == meetingId));
         Assert.False(await db.AgentReplyTasks.AnyAsync(item => item.MeetingId == meetingId));
         Assert.False(await db.AgentContextCursors.AnyAsync(item => item.MeetingId == meetingId));
         Assert.False(await db.AgentConnectionSessions.AnyAsync(item => item.MeetingId == meetingId));

@@ -33,6 +33,12 @@ public sealed partial class McpAgentContractTests
 
 	private sealed class RejectingAgentConnectionRegistry : IAgentConnectionRegistry
 	{
+        private readonly RoundTableMeeting.AgentCollaboration.AgentConnectionRegistry reservations = new();
+        public ValueTask<IAsyncDisposable> ReserveTransportAsync(McpTransportSessionKey transportSession, CancellationToken cancellationToken = default)
+            => reservations.ReserveTransportAsync(transportSession, cancellationToken);
+        public bool TryActivate(McpTransportSessionKey transportSession, AgentConnectionRegistration registration, AgentConnectionRegistration? expectedPrevious) => false;
+        public bool Retire(AgentConnectionRegistration registration) => false;
+        public CancellationToken GetBindingCancellationToken(McpTransportSessionKey transportSession, AgentConnectionRegistration registration) => new(true);
         public void TerminateMeeting(Guid meetingId) { }
 
 		public bool ContainsTransport(McpTransportSessionKey transportSession)
@@ -72,7 +78,7 @@ public sealed partial class McpAgentContractTests
 		}
 	}
 
-	private static readonly string[] ExpectedToolNames = new string[4] { "get_agent_status", "join_meeting", "reply_to_mention", "wait_for_mention" };
+	private static readonly string[] ExpectedToolNames = ["confirm_context", "get_agent_status", "join_meeting", "renew_agent_lease", "reply_to_mention", "report_task_failure", "resume_agent", "retry_task", "wait_for_mention"];
 
 	[Fact]
 	public async Task AnonymousMcpSessionDiscoversOnlyTheVersionedAgentTools()
@@ -101,7 +107,7 @@ public sealed partial class McpAgentContractTests
 			select name);
 		Assert.DoesNotContain(session.TransportSessionId, toolsBody.Raw, StringComparison.Ordinal);
 		JsonElement joinSchema = tools.Single((JsonElement tool) => tool.GetProperty("name").GetString() == "join_meeting").GetProperty("inputSchema").GetProperty("properties");
-		Assert.Equal(new[] { "contextCharacterLimit", "displayName", "meetingCode" }, from property in joinSchema.EnumerateObject()
+		Assert.Equal(new[] { "contextCharacterLimit", "displayName", "joinMode", "meetingCode", "operationId", "recoveryKey", "reliabilityMode" }, from property in joinSchema.EnumerateObject()
 			select property.Name into name
 			orderby name
 			select name);
@@ -175,8 +181,8 @@ public sealed partial class McpAgentContractTests
 		});
 		Assert.Equal(HttpStatusCode.OK, firstTools.StatusCode);
 		Assert.Equal(HttpStatusCode.OK, secondTools.StatusCode);
-		Assert.Equal(4, (await ReadMcpBodyAsync(firstTools)).Json.GetProperty("result").GetProperty("tools").GetArrayLength());
-		Assert.Equal(4, (await ReadMcpBodyAsync(secondTools)).Json.GetProperty("result").GetProperty("tools").GetArrayLength());
+		Assert.Equal(ExpectedToolNames.Length, (await ReadMcpBodyAsync(firstTools)).Json.GetProperty("result").GetProperty("tools").GetArrayLength());
+		Assert.Equal(ExpectedToolNames.Length, (await ReadMcpBodyAsync(secondTools)).Json.GetProperty("result").GetProperty("tools").GetArrayLength());
 		using HttpResponseMessage invalidSession = await SendRpcAsync(client, "invalid-session", new
 		{
 			jsonrpc = "2.0",

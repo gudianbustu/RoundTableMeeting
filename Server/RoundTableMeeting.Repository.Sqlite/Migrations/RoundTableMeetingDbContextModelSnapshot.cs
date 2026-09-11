@@ -23,8 +23,18 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("BindingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L);
+
                     b.Property<DateTimeOffset>("ConnectedAtUtc")
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("ConnectionGeneration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L);
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT");
@@ -32,21 +42,17 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<int>("DeclaredContextCharacterLimit")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("DisconnectReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset?>("DisconnectedAtUtc")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTimeOffset?>("InitialContextConfirmedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("InitialContextState")
-                        .IsRequired()
-                        .HasMaxLength(16)
-                        .HasColumnType("TEXT");
-
-                    b.Property<long>("InitialSnapshotSequence")
-                        .HasColumnType("INTEGER");
-
                     b.Property<DateTimeOffset>("LastActivityAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("LeaseExpiresAtUtc")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("McpTransportBinding")
@@ -60,9 +66,23 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("RecoveryKeyHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReliabilityMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("legacy_v1");
+
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("SupersededByConnectionId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Transport")
@@ -77,25 +97,29 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.HasIndex("MeetingId", "ParticipantId")
                         .IsUnique()
-                        .HasFilter("State = 'Connected'");
+                        .HasFilter("State IN ('Connected', 'Activating')");
 
                     b.HasIndex("ParticipantId", "MeetingId");
 
+                    b.HasIndex("State", "LeaseExpiresAtUtc");
+
                     b.HasIndex("MeetingId", "ParticipantId", "State");
+
+                    b.HasIndex("SupersededByConnectionId", "MeetingId", "ParticipantId");
 
                     b.ToTable("AgentConnectionSessions", null, t =>
                         {
                             t.HasCheckConstraint("CK_AgentConnectionSessions_CharacterLimit", "DeclaredContextCharacterLimit > 0");
 
-                            t.HasCheckConstraint("CK_AgentConnectionSessions_ContextConfirmation", "(InitialContextState = 'Prepared' AND InitialContextConfirmedAtUtc IS NULL) OR (InitialContextState = 'Confirmed' AND InitialContextConfirmedAtUtc IS NOT NULL)");
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_State", "State IN ('Connected', 'Disconnected', 'Activating', 'Superseded')");
 
-                            t.HasCheckConstraint("CK_AgentConnectionSessions_InitialContextState", "InitialContextState IN ('Prepared', 'Confirmed')");
+                            t.HasCheckConstraint("CK_AgentConnectionSessions_StateTimes", "(State IN ('Connected', 'Activating') AND DisconnectedAtUtc IS NULL) OR (State IN ('Disconnected', 'Superseded') AND DisconnectedAtUtc IS NOT NULL)");
 
-                            t.HasCheckConstraint("CK_AgentConnectionSessions_InitialSnapshot", "InitialSnapshotSequence BETWEEN 0 AND 9007199254740991");
+                            t.HasCheckConstraint("CK_AgentConnections_Mode", "(ReliabilityMode = 'legacy_v1' AND RecoveryKeyHash IS NULL AND LeaseExpiresAtUtc IS NULL) OR (ReliabilityMode = 'explicit_ack_v1' AND RecoveryKeyHash IS NOT NULL AND length(RecoveryKeyHash) = 64 AND RecoveryKeyHash NOT GLOB '*[^0-9A-Fa-f]*' AND (State != 'Connected' OR LeaseExpiresAtUtc IS NOT NULL))");
 
-                            t.HasCheckConstraint("CK_AgentConnectionSessions_State", "State IN ('Connected', 'Disconnected')");
+                            t.HasCheckConstraint("CK_AgentConnections_Replacement", "SupersededByConnectionId IS NULL OR (State = 'Superseded' AND SupersededByConnectionId != ID)");
 
-                            t.HasCheckConstraint("CK_AgentConnectionSessions_StateTimes", "(State = 'Connected' AND DisconnectedAtUtc IS NULL) OR (State = 'Disconnected' AND DisconnectedAtUtc IS NOT NULL)");
+                            t.HasCheckConstraint("CK_AgentConnections_Versions", "ConnectionGeneration BETWEEN 1 AND 9007199254740991 AND BindingVersion BETWEEN 1 AND 9007199254740991");
                         });
                 });
 
@@ -105,10 +129,25 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset>("ActivityChangedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ActivityRevision")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("AllocatedThroughSequence")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("ConnectionGeneration")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CurrentConnectionId")
+                        .HasColumnType("TEXT");
+
                     b.Property<long>("DeliveredThroughSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("FirstJoinSnapshotSequence")
                         .HasColumnType("INTEGER");
 
                     b.Property<Guid>("MeetingId")
@@ -116,6 +155,13 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.Property<Guid>("ParticipantId")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("RequiredReliabilityMode")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("legacy_v1");
 
                     b.Property<DateTimeOffset>("UpdatedAtUtc")
                         .HasColumnType("TEXT");
@@ -129,20 +175,188 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.HasIndex("ParticipantId", "MeetingId");
 
+                    b.HasIndex("CurrentConnectionId", "MeetingId", "ParticipantId", "ConnectionGeneration");
+
                     b.ToTable("AgentContextCursors", null, t =>
                         {
                             t.HasCheckConstraint("CK_AgentContextCursors_Sequences", "DeliveredThroughSequence BETWEEN 0 AND 9007199254740991 AND AllocatedThroughSequence BETWEEN 0 AND 9007199254740991 AND DeliveredThroughSequence <= AllocatedThroughSequence");
+
+                            t.HasCheckConstraint("CK_AgentCursors_Recovery", "ConnectionGeneration BETWEEN 0 AND 9007199254740991 AND (CurrentConnectionId IS NULL OR ConnectionGeneration > 0) AND FirstJoinSnapshotSequence BETWEEN 0 AND AllocatedThroughSequence AND ActivityRevision BETWEEN 0 AND 9007199254740991 AND RequiredReliabilityMode IN ('legacy_v1', 'explicit_ack_v1')");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentInitialContextDelivery", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("CandidateFirstSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("CandidateLastSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ConnectionSessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContextFormatVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DeclaredCharacterLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DeliveredCharacterCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DeliveredFirstSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("DeliveredLastSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("OverLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("SnapshotSequence")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("State")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Truncated")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("TruncatedMessageCount")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ConnectionSessionId")
+                        .IsUnique();
+
+                    b.HasIndex("ConnectionSessionId", "MeetingId", "ParticipantId");
+
+                    b.ToTable("AgentInitialContextDeliveries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentInitial_Confirmation", "(State = 'Prepared' AND ConfirmedAtUtc IS NULL) OR (State = 'Confirmed' AND ConfirmedAtUtc IS NOT NULL AND ConfirmedAtUtc >= CreatedAtUtc)");
+
+                            t.HasCheckConstraint("CK_AgentInitial_Context", "SnapshotSequence BETWEEN 0 AND 9007199254740991 AND DeclaredCharacterLimit > 0 AND DeliveredCharacterCount >= 0 AND TruncatedMessageCount >= 0 AND ((Truncated = 0 AND TruncatedMessageCount = 0) OR (Truncated = 1 AND TruncatedMessageCount > 0)) AND ((OverLimit = 0 AND DeliveredCharacterCount <= DeclaredCharacterLimit) OR (OverLimit = 1 AND DeliveredCharacterCount > DeclaredCharacterLimit))");
+
+                            t.HasCheckConstraint("CK_AgentInitial_Range", "(SnapshotSequence = 0 AND CandidateFirstSequence IS NULL AND CandidateLastSequence IS NULL AND DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredCharacterCount = 0 AND TruncatedMessageCount = 0 AND Truncated = 0 AND OverLimit = 0) OR (SnapshotSequence > 0 AND CandidateFirstSequence IS NOT NULL AND CandidateLastSequence IS NOT NULL AND DeliveredFirstSequence IS NOT NULL AND DeliveredLastSequence IS NOT NULL AND DeliveredCharacterCount > 0 AND CandidateFirstSequence = 1 AND CandidateLastSequence = SnapshotSequence AND DeliveredFirstSequence BETWEEN 1 AND SnapshotSequence AND DeliveredLastSequence = SnapshotSequence AND TruncatedMessageCount = DeliveredFirstSequence - 1)");
+                        });
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentRecoveryOperation", b =>
+                {
+                    b.Property<Guid>("ID")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("ConnectionSessionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("MeetingId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedDisplayName")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OperationKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ParticipantId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestFingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("ResultBindingVersion")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long?>("ResultConnectionGeneration")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ResultConnectionId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("ResultRetryCycle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TargetTransportBinding")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("TaskId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ID");
+
+                    b.HasIndex("ParticipantId", "MeetingId");
+
+                    b.HasIndex("TaskId", "MeetingId");
+
+                    b.HasIndex("MeetingId", "ConnectionSessionId", "OperationId")
+                        .IsUnique()
+                        .HasFilter("OperationKind = 'Resume'");
+
+                    b.HasIndex("MeetingId", "NormalizedDisplayName", "OperationId")
+                        .IsUnique()
+                        .HasFilter("OperationKind = 'Join'");
+
+                    b.HasIndex("MeetingId", "ParticipantId", "TaskId", "OperationId")
+                        .IsUnique()
+                        .HasFilter("OperationKind = 'Retry'");
+
+                    b.HasIndex("ResultConnectionId", "MeetingId", "ParticipantId", "ResultConnectionGeneration");
+
+                    b.ToTable("AgentRecoveryOperations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_AgentOperations_Fingerprint", "length(RequestFingerprint) = 64 AND RequestFingerprint NOT GLOB '*[^0-9A-Fa-f]*'");
+
+                            t.HasCheckConstraint("CK_AgentOperations_Result", "(OperationKind IN ('Join', 'Resume') AND ResultConnectionGeneration IS NOT NULL AND ResultBindingVersion IS NOT NULL AND ResultConnectionGeneration BETWEEN 1 AND 9007199254740991 AND ResultBindingVersion BETWEEN 1 AND 9007199254740991 AND TargetTransportBinding IS NOT NULL) OR (OperationKind = 'Retry' AND ResultConnectionGeneration IS NULL AND ResultBindingVersion IS NULL AND TargetTransportBinding IS NULL)");
+
+                            t.HasCheckConstraint("CK_AgentOperations_Scope", "(OperationKind = 'Join' AND NormalizedDisplayName IS NOT NULL AND ConnectionSessionId IS NULL AND TaskId IS NULL AND ResultConnectionId IS NOT NULL AND ResultRetryCycle IS NULL) OR (OperationKind = 'Resume' AND NormalizedDisplayName IS NULL AND ConnectionSessionId IS NOT NULL AND ResultConnectionId IS NOT NULL AND ConnectionSessionId = ResultConnectionId AND TaskId IS NULL AND ResultRetryCycle IS NULL) OR (OperationKind = 'Retry' AND NormalizedDisplayName IS NULL AND ConnectionSessionId IS NULL AND TaskId IS NOT NULL AND ResultConnectionId IS NULL AND ResultRetryCycle IS NOT NULL AND ResultRetryCycle >= 1)");
                         });
                 });
 
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentReplyTask", b =>
                 {
                     b.Property<Guid>("ID")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("AgentParticipantId")
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("AutomaticRetryCount")
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset?>("CancelledAtUtc")
                         .HasColumnType("TEXT");
@@ -154,6 +368,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("CurrentAttemptId")
                         .HasColumnType("TEXT");
 
                     b.Property<DateTimeOffset?>("DeliveredAtUtc")
@@ -169,6 +386,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<Guid>("MeetingId")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTimeOffset?>("NextRetryAtUtc")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTimeOffset?>("ProcessingAtUtc")
                         .HasColumnType("TEXT");
 
@@ -181,6 +401,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<Guid?>("ReplyMessageId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("RetryCycle")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("RetryExhausted")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("SourceAuthorKind")
                         .IsRequired()
                         .HasMaxLength(16)
@@ -192,6 +418,10 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<string>("State")
                         .IsRequired()
                         .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StopReason")
+                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.Property<Guid>("TriggerMentionId")
@@ -216,8 +446,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.HasIndex("TriggerMentionId", "MeetingId");
 
+                    b.HasIndex("CurrentAttemptId", "ID", "MeetingId");
+
                     b.HasIndex("MeetingId", "AgentParticipantId", "TriggerMessageId")
                         .IsUnique();
+
+                    b.HasIndex("State", "NextRetryAtUtc", "TriggerSequence");
 
                     b.HasIndex("TriggerMessageId", "MeetingId", "TriggerSequence");
 
@@ -232,6 +466,10 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                             t.HasCheckConstraint("CK_AgentReplyTasks_State", "State IN ('Queued', 'Delivered', 'Processing', 'Replied', 'Failed', 'Cancelled')");
 
                             t.HasCheckConstraint("CK_AgentReplyTasks_Timestamps", "(State != 'Delivered' OR DeliveredAtUtc IS NOT NULL) AND (State != 'Processing' OR ProcessingAtUtc IS NOT NULL) AND (State != 'Replied' OR (RepliedAtUtc IS NOT NULL AND ReplyMessageId IS NOT NULL)) AND (State != 'Failed' OR (FailedAtUtc IS NOT NULL AND FailureCode IS NOT NULL)) AND (State != 'Cancelled' OR CancelledAtUtc IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_AgentTasks_Retry", "RetryCycle >= 0 AND AutomaticRetryCount >= 0 AND ((RetryExhausted = 0 AND StopReason IS NULL) OR (RetryExhausted = 1 AND StopReason IS NOT NULL AND StopReason IN ('AttemptsExhausted', 'PermanentFailure') AND NextRetryAtUtc IS NULL))");
+
+                            t.HasCheckConstraint("CK_AgentTasks_RetryTime", "NextRetryAtUtc IS NULL OR (State = 'Failed' AND FailedAtUtc IS NOT NULL AND NextRetryAtUtc >= FailedAtUtc)");
                         });
                 });
 
@@ -241,14 +479,37 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("BindingVersion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L);
+
                     b.Property<long>("CandidateFirstSequence")
                         .HasColumnType("INTEGER");
 
                     b.Property<long>("CandidateLastSequence")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTimeOffset?>("ConfirmationDeadlineUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("ConfirmedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("ConnectionGeneration")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(1L);
+
                     b.Property<Guid>("ConnectionSessionId")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("ContextFormatVersion")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("agent-context-v1");
 
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT");
@@ -268,10 +529,30 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<long?>("DeliveredLastSequence")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("FailureDecision")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTimeOffset?>("InvalidatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("InvalidationReason")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("MeetingId")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("OverLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ReplacementAttemptId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReportedFailureCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("RetryCycle")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("State")
@@ -292,6 +573,8 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.HasIndex("ConnectionSessionId", "MeetingId");
 
+                    b.HasIndex("State", "ConfirmationDeadlineUtc");
+
                     b.HasIndex("TaskId", "ID")
                         .IsUnique();
 
@@ -299,15 +582,27 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.HasIndex("MeetingId", "ConnectionSessionId", "State");
 
+                    b.HasIndex("ReplacementAttemptId", "TaskId", "MeetingId");
+
                     b.ToTable("AgentTaskDeliveryAttempts", null, t =>
                         {
+                            t.HasCheckConstraint("CK_AgentAttempts_Confirmation", "(ConfirmedAtUtc IS NULL AND State != 'Confirmed') OR (ConfirmedAtUtc IS NOT NULL AND State IN ('Confirmed', 'Abandoned') AND ConfirmationDeadlineUtc IS NOT NULL AND ConfirmedAtUtc < ConfirmationDeadlineUtc AND ConfirmedAtUtc >= DeliveredAtUtc)");
+
+                            t.HasCheckConstraint("CK_AgentAttempts_Deadline", "ConfirmationDeadlineUtc IS NULL OR (DeliveredAtUtc IS NOT NULL AND ConfirmationDeadlineUtc > DeliveredAtUtc)");
+
+                            t.HasCheckConstraint("CK_AgentAttempts_FailureReceipt", "(ReportedFailureCode IS NULL AND FailureDecision IS NULL) OR (ReportedFailureCode IN ('agent_transient_failure', 'agent_permanent_failure') AND FailureDecision IS NOT NULL AND json_valid(FailureDecision) AND ConfirmedAtUtc IS NOT NULL)");
+
+                            t.HasCheckConstraint("CK_AgentAttempts_Invalidation", "(InvalidatedAtUtc IS NULL AND InvalidationReason IS NULL AND ReplacementAttemptId IS NULL) OR (InvalidatedAtUtc IS NOT NULL AND InvalidationReason IS NOT NULL AND InvalidatedAtUtc >= CreatedAtUtc AND (ReplacementAttemptId IS NULL OR (State = 'Abandoned' AND ReplacementAttemptId != ID)))");
+
+                            t.HasCheckConstraint("CK_AgentAttempts_Versions", "ConnectionGeneration BETWEEN 1 AND 9007199254740991 AND BindingVersion BETWEEN 1 AND 9007199254740991 AND RetryCycle >= 0");
+
                             t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_CandidateRange", "CandidateFirstSequence BETWEEN 1 AND 9007199254740991 AND CandidateFirstSequence <= CandidateLastSequence AND CandidateLastSequence <= 9007199254740991");
 
                             t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_CharacterCounts", "DeclaredContextCharacterLimit > 0 AND DeliveredCharacterCount >= 0 AND TruncatedMessageCount >= 0 AND ((Truncated = 0 AND TruncatedMessageCount = 0) OR (Truncated = 1 AND TruncatedMessageCount > 0)) AND ((OverLimit = 0 AND DeliveredCharacterCount <= DeclaredContextCharacterLimit) OR (OverLimit = 1 AND DeliveredCharacterCount > DeclaredContextCharacterLimit))");
 
-                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_DeliveredRange", "(State = 'Prepared' AND DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (State = 'Delivered' AND DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL) OR (State = 'Abandoned' AND ((DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL)))");
+                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_DeliveredRange", "(State = 'Prepared' AND DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (State IN ('Delivered', 'Confirmed') AND DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL) OR (State = 'Abandoned' AND ((DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL)))");
 
-                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_State", "State IN ('Prepared', 'Delivered', 'Abandoned')");
+                            t.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_State", "State IN ('Prepared', 'Delivered', 'Abandoned', 'Confirmed')");
                         });
                 });
 
@@ -664,6 +959,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .HasPrincipalKey("ID", "MeetingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentConnectionSession", null)
+                        .WithMany()
+                        .HasForeignKey("SupersededByConnectionId", "MeetingId", "ParticipantId")
+                        .HasPrincipalKey("ID", "MeetingId", "ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentContextCursor", b =>
@@ -680,6 +981,44 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .HasPrincipalKey("ID", "MeetingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentConnectionSession", null)
+                        .WithMany()
+                        .HasForeignKey("CurrentConnectionId", "MeetingId", "ParticipantId", "ConnectionGeneration")
+                        .HasPrincipalKey("ID", "MeetingId", "ParticipantId", "ConnectionGeneration")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentInitialContextDelivery", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentConnectionSession", null)
+                        .WithMany()
+                        .HasForeignKey("ConnectionSessionId", "MeetingId", "ParticipantId")
+                        .HasPrincipalKey("ID", "MeetingId", "ParticipantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentRecoveryOperation", b =>
+                {
+                    b.HasOne("RoundTableMeeting.Domain.Entities.MeetingParticipant", null)
+                        .WithMany()
+                        .HasForeignKey("ParticipantId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentReplyTask", null)
+                        .WithMany()
+                        .HasForeignKey("TaskId", "MeetingId")
+                        .HasPrincipalKey("ID", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentConnectionSession", null)
+                        .WithMany()
+                        .HasForeignKey("ResultConnectionId", "MeetingId", "ParticipantId", "ResultConnectionGeneration")
+                        .HasPrincipalKey("ID", "MeetingId", "ParticipantId", "ConnectionGeneration")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.AgentReplyTask", b =>
@@ -716,6 +1055,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("CurrentAttemptId", "ID", "MeetingId")
+                        .HasPrincipalKey("ID", "TaskId", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("RoundTableMeeting.Domain.Entities.MeetingMessage", null)
                         .WithMany()
                         .HasForeignKey("TriggerMessageId", "MeetingId", "TriggerSequence")
@@ -745,6 +1090,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .HasPrincipalKey("ID", "MeetingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("ReplacementAttemptId", "TaskId", "MeetingId")
+                        .HasPrincipalKey("ID", "TaskId", "MeetingId")
+                        .OnDelete(DeleteBehavior.Restrict);
                 });
 
             modelBuilder.Entity("RoundTableMeeting.Domain.Entities.Meeting", b =>

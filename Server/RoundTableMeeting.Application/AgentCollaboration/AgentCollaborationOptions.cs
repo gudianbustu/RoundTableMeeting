@@ -2,7 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace RoundTableMeeting.Application.AgentCollaboration;
 
-public sealed class AgentCollaborationOptions
+public sealed partial class AgentCollaborationOptions
 {
 	public const string SectionName = "AgentCollaboration";
 

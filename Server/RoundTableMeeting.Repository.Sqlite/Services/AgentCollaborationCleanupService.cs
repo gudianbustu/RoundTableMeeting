@@ -19,6 +19,16 @@ public sealed class AgentCollaborationCleanupService(RoundTableMeetingDbContext 
         foreach (var task in tasks) task.Cancel(cancelledAtUtc);
         await dbContext.SaveChangesAsync(cancellationToken);
         foreach (var task in tasks) dbContext.Entry(task).State = EntityState.Detached;
+        await dbContext.AgentContextCursors.Where(item => item.MeetingId == meetingId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CurrentConnectionId, (Guid?)null), cancellationToken);
+        await dbContext.AgentReplyTasks.Where(item => item.MeetingId == meetingId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CurrentAttemptId, (Guid?)null), cancellationToken);
+        await dbContext.AgentTaskDeliveryAttempts.Where(item => item.MeetingId == meetingId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ReplacementAttemptId, (Guid?)null), cancellationToken);
+        await dbContext.AgentConnectionSessions.Where(item => item.MeetingId == meetingId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.SupersededByConnectionId, (Guid?)null), cancellationToken);
+        await dbContext.AgentRecoveryOperations.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.AgentInitialContextDeliveries.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.AgentTaskDeliveryAttempts.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.AgentReplyTasks.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.AgentContextCursors.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);

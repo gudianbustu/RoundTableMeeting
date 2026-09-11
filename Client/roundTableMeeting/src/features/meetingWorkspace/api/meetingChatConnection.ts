@@ -6,11 +6,21 @@ export type Subscription = { onlineParticipantIds: string[]; highWatermarkSequen
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const isGuid = (value: unknown): value is string => typeof value === 'string' && guidPattern.test(value)
 
-function mapAgentActivity(value: any): AgentActivity {
+export function mapAgentActivity(value: any): AgentActivity {
   const changedAt = new Date(value?.changedAt)
   const state: AgentActivityState = ['waiting', 'processing', 'blocked', 'disconnected'].includes(value?.state) ? value.state : 'unknown'
   if (!isGuid(value?.meetingId) || !isGuid(value?.participantId) || Number.isNaN(changedAt.getTime())) throw new Error('invalid_agent_activity')
-  return { meetingId: value.meetingId, participantId: value.participantId, state, activeTaskId: isGuid(value?.activeTaskId) ? value.activeTaskId : undefined, failureCode: typeof value?.failureCode === 'string' ? value.failureCode : undefined, changedAt }
+  if (value.revision !== undefined && (!Number.isSafeInteger(value.revision) || value.revision < 0)) throw new Error('invalid_agent_activity_revision')
+  const nextRetryAt = value.nextRetryAt == null ? undefined : new Date(value.nextRetryAt)
+  if (nextRetryAt && Number.isNaN(nextRetryAt.getTime())) throw new Error('invalid_agent_activity_retry_time')
+  return {
+    meetingId: value.meetingId, participantId: value.participantId, state,
+    activeTaskId: isGuid(value?.activeTaskId) ? value.activeTaskId : undefined,
+    failureCode: typeof value?.failureCode === 'string' ? value.failureCode : undefined, changedAt,
+    revision: value.revision, reason: typeof value.reason === 'string' ? value.reason : undefined,
+    retryExhausted: typeof value.retryExhausted === 'boolean' ? value.retryExhausted : undefined,
+    nextRetryAt, connectionDisposition: typeof value.connectionDisposition === 'string' ? value.connectionDisposition : undefined,
+  }
 }
 
 function mapSubscription(value: any): Subscription {

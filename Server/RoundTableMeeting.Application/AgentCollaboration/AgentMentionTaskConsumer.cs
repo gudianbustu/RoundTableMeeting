@@ -13,7 +13,7 @@ public sealed class AgentMentionTaskConsumer(
     IMessageRepository messages,
     IAgentCollaborationRepository agentRepository,
     IUnitOfWork unitOfWork,
-    IMeetingTransactionRunner transactionRunner,
+    AgentActivityTransactions transactionRunner,
     IMeetingRealtimeGate realtimeGate,
     IAgentTaskSignalRegistry taskSignals,
     TimeProvider timeProvider) : IMessageEventConsumer
@@ -26,7 +26,7 @@ public sealed class AgentMentionTaskConsumer(
         if (sharedLease is null || await meetings.FindActiveByIdAsync(envelope.MeetingId, cancellationToken) is null)
             return;
 
-        var createdAgents = await transactionRunner.RunAsync(
+        var createdAgents = await transactionRunner.RunAsync(envelope.MeetingId,
             token => AllocateTasksAsync(envelope, token),
             cancellationToken);
 

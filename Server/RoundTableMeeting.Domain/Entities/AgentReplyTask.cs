@@ -3,7 +3,7 @@ using RoundTableMeeting.Domain.Enums;
 
 namespace RoundTableMeeting.Domain.Entities;
 
-public sealed class AgentReplyTask : BaseEntity
+public sealed partial class AgentReplyTask : BaseEntity
 {
 	private const long MaximumSequence = 9007199254740991L;
 
@@ -167,6 +167,9 @@ public sealed class AgentReplyTask : BaseEntity
 		}
 		EnsureNotBeforeLatestState(cancelledAtUtc);
 		State = AgentReplyTaskState.Cancelled;
+        NextRetryAtUtc = null;
+        RetryExhausted = false;
+        StopReason = null;
 		CancelledAtUtc = cancelledAtUtc;
 		return true;
 	}

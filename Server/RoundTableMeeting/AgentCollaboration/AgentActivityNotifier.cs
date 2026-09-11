@@ -27,16 +27,16 @@ public sealed class AgentActivityNotifier(
             {
                 await group.SendAsync("participantPresenceChanged",
                     new ParticipantPresenceDto(activity.ParticipantId,
-                        activity.State == "disconnected" ? "offline" : "online",
+                        activity.State == "disconnected" || activity.Reason == "activating" ? "offline" : "online",
                         activity.ChangedAt),
                     cancellationToken);
             }
         }
         catch (Exception exception)
         {
-            logger.LogWarning(exception,
-                "Failed to publish Agent activity. MeetingId: {MeetingId}, ParticipantId: {ParticipantId}, State: {State}",
-                activity.MeetingId, activity.ParticipantId, activity.State);
+            logger.LogWarning(
+                "Failed to publish Agent activity. MeetingId: {MeetingId}, ParticipantId: {ParticipantId}, State: {State}, ExceptionType: {ExceptionType}",
+                activity.MeetingId, activity.ParticipantId, activity.State, exception.GetType().Name);
         }
     }
 }

@@ -10,23 +10,17 @@ public sealed class AgentConnectionSessionConfiguration : IEntityTypeConfigurati
 	{
 		builder.ToTable("AgentConnectionSessions", delegate(TableBuilder<AgentConnectionSession> table)
 		{
-			table.HasCheckConstraint("CK_AgentConnectionSessions_State", "State IN ('Connected', 'Disconnected')");
-			table.HasCheckConstraint("CK_AgentConnectionSessions_InitialContextState", "InitialContextState IN ('Prepared', 'Confirmed')");
+			table.HasCheckConstraint("CK_AgentConnectionSessions_State", "State IN ('Connected', 'Disconnected', 'Activating', 'Superseded')");
 			table.HasCheckConstraint("CK_AgentConnectionSessions_CharacterLimit", "DeclaredContextCharacterLimit > 0");
-			table.HasCheckConstraint("CK_AgentConnectionSessions_InitialSnapshot", "InitialSnapshotSequence BETWEEN 0 AND 9007199254740991");
-			table.HasCheckConstraint("CK_AgentConnectionSessions_StateTimes", "(State = 'Connected' AND DisconnectedAtUtc IS NULL) OR (State = 'Disconnected' AND DisconnectedAtUtc IS NOT NULL)");
-			table.HasCheckConstraint("CK_AgentConnectionSessions_ContextConfirmation", "(InitialContextState = 'Prepared' AND InitialContextConfirmedAtUtc IS NULL) OR (InitialContextState = 'Confirmed' AND InitialContextConfirmedAtUtc IS NOT NULL)");
+			table.HasCheckConstraint("CK_AgentConnectionSessions_StateTimes", "(State IN ('Connected', 'Activating') AND DisconnectedAtUtc IS NULL) OR (State IN ('Disconnected', 'Superseded') AND DisconnectedAtUtc IS NOT NULL)");
 		});
 		builder.HasKey((AgentConnectionSession x) => x.ID);
 		builder.HasAlternateKey((AgentConnectionSession x) => new { x.ID, x.MeetingId });
 		builder.Property((AgentConnectionSession x) => x.Transport).HasMaxLength(64).IsRequired();
 		builder.Property((AgentConnectionSession x) => x.State).HasConversion<string>().HasMaxLength(16)
 			.IsRequired();
-		builder.Property((AgentConnectionSession x) => x.InitialContextState).HasConversion<string>().HasMaxLength(16)
-			.IsRequired();
 		builder.Property((AgentConnectionSession x) => x.McpTransportBinding).HasMaxLength(128).IsRequired();
 		builder.Property((AgentConnectionSession x) => x.DeclaredContextCharacterLimit).IsRequired();
-		builder.Property((AgentConnectionSession x) => x.InitialSnapshotSequence).IsRequired();
 		builder.Property((AgentConnectionSession x) => x.ConnectedAtUtc).IsRequired();
 		builder.Property((AgentConnectionSession x) => x.LastActivityAtUtc).IsRequired();
 		builder.Property((AgentConnectionSession x) => x.CreatedAtUtc).IsRequired();
@@ -36,7 +30,7 @@ public sealed class AgentConnectionSessionConfiguration : IEntityTypeConfigurati
 			.HasPrincipalKey((MeetingParticipant x) => new { x.ID, x.MeetingId })
 			.OnDelete(DeleteBehavior.Restrict);
 		builder.HasIndex((AgentConnectionSession x) => new { x.MeetingId, x.ParticipantId, x.State });
-		builder.HasIndex((AgentConnectionSession x) => new { x.MeetingId, x.ParticipantId }).IsUnique().HasFilter("State = 'Connected'");
+		builder.HasIndex((AgentConnectionSession x) => new { x.MeetingId, x.ParticipantId }).IsUnique().HasFilter("State IN ('Connected', 'Activating')");
 		builder.HasIndex((AgentConnectionSession x) => x.McpTransportBinding).IsUnique();
 	}
 }
@@ -115,10 +109,10 @@ public sealed class AgentTaskDeliveryAttemptConfiguration : IEntityTypeConfigura
 	{
 		builder.ToTable("AgentTaskDeliveryAttempts", delegate(TableBuilder<AgentTaskDeliveryAttempt> table)
 		{
-			table.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_State", "State IN ('Prepared', 'Delivered', 'Abandoned')");
+			table.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_State", "State IN ('Prepared', 'Delivered', 'Abandoned', 'Confirmed')");
 			table.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_CandidateRange", "CandidateFirstSequence BETWEEN 1 AND 9007199254740991 AND CandidateFirstSequence <= CandidateLastSequence AND CandidateLastSequence <= 9007199254740991");
 			table.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_CharacterCounts", "DeclaredContextCharacterLimit > 0 AND DeliveredCharacterCount >= 0 AND TruncatedMessageCount >= 0 AND ((Truncated = 0 AND TruncatedMessageCount = 0) OR (Truncated = 1 AND TruncatedMessageCount > 0)) AND ((OverLimit = 0 AND DeliveredCharacterCount <= DeclaredContextCharacterLimit) OR (OverLimit = 1 AND DeliveredCharacterCount > DeclaredContextCharacterLimit))");
-			table.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_DeliveredRange", "(State = 'Prepared' AND DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (State = 'Delivered' AND DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL) OR (State = 'Abandoned' AND ((DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL)))");
+			table.HasCheckConstraint("CK_AgentTaskDeliveryAttempts_DeliveredRange", "(State = 'Prepared' AND DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (State IN ('Delivered', 'Confirmed') AND DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL) OR (State = 'Abandoned' AND ((DeliveredFirstSequence IS NULL AND DeliveredLastSequence IS NULL AND DeliveredAtUtc IS NULL) OR (DeliveredFirstSequence BETWEEN CandidateFirstSequence AND CandidateLastSequence AND DeliveredLastSequence BETWEEN DeliveredFirstSequence AND CandidateLastSequence AND DeliveredAtUtc IS NOT NULL)))");
 		});
 		builder.HasKey((AgentTaskDeliveryAttempt x) => x.ID);
 		builder.Property((AgentTaskDeliveryAttempt x) => x.State).HasConversion<string>().HasMaxLength(16)

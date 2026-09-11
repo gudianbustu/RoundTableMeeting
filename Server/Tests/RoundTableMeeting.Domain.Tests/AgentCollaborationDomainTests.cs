@@ -12,12 +12,13 @@ public sealed class AgentCollaborationDomainTests
 	[Fact]
 	public void ConnectionSessionConfirmsOnceAndDisconnectsIdempotently()
 	{
-		AgentConnectionSession session = AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 12000, 8L, "binding-1", BaseTime);
+		AgentConnectionSession session = AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 12000, "binding-1", BaseTime);
 		Assert.Equal(AgentConnectionState.Connected, session.State);
-		Assert.Equal(InitialContextState.Prepared, session.InitialContextState);
-		Assert.True(session.ConfirmInitialContext(BaseTime.AddSeconds(1.0)));
-		Assert.False(session.ConfirmInitialContext(BaseTime.AddSeconds(2.0)));
-		Assert.Equal(BaseTime.AddSeconds(1.0), session.InitialContextConfirmedAtUtc);
+		var initial = AgentInitialContextDelivery.Create(session.MeetingId, session.ParticipantId, session.ID, new(0, null, null, null, null, 12000, 0, false, false, 0, "agent-context-v1"), BaseTime);
+        Assert.Equal(InitialContextState.Prepared, initial.State);
+		Assert.True(initial.Confirm(BaseTime.AddSeconds(1.0)));
+		Assert.False(initial.Confirm(BaseTime.AddSeconds(2.0)));
+		Assert.Equal(BaseTime.AddSeconds(1.0), initial.ConfirmedAtUtc);
 		Assert.True(session.Disconnect(BaseTime.AddSeconds(3.0)));
 		Assert.False(session.Disconnect(BaseTime.AddSeconds(4.0)));
 		Assert.Equal(AgentConnectionState.Disconnected, session.State);
@@ -30,26 +31,16 @@ public sealed class AgentCollaborationDomainTests
 	[Fact]
 	public void ConnectionSessionRejectsInvalidIdentityLimitsAndTimeRegression()
 	{
-		Assert.Throws<ArgumentException>(() => AgentConnectionSession.Create(Guid.Empty, Guid.NewGuid(), 1, 0L, "binding", BaseTime));
-		Assert.Throws<ArgumentException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.Empty, 1, 0L, "binding", BaseTime));
-		Assert.Throws<ArgumentOutOfRangeException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 0, 0L, "binding", BaseTime));
-		Assert.Throws<ArgumentOutOfRangeException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, -1L, "binding", BaseTime));
-		Assert.Throws<ArgumentOutOfRangeException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, 9007199254740992L, "binding", BaseTime));
-		Assert.Throws<ArgumentException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, 0L, " ", BaseTime));
-		AgentConnectionSession session = AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, 0L, "binding", BaseTime);
+		Assert.Throws<ArgumentException>(() => AgentConnectionSession.Create(Guid.Empty, Guid.NewGuid(), 1, "binding", BaseTime));
+		Assert.Throws<ArgumentException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.Empty, 1, "binding", BaseTime));
+		Assert.Throws<ArgumentOutOfRangeException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 0, "binding", BaseTime));
+		Assert.Throws<ArgumentException>(() => AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, " ", BaseTime));
+		AgentConnectionSession session = AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, "binding", BaseTime);
 		Assert.Throws<ArgumentOutOfRangeException>(delegate
 		{
 			session.Touch(BaseTime.AddSeconds(-1.0));
 		});
 		Assert.Throws<ArgumentOutOfRangeException>(() => session.Disconnect(BaseTime.AddSeconds(-1.0)));
-	}
-
-	[Fact]
-	public void PreparedDisconnectedSessionCannotBeConfirmed()
-	{
-		AgentConnectionSession session = AgentConnectionSession.Create(Guid.NewGuid(), Guid.NewGuid(), 1, 0L, "binding", BaseTime);
-		session.Disconnect(BaseTime.AddSeconds(1.0));
-		Assert.Throws<InvalidOperationException>(() => session.ConfirmInitialContext(BaseTime.AddSeconds(2.0)));
 	}
 
 	[Fact]

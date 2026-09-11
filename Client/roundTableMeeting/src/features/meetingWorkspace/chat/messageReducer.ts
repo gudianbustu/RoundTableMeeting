@@ -13,6 +13,7 @@ export type ChatAction =
   | (Scoped & { type: 'agentActivitySnapshot'; activities: AgentActivity[] })
   | (Scoped & { type: 'agentActivityChanged'; activity: AgentActivity })
   | (Scoped & { type: 'connectionStateChanged'; state: ConnectionState })
+  | (Scoped & { type: 'connectionStarted' })
   | (Scoped & { type: 'historyStateChanged'; state: HistoryState })
   | (Scoped & { type: 'sendStarted'; submission: FailedSubmission })
   | (Scoped & { type: 'sendSucceeded'; message: ChatMessage })
@@ -42,7 +43,21 @@ function merge(state: ChatState, messages: ChatMessage[], initial = false): Chat
   return next
 }
 
+function retainActivity(current: AgentActivity | undefined, incoming: AgentActivity): boolean {
+  if (!current) return false
+  if (current.revision !== undefined) {
+    if (incoming.revision === undefined) return true
+    return current.revision > incoming.revision || current.revision === incoming.revision && current.state !== 'unknown'
+  }
+  if (incoming.revision !== undefined) return false
+  return current.changedAt.getTime() > incoming.changedAt.getTime()
+}
+
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
+  if (action.type === 'connectionStarted') {
+    if (action.meetingId !== state.meetingId || action.generation <= state.generation) return state
+    return { ...state, generation: action.generation, connection: 'connecting', send: state.send === 'sending' ? 'failed' : state.send }
+  }
   if (action.type !== 'reset' && (action.meetingId !== state.meetingId || action.generation !== state.generation)) return state
   switch (action.type) {
     case 'reset': return createInitialChatState(action.meetingId, action.generation)
@@ -50,8 +65,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'messageEventReceived': return action.message.meetingId !== state.meetingId || state.messagesById[action.message.messageId] ? state : merge({ ...state, newMessageCount: state.newMessageCount + 1 }, [action.message])
     case 'presenceChanged': return { ...state, presence: { ...state.presence, [action.participantId]: action.state } }
     case 'presenceSnapshot': { const presence: Record<string, PresenceState> = {}; for (const id of action.participantIds) presence[id] = 'online'; return { ...state, presence, highWatermarkSequence: Math.max(state.highWatermarkSequence, action.highWatermarkSequence) } }
-    case 'agentActivitySnapshot': { const agentActivities: Record<string, AgentActivity> = {}; for (const activity of action.activities) { if (activity.meetingId !== state.meetingId) continue; const current = state.agentActivities[activity.participantId]; agentActivities[activity.participantId] = current && current.changedAt.getTime() > activity.changedAt.getTime() ? current : activity } return { ...state, agentActivities } }
-    case 'agentActivityChanged': { const current = state.agentActivities[action.activity.participantId]; if (action.activity.meetingId !== state.meetingId || current && current.changedAt.getTime() > action.activity.changedAt.getTime()) return state; return { ...state, agentActivities: { ...state.agentActivities, [action.activity.participantId]: action.activity } } }
+    case 'agentActivitySnapshot': { const agentActivities: Record<string, AgentActivity> = {}; for (const activity of action.activities) { if (activity.meetingId !== state.meetingId) continue; const current = state.agentActivities[activity.participantId]; agentActivities[activity.participantId] = retainActivity(current, activity) ? current : activity } return { ...state, agentActivities } }
+    case 'agentActivityChanged': { const current = state.agentActivities[action.activity.participantId]; if (action.activity.meetingId !== state.meetingId || retainActivity(current, action.activity)) return state; return { ...state, agentActivities: { ...state.agentActivities, [action.activity.participantId]: action.activity } } }
     case 'connectionStateChanged': { if (action.state !== 'reconnecting' && action.state !== 'disconnected' && action.state !== 'rejected') return { ...state, connection: action.state }; const agentActivities: Record<string, AgentActivity> = {}; for (const activity of Object.values(state.agentActivities)) agentActivities[activity.participantId] = { ...activity, state: 'unknown' }; return { ...state, connection: action.state, agentActivities } }
     case 'historyStateChanged': return { ...state, history: action.state }
     case 'draftChanged': return { ...state, draft: action.draft, failedSubmission: undefined, send: 'idle' }

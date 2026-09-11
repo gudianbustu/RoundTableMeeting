@@ -127,7 +127,7 @@ public sealed class AgentCollaborationPersistenceTests
 			await context.Database.MigrateAsync();
 			Seed seed = await SeedAsync(context, "enum-strings");
 			Assert.Equal("Connected", await context.Database.SqlQueryRaw<string>("SELECT State AS Value FROM AgentConnectionSessions WHERE ID = {0}", new object[1] { seed.ConnectionSessionId }).SingleAsync());
-			Assert.Equal("Prepared", await context.Database.SqlQueryRaw<string>("SELECT InitialContextState AS Value FROM AgentConnectionSessions WHERE ID = {0}", new object[1] { seed.ConnectionSessionId }).SingleAsync());
+			Assert.Equal("Prepared", await context.Database.SqlQueryRaw<string>("SELECT State AS Value FROM AgentInitialContextDeliveries WHERE ConnectionSessionId = {0}", new object[1] { seed.ConnectionSessionId }).SingleAsync());
 			Assert.Equal("Queued", await context.Database.SqlQueryRaw<string>("SELECT State AS Value FROM AgentReplyTasks WHERE ID = {0}", new object[1] { seed.TaskId }).SingleAsync());
 			Assert.Equal("Human", await context.Database.SqlQueryRaw<string>("SELECT SourceAuthorKind AS Value FROM AgentReplyTasks WHERE ID = {0}", new object[1] { seed.TaskId }).SingleAsync());
 			Assert.Equal("Prepared", await context.Database.SqlQueryRaw<string>("SELECT State AS Value FROM AgentTaskDeliveryAttempts WHERE ID = {0}", new object[1] { seed.DeliveryAttemptId }).SingleAsync());
@@ -149,7 +149,7 @@ public sealed class AgentCollaborationPersistenceTests
 			{
 				await context.Database.MigrateAsync();
 				Seed seed = await SeedAsync(context, "unique");
-				context.Add(AgentConnectionSession.Create(seed.MeetingId, seed.AgentParticipantId, 12000, 0L, "another-binding", BaseTime.AddSeconds(10.0)));
+				context.Add(AgentConnectionSession.Create(seed.MeetingId, seed.AgentParticipantId, 12000, "another-binding", BaseTime.AddSeconds(10.0)));
 				await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
 				context.ChangeTracker.Clear();
 				AgentReplyTask duplicateTask = AgentReplyTask.Create(Guid.NewGuid(), seed.MeetingId, seed.AgentParticipantId, seed.TriggerMessageId, 1L, seed.TriggerMentionId, MessageAuthorKind.Human, seed.SourceParticipantId, 0L, Guid.NewGuid(), BaseTime.AddSeconds(11.0));
@@ -238,7 +238,7 @@ public sealed class AgentCollaborationPersistenceTests
 			UnitOfWorkImpl unitOfWork = new UnitOfWorkImpl(context);
 			MeetingTransactionRunner runner = new MeetingTransactionRunner(context, unitOfWork);
 			MeetingParticipant agent = MeetingParticipant.CreateAgent(seed.MeetingId, "Check Agent", BaseTime.AddSeconds(1.0));
-			AgentConnectionSession connection = AgentConnectionSession.Create(seed.MeetingId, agent.ID, 12000, 0L, "binding-transaction-check", BaseTime.AddSeconds(1.0));
+			AgentConnectionSession connection = AgentConnectionSession.Create(seed.MeetingId, agent.ID, 12000, "binding-transaction-check", BaseTime.AddSeconds(1.0));
 			context.Entry(connection).Property((AgentConnectionSession item) => item.State).CurrentValue = (AgentConnectionState)999;
 			await Assert.ThrowsAsync<DbUpdateException>(() => runner.RunAsync(delegate
 			{
@@ -266,7 +266,7 @@ public sealed class AgentCollaborationPersistenceTests
 				await context.Database.MigrateAsync();
 				Seed first = await SeedAsync(context, "first");
 				Seed second = await SeedAsync(context, "second");
-				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentConnectionSessions\r\n(ID, MeetingId, ParticipantId, Transport, State, DeclaredContextCharacterLimit,\r\n InitialSnapshotSequence, InitialContextState, McpTransportBinding, ConnectedAtUtc,\r\n LastActivityAtUtc, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {second.MeetingId}, {first.AgentParticipantId},\r\n        'mcp-streamable-http', 'Connected', 12000, 0, 'Prepared', 'cross-binding',\r\n        {BaseTime}, {BaseTime}, {BaseTime})"));
+				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentConnectionSessions\r\n(ID, MeetingId, ParticipantId, Transport, State, DeclaredContextCharacterLimit,\r\n McpTransportBinding, ConnectedAtUtc,\r\n LastActivityAtUtc, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {second.MeetingId}, {first.AgentParticipantId},\r\n        'mcp-streamable-http', 'Connected', 12000, 'cross-binding',\r\n        {BaseTime}, {BaseTime}, {BaseTime})"));
 				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentContextCursors\r\n(ID, MeetingId, ParticipantId, DeliveredThroughSequence, AllocatedThroughSequence, UpdatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {second.MeetingId}, {first.AgentParticipantId}, 0, 0, {BaseTime})"));
 				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentReplyTasks\r\n(ID, MeetingId, AgentParticipantId, TriggerMessageId, TriggerSequence, TriggerMentionId,\r\n SourceAuthorKind, CandidateFromSequenceExclusive, CandidateToSequenceInclusive, State,\r\n ReplyIdempotencyKey, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {second.MeetingId}, {first.AgentParticipantId}, {first.TriggerMessageId},\r\n        1, {first.TriggerMentionId}, 'System', 0, 1, 'Queued', {Guid.NewGuid()}, {BaseTime})"));
 				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentTaskDeliveryAttempts\r\n(ID, TaskId, ConnectionSessionId, MeetingId, CandidateFirstSequence, CandidateLastSequence,\r\n DeclaredContextCharacterLimit, DeliveredCharacterCount, Truncated, OverLimit,\r\n TruncatedMessageCount, State, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {first.TaskId}, {first.ConnectionSessionId}, {second.MeetingId},\r\n        1, 1, 12000, 0, 0, 0, 0, 'Prepared', {BaseTime})"));
@@ -296,7 +296,7 @@ public sealed class AgentCollaborationPersistenceTests
 			{
 				await context.Database.MigrateAsync();
 				Seed seed = await SeedAsync(context, "checks");
-				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentConnectionSessions\r\n(ID, MeetingId, ParticipantId, Transport, State, DeclaredContextCharacterLimit,\r\n InitialSnapshotSequence, InitialContextState, McpTransportBinding, ConnectedAtUtc,\r\n LastActivityAtUtc, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {seed.MeetingId}, {seed.AgentParticipantId},\r\n        'mcp-streamable-http', 'Invalid', 12000, 0, 'Prepared', 'invalid-state',\r\n        {BaseTime}, {BaseTime}, {BaseTime})"));
+				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentConnectionSessions\r\n(ID, MeetingId, ParticipantId, Transport, State, DeclaredContextCharacterLimit,\r\n McpTransportBinding, ConnectedAtUtc,\r\n LastActivityAtUtc, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {seed.MeetingId}, {seed.AgentParticipantId},\r\n        'mcp-streamable-http', 'Invalid', 12000, 'invalid-state',\r\n        {BaseTime}, {BaseTime}, {BaseTime})"));
 				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentContextCursors\r\n(ID, MeetingId, ParticipantId, DeliveredThroughSequence, AllocatedThroughSequence, UpdatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {seed.MeetingId}, {seed.AgentParticipantId}, 2, 1, {BaseTime})"));
 				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentReplyTasks\r\n(ID, MeetingId, AgentParticipantId, TriggerMessageId, TriggerSequence, TriggerMentionId,\r\n SourceAuthorKind, SourceParticipantId, CandidateFromSequenceExclusive,\r\n CandidateToSequenceInclusive, State, ReplyIdempotencyKey, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {seed.MeetingId}, {seed.AgentParticipantId}, {seed.TriggerMessageId},\r\n        1, {seed.TriggerMentionId}, 'Human', {seed.SourceParticipantId}, 1, 1,\r\n        'Queued', {Guid.NewGuid()}, {BaseTime})"));
 				await Assert.ThrowsAsync<SqliteException>(() => context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO AgentTaskDeliveryAttempts\r\n(ID, TaskId, ConnectionSessionId, MeetingId, CandidateFirstSequence, CandidateLastSequence,\r\n DeliveredFirstSequence, DeliveredLastSequence, DeclaredContextCharacterLimit,\r\n DeliveredCharacterCount, Truncated, OverLimit, TruncatedMessageCount, State, CreatedAtUtc)\r\nVALUES ({Guid.NewGuid()}, {seed.TaskId}, {seed.ConnectionSessionId}, {seed.MeetingId},\r\n        1, 3, 1, 2, 12000, 10, 0, 0, 0, 'Prepared', {BaseTime})"));
@@ -324,11 +324,13 @@ public sealed class AgentCollaborationPersistenceTests
 		MeetingParticipant agent = MeetingParticipant.CreateAgent(meeting.ID, "Analyst", BaseTime);
 		MeetingMessage message = MeetingMessage.CreateParticipant(meeting.ID, 1L, human.ID, MessageAuthorKind.Human, human.DisplayName, "@Analyst please review", Guid.NewGuid(), BaseTime);
 		MessageMention mention = MessageMention.Create(meeting.ID, message.ID, agent.ID, agent.DisplayName, 0, 8);
-		AgentConnectionSession connection = AgentConnectionSession.Create(meeting.ID, agent.ID, 12000, 0L, "binding-" + suffix, BaseTime);
+		AgentConnectionSession connection = AgentConnectionSession.Create(meeting.ID, agent.ID, 12000, "binding-" + suffix, BaseTime);
 		AgentContextCursor cursor = AgentContextCursor.Create(meeting.ID, agent.ID, 0L, BaseTime);
 		AgentReplyTask task = AgentReplyTask.Create(Guid.NewGuid(), meeting.ID, agent.ID, message.ID, message.Sequence, mention.ID, MessageAuthorKind.Human, human.ID, 0L, Guid.NewGuid(), BaseTime);
 		AgentTaskDeliveryAttempt attempt = AgentTaskDeliveryAttempt.Create(task.ID, connection.ID, meeting.ID, 1L, 1L, 12000, 24, truncated: false, overLimit: false, 0, BaseTime);
 		context.AddRange(user, meeting, human, agent, message, mention, connection, cursor, task, attempt);
+        context.Add(AgentInitialContextDelivery.Create(meeting.ID, agent.ID, connection.ID,
+            new(0, null, null, null, null, 12000, 0, false, false, 0, "agent-context-v1"), BaseTime));
 		await context.SaveChangesAsync();
 		return new Seed(meeting.ID, agent.ID, human.ID, message.ID, 1L, mention.ID, connection.ID, task.ID, task.ReplyIdempotencyKey, attempt.ID);
 	}

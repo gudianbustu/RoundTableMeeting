@@ -9,7 +9,14 @@ public sealed record SubmitMessageResultDto(MessageDto Message, bool Replayed);
 public sealed record MessagePageRequest(long? BeforeSequence = null, long? AfterSequence = null, long? ThroughSequence = null, int? Limit = null);
 public sealed record MessagePageDto(IReadOnlyList<MessageDto> Items, bool HasMoreBefore, bool HasMoreAfter, long? FirstSequence, long? LastSequence, long? NextBeforeSequence, long? NextAfterSequence);
 public sealed record MeetingChatSubscriptionAccessDto(Guid ParticipantId, long HighWatermarkSequence);
-public sealed record AgentActivityDto(Guid MeetingId, Guid ParticipantId, string State, Guid? ActiveTaskId, string? FailureCode, DateTimeOffset ChangedAt);
+public sealed record AgentActivityDto(Guid MeetingId, Guid ParticipantId, string State, Guid? ActiveTaskId, string? FailureCode, DateTimeOffset ChangedAt)
+{
+    public long Revision { get; init; }
+    public string? Reason { get; init; }
+    public bool? RetryExhausted { get; init; }
+    public DateTimeOffset? NextRetryAt { get; init; }
+    public string? ConnectionDisposition { get; init; }
+}
 public sealed record MeetingChatSubscriptionDto(IReadOnlyList<Guid> OnlineParticipantIds, long HighWatermarkSequence, IReadOnlyList<AgentActivityDto> AgentActivities);
 public sealed record ParticipantPresenceDto(Guid ParticipantId, string State, DateTimeOffset ChangedAt);
 public sealed record MeetingDeletedDto(Guid MeetingId, DateTimeOffset DeletedAt, string ReasonCode = "meeting_deleted");

@@ -17,7 +17,7 @@ public static class AgentCollaborationContract
 	public const string StatusToolName = "get_agent_status";
 }
 
-public sealed record AgentConnectionDto(Guid ConnectionSessionId, string State, int DeclaredContextCharacterLimit, string InitialContextState);
+public sealed partial record AgentConnectionDto(Guid ConnectionSessionId, string State, int DeclaredContextCharacterLimit, string InitialContextState);
 
 public sealed record AgentContextDto(string ContextFormatVersion, long SnapshotSequence, long? CandidateFirstSequence, long? CandidateLastSequence, long? DeliveredFirstSequence, long? DeliveredLastSequence, int DeclaredCharacterLimit, int DeliveredCharacterCount, bool Truncated, bool OverLimit, int TruncatedMessageCount, IReadOnlyList<AgentContextMessageDto> Messages);
 
@@ -25,13 +25,13 @@ public sealed record AgentContextMentionDto(Guid TargetParticipantId, string Tar
 
 public sealed record AgentContextMessageDto(Guid MessageId, Guid MeetingId, long Sequence, string AuthorKind, Guid? AuthorParticipantId, string AuthorDisplayName, string Content, IReadOnlyList<AgentContextMentionDto> Mentions, DateTimeOffset CreatedAtUtc);
 
-public sealed record AgentJoinRequest(string? MeetingCode, string? DisplayName, int ContextCharacterLimit, string? SourceAddress = null);
+public sealed partial record AgentJoinRequest(string? MeetingCode, string? DisplayName, int ContextCharacterLimit, string? SourceAddress = null);
 
-public sealed record AgentJoinResultDto(AgentMeetingDto Meeting, AgentParticipantDto Agent, AgentConnectionDto Connection, IReadOnlyList<AgentParticipantDto> Participants, string ResidentInstructionVersion, string ResidentInstruction, AgentContextDto InitialContext, string NextAction);
+public sealed partial record AgentJoinResultDto(AgentMeetingDto Meeting, AgentParticipantDto Agent, AgentConnectionDto Connection, IReadOnlyList<AgentParticipantDto> Participants, string ResidentInstructionVersion, string ResidentInstruction, AgentContextDto InitialContext, string NextAction);
 
 public sealed record AgentMeetingDto(Guid MeetingId, string Name, string? Description);
 
-public sealed record AgentOperationResult(string ProtocolVersion, bool Succeeded, string? ErrorCode, string Message, object? Data)
+public sealed partial record AgentOperationResult(string ProtocolVersion, bool Succeeded, string? ErrorCode, string Message, object? Data)
 {
 	public static AgentOperationResult Success(object data, string message)
 	{
@@ -48,11 +48,11 @@ public sealed record AgentParticipantDto(Guid ParticipantId, string DisplayName,
 
 public sealed record AgentReplyRequest(Guid? ConnectionSessionId, Guid? TaskId, Guid? DeliveryAttemptId, Guid? ReplyIdempotencyKey, string? Content);
 
-public sealed record AgentStatusRequest(Guid? ConnectionSessionId);
+public sealed partial record AgentStatusRequest(Guid? ConnectionSessionId);
 
-public sealed record AgentWaitRequest(Guid? ConnectionSessionId);
+public sealed partial record AgentWaitRequest(Guid? ConnectionSessionId);
 
-public sealed record AgentMentionResultDto(
+public sealed partial record AgentMentionResultDto(
 	string Kind,
 	Guid TaskId,
 	string TaskState,
@@ -67,11 +67,11 @@ public sealed record AgentMentionResultDto(
 
 public sealed record AgentWaitIdleDto(string Kind, string NextAction);
 
-public sealed record AgentReplyResultDto(MessageDto Message, bool Replayed, string NextAction);
+public sealed partial record AgentReplyResultDto(MessageDto Message, bool Replayed, string NextAction);
 
-public sealed record AgentTaskSummaryDto(Guid TaskId, long TriggerSequence, string State, string? FailureCode);
+public sealed partial record AgentTaskSummaryDto(Guid TaskId, long TriggerSequence, string State, string? FailureCode);
 
-public sealed record AgentStatusResultDto(
+public sealed partial record AgentStatusResultDto(
 	Guid MeetingId,
 	Guid ParticipantId,
 	AgentConnectionDto Connection,

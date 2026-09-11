@@ -13,6 +13,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Repositories;
 
 public sealed class AgentCollaborationRepository(RoundTableMeetingDbContext dbContext) : IAgentCollaborationRepository, IScopedDependency<IAgentCollaborationRepository>, IScopedDependency, IRegisterType, IRegisterType<IAgentCollaborationRepository>
 {
+    public Task<AgentInitialContextDelivery?> FindInitialContextAsync(Guid meetingId, Guid participantId,
+        Guid connectionSessionId, CancellationToken cancellationToken = default)
+        => dbContext.AgentInitialContextDeliveries.AsNoTracking().SingleOrDefaultAsync(item =>
+            item.MeetingId == meetingId && item.ParticipantId == participantId
+            && item.ConnectionSessionId == connectionSessionId, cancellationToken);
+
     public async Task<IReadOnlyList<AgentConnectionSession>> ListConnectedConnectionsAsync(CancellationToken cancellationToken = default)
         => await dbContext.AgentConnectionSessions.AsNoTracking()
             .Where(item => item.State == RoundTableMeeting.Domain.Enums.AgentConnectionState.Connected)

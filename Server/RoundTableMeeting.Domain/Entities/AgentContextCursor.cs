@@ -2,7 +2,7 @@ using System;
 
 namespace RoundTableMeeting.Domain.Entities;
 
-public sealed class AgentContextCursor : BaseEntity
+public sealed partial class AgentContextCursor : BaseEntity
 {
 	private const long MaximumSequence = 9007199254740991L;
 
@@ -35,6 +35,8 @@ public sealed class AgentContextCursor : BaseEntity
 		ParticipantId = participantId;
 		DeliveredThroughSequence = 0L;
 		AllocatedThroughSequence = allocatedThroughSequence;
+        FirstJoinSnapshotSequence = allocatedThroughSequence;
+        ActivityChangedAtUtc = updatedAtUtc;
 		UpdatedAtUtc = updatedAtUtc;
 	}
 

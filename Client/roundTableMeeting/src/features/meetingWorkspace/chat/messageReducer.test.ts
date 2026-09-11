@@ -5,6 +5,39 @@ const message = (id: string, sequence: number) => ({ messageId: id, meetingId: '
 const activity = (state: 'waiting' | 'processing' | 'disconnected', changedAt: string) => ({ meetingId: '11111111-1111-4111-8111-111111111111', participantId: '33333333-3333-4333-8333-333333333333', state, changedAt: new Date(changedAt) })
 
 describe('chatReducer', () => {
+  it('preserves an uncertain submission across reconnect and ignores its old response until an idempotent retry completes', () => {
+    const scope = { meetingId: '11111111-1111-4111-8111-111111111111', generation: 1 }
+    const submission = { clientSubmissionId: 'same-submission', content: 'Keep pending question', candidates: [] }
+    let state = chatReducer(createInitialChatState(scope.meetingId), { ...scope, type: 'draftChanged', draft: submission.content })
+    state = chatReducer(state, { ...scope, type: 'sendStarted', submission })
+    state = chatReducer(state, { ...scope, generation: 2, type: 'connectionStarted' })
+    expect(state).toMatchObject({ generation: 2, draft: submission.content, send: 'failed', failedSubmission: submission })
+    expect(chatReducer(state, { ...scope, type: 'sendSucceeded', message: message('accepted', 1) })).toBe(state)
+    state = chatReducer(state, { ...scope, generation: 2, type: 'sendStarted', submission: state.failedSubmission! })
+    state = chatReducer(state, { ...scope, generation: 2, type: 'sendSucceeded', message: message('accepted', 1) })
+    expect(state).toMatchObject({ draft: '', send: 'idle', orderedMessageIds: ['accepted'] })
+    expect(state.failedSubmission).toBeUndefined()
+  })
+
+  it('uses revision over timestamps and restores an unchanged version after reconnect', () => {
+    const scope = { meetingId: '11111111-1111-4111-8111-111111111111', generation: 1 }
+    const current = { ...activity('disconnected', '2026-09-09T00:00:00Z'), revision: 12 }
+    let state = chatReducer(createInitialChatState(scope.meetingId), { ...scope, type: 'agentActivityChanged', activity: current })
+    state = chatReducer(state, { ...scope, type: 'agentActivityChanged', activity: { ...activity('processing', '2026-09-10T00:00:00Z'), revision: 11 } })
+    state = chatReducer(state, { ...scope, type: 'agentActivitySnapshot', activities: [{ ...activity('waiting', '2026-09-10T00:00:00Z'), revision: 11 }] })
+    state = chatReducer(state, { ...scope, type: 'presenceChanged', participantId: current.participantId, state: 'online' })
+    expect(state.agentActivities[current.participantId]).toEqual(current)
+    state = chatReducer(state, { ...scope, type: 'agentActivityChanged', activity: activity('waiting', '2026-09-11T00:00:00Z') })
+    expect(state.agentActivities[current.participantId]).toEqual(current)
+    state = chatReducer(state, { ...scope, type: 'connectionStateChanged', state: 'reconnecting' })
+    expect(state.agentActivities[current.participantId].state).toBe('unknown')
+    state = chatReducer(state, { ...scope, type: 'agentActivitySnapshot', activities: [current] })
+    expect(state.agentActivities[current.participantId]).toEqual(current)
+    const next = { ...activity('processing', '2026-09-08T00:00:00Z'), revision: 13 }
+    state = chatReducer(state, { ...scope, type: 'agentActivityChanged', activity: next })
+    expect(state.agentActivities[current.participantId]).toEqual(next)
+  })
+
   it('deduplicates events and advances only across contiguous sequences', () => {
     const scope = { meetingId: '11111111-1111-4111-8111-111111111111', generation: 1 }
     let state = createInitialChatState(scope.meetingId, scope.generation)

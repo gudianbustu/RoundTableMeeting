@@ -3,4 +3,18 @@ import { SendOutlined } from '@ant-design/icons'
 import type { FailedSubmission, MentionCandidate, SendState } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates } from '../chat/mentionCandidates'
-export function MessageComposer({ value, send, failedSubmission, participants, onChange, onSend, onRetry }: { value: string; send: SendState; failedSubmission?: FailedSubmission; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void; onRetry: () => void }) { const candidates = getMentionCandidates(value, participants); const error = failedSubmission?.errorCode === 'message_send_rate_limited' && failedSubmission.retryAfterSeconds ? `发送过于频繁，请在 ${failedSubmission.retryAfterSeconds} 秒后重试。` : failedSubmission ? '消息发送失败，请重试。' : undefined; return <div className="message-composer"><Input.TextArea value={value} disabled={send === 'sending'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder="输入消息" onChange={event => onChange(event.target.value)} onPressEnter={event => { if (!event.shiftKey) { event.preventDefault(); if (value.trim()) onSend(candidates) } }} />{error && <span role="alert">{error}</span>}<div className="message-composer-actions">{failedSubmission && <Button danger onClick={onRetry}>重试发送</Button>}<Button type="primary" icon={<SendOutlined />} loading={send === 'sending'} disabled={!value.trim()} onClick={() => onSend(candidates)}>发送</Button></div></div> }
+export function MessageComposer({ value, send, failedSubmission, participants, onChange, onSend, onRetry }: { value: string; send: SendState; failedSubmission?: FailedSubmission; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void; onRetry: () => void }) {
+  const candidates = getMentionCandidates(value, participants)
+  const failure = send === 'failed' ? failedSubmission : undefined
+  const error = failure?.errorCode === 'message_send_rate_limited' && failure.retryAfterSeconds
+    ? `发送过于频繁，请在 ${failure.retryAfterSeconds} 秒后重试。`
+    : failure ? '消息发送失败，请重试。' : undefined
+  return <div className="message-composer">
+    <Input.TextArea value={value} disabled={send === 'sending'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder="输入消息" onChange={event => onChange(event.target.value)} onPressEnter={event => { if (!event.shiftKey) { event.preventDefault(); if (value.trim()) onSend(candidates) } }} />
+    {error && <span role="alert">{error}</span>}
+    <div className="message-composer-actions">
+      {failure && <Button danger onClick={onRetry}>重试发送</Button>}
+      <Button type="primary" icon={<SendOutlined />} loading={send === 'sending'} disabled={!value.trim()} onClick={() => onSend(candidates)}>发送</Button>
+    </div>
+  </div>
+}

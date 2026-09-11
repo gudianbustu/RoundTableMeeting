@@ -124,6 +124,7 @@ public sealed partial class McpAgentContractTests
             {
                 var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
                 Assert.False(await db.AgentConnectionSessions.AnyAsync());
+                Assert.False(await db.AgentInitialContextDeliveries.AnyAsync());
                 Assert.False(await db.AgentContextCursors.AnyAsync());
                 Assert.False(await db.MeetingParticipants.AnyAsync(item => item.ParticipantType == ParticipantType.Agent));
             }
@@ -136,6 +137,8 @@ public sealed partial class McpAgentContractTests
         var connectionId = Data(join).GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker first");
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker second");
+        // Message publication does not imply that the asynchronous mention consumer has allocated both tasks.
+        await EventuallyAsync(factory, async db => await db.AgentReplyTasks.CountAsync(item => item.MeetingId == meeting.MeetingId) == 2);
         fault.Stage = stage;
         AssertToolError(await CallToolAsync(agent, session.TransportSessionId, 3, "wait_for_mention",
             new { connectionSessionId = connectionId }, useSessionEventStream: true), "agent_operation_unavailable");
@@ -146,9 +149,9 @@ public sealed partial class McpAgentContractTests
             await using (var scope = factory.Services.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-                var connection = await db.AgentConnectionSessions.SingleAsync();
-                Assert.Equal(InitialContextState.Confirmed, connection.InitialContextState);
-                confirmedAt = connection.InitialContextConfirmedAtUtc;
+                var initial = await db.AgentInitialContextDeliveries.SingleAsync();
+                Assert.Equal(InitialContextState.Confirmed, initial.State);
+                confirmedAt = initial.ConfirmedAtUtc;
                 Assert.NotNull(confirmedAt);
                 Assert.Equal(1, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
                 Assert.All(await db.AgentReplyTasks.ToArrayAsync(), item => Assert.Equal(AgentReplyTaskState.Queued, item.State));
@@ -158,7 +161,7 @@ public sealed partial class McpAgentContractTests
             Assert.Equal(2, retry.GetProperty("triggerSequence").GetInt64());
             await using var readScope = factory.Services.CreateAsyncScope();
             var readDb = readScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(confirmedAt, (await readDb.AgentConnectionSessions.SingleAsync()).InitialContextConfirmedAtUtc);
+            Assert.Equal(confirmedAt, (await readDb.AgentInitialContextDeliveries.SingleAsync()).ConfirmedAtUtc);
             return;
         }
         AssertToolError(await CallToolAsync(agent, session.TransportSessionId, 4, "wait_for_mention",

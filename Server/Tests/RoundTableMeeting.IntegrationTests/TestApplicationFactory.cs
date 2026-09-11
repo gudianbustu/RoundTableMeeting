@@ -112,6 +112,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
             if (agentWaitTimeoutSeconds is int waitTimeoutSeconds)
             {
                 values["AgentCollaboration:WaitTimeoutSeconds"] = waitTimeoutSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                values["AgentCollaboration:ReliableWaitTimeoutSeconds"] = Math.Min(30, waitTimeoutSeconds).ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
             configuration.AddInMemoryCollection(values);
         });

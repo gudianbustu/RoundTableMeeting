@@ -1,5 +1,6 @@
 using System.Text;
 using RoundTableMeeting.Abstraction.Contracts.AgentCollaboration;
+using RoundTableMeeting.Domain.AgentCollaboration;
 using RoundTableMeeting.Domain.Entities;
 using RoundTableMeeting.Domain.Enums;
 using RoundTableMeeting.Domain.Repositories;
@@ -8,6 +9,34 @@ namespace RoundTableMeeting.Application.AgentCollaboration;
 
 public sealed class AgentContextBuilder(IMessageRepository messages)
 {
+    public async Task<AgentContextDto> RebuildFrozenAsync(Guid meetingId, AgentContextWindow window,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        if (meetingId == Guid.Empty) throw new ArgumentException("Meeting is required.", nameof(meetingId));
+        if (window.ContextFormatVersion != "agent-context-v1")
+            throw new ArgumentException("The saved context format is unsupported.", nameof(window));
+        if (window.SnapshotSequence == 0) return Empty(0, window.DeclaredCharacterLimit);
+
+        var selected = await messages.ListAfterSequenceThroughAsync(meetingId,
+            window.DeliveredFirstSequence!.Value - 1, window.DeliveredLastSequence!.Value, cancellationToken);
+        ValidateCandidates(selected, meetingId, window.DeliveredFirstSequence.Value - 1,
+            window.DeliveredLastSequence.Value, window.DeclaredCharacterLimit);
+        var rebuilt = await BuildAsync(selected, window.SnapshotSequence, window.DeclaredCharacterLimit, cancellationToken);
+        if (rebuilt.DeliveredFirstSequence != window.DeliveredFirstSequence
+            || rebuilt.DeliveredLastSequence != window.DeliveredLastSequence
+            || rebuilt.DeliveredCharacterCount != window.DeliveredCharacterCount
+            || rebuilt.OverLimit != window.OverLimit)
+            throw new ArgumentException("The saved context no longer matches its immutable messages.", nameof(window));
+        return rebuilt with
+        {
+            CandidateFirstSequence = window.CandidateFirstSequence,
+            CandidateLastSequence = window.CandidateLastSequence,
+            Truncated = window.Truncated,
+            TruncatedMessageCount = window.TruncatedMessageCount
+        };
+    }
+
     public async Task<AgentContextDto> BuildInitialAsync(
         Guid meetingId,
         long snapshotSequence,

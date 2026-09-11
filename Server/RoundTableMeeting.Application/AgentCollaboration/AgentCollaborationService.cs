@@ -2,6 +2,7 @@ using System.Diagnostics;
 using RoundTableMeeting.Abstraction.Contracts.AgentCollaboration;
 using RoundTableMeeting.Abstraction.Contracts.RealtimeChat;
 using RoundTableMeeting.Abstraction.Services;
+using RoundTableMeeting.Domain.AgentCollaboration;
 using RoundTableMeeting.Domain.Entities;
 using RoundTableMeeting.Domain.Enums;
 using RoundTableMeeting.Domain.Exceptions;
@@ -11,19 +12,20 @@ using TransportAuthorKind = RoundTableMeeting.Abstraction.Contracts.RealtimeChat
 
 namespace RoundTableMeeting.Application.AgentCollaboration;
 
-public sealed class AgentCollaborationService(
+public sealed partial class AgentCollaborationService(
     AgentCollaborationOptions options,
     IMeetingRepository meetings,
     IMeetingParticipantRepository participants,
     IMessageRepository messages,
     IAgentCollaborationRepository agentRepository,
+    IAgentRecoveryRepository recoveryRepository,
     IUnitOfWork unitOfWork,
-    IMeetingTransactionRunner transactionRunner,
+    AgentActivityTransactions transactionRunner,
     IMeetingRealtimeGate realtimeGate,
     IAgentJoinCoordinator joinCoordinator,
     IAgentJoinRateLimiter joinRateLimiter,
+    IAgentResumeRateLimiter resumeRateLimiter,
     IAgentConnectionRegistry connectionRegistry,
-    IAgentConnectionCompensator connectionCompensator,
     AgentContextBuilder contextBuilder,
     IResolvedMessageAppendCore messageAppendCore,
     IAgentTaskSignalRegistry taskSignals,
@@ -36,8 +38,14 @@ public sealed class AgentCollaborationService(
         McpTransportSessionKey? transportSession,
         CancellationToken cancellationToken = default)
     {
+        var validation = AgentRecoveryRequestValidator.ValidateJoin(request);
+        if (validation is not null) return validation;
+        if (request.ReliabilityMode == AgentReliabilityProtocol.ExplicitAck)
+            return await JoinReliableAsync(request, transportSession, cancellationToken);
         if (transportSession is not { IsEmpty: false } session)
             return Failure("connection_invalid", "The MCP protocol session is unavailable.");
+        // Keep transport ownership serialized before taking a meeting gate or participant lock.
+        await using var transportReservation = await connectionRegistry.ReserveTransportAsync(session, cancellationToken);
         if (connectionRegistry.ContainsTransport(session))
             return Failure("connection_invalid", "The MCP protocol session is already bound.");
         if (!joinRateLimiter.TryAcquire(
@@ -80,7 +88,7 @@ public sealed class AgentCollaborationService(
         JoinTransactionResult outcome;
         try
         {
-            outcome = await transactionRunner.RunAsync(async token =>
+            outcome = await transactionRunner.RunAsync(preflightMeeting.ID, async token =>
             {
                 var meeting = await meetings.FindActiveByCodeAsync(meetingCode, token);
                 if (meeting is null || meeting.ID != preflightMeeting.ID)
@@ -92,6 +100,10 @@ public sealed class AgentCollaborationService(
                 {
                     if (existing.ParticipantType != ParticipantType.Agent)
                         return JoinTransactionResult.Failure("agent_name_in_use");
+
+                    var existingCursor = await agentRepository.FindCursorAsync(meeting.ID, existing.ID, token);
+                    if (existingCursor?.RequiredReliabilityMode == AgentReliabilityProtocol.ExplicitAck)
+                        return JoinTransactionResult.Failure("reliability_mode_required");
 
                     var activeConnection = await agentRepository.FindConnectedConnectionAsync(
                         meeting.ID, existing.ID, token);
@@ -116,15 +128,18 @@ public sealed class AgentCollaborationService(
                 var now = UtcNow();
                 var sequence = await messages.GetSequenceSummaryAsync(meeting.ID, token);
                 var agent = MeetingParticipant.CreateAgent(meeting.ID, displayName, now);
-                var connection = AgentConnectionSession.Create(
+                var connection = AgentConnectionSession.CreateActivating(
                     meeting.ID,
                     agent.ID,
                     request.ContextCharacterLimit,
-                    sequence.HighWatermarkSequence,
                     transportBinding,
+                    1,
+                    AgentReliabilityProtocol.Legacy,
+                    null,
                     now);
                 var cursor = AgentContextCursor.Create(
                     meeting.ID, agent.ID, sequence.HighWatermarkSequence, now);
+                cursor.AssignConnection(connection, now);
                 var initialContext = await contextBuilder.BuildInitialAsync(
                     meeting.ID, sequence.HighWatermarkSequence, request.ContextCharacterLimit, token);
                 var currentParticipants = await participants.ListAsync(meeting.ID, token);
@@ -132,6 +147,12 @@ public sealed class AgentCollaborationService(
                 unitOfWork.RegisterAdd(agent);
                 unitOfWork.RegisterAdd(connection);
                 unitOfWork.RegisterAdd(cursor);
+                unitOfWork.RegisterAdd(AgentInitialContextDelivery.Create(meeting.ID, agent.ID, connection.ID,
+                    new AgentContextWindow(initialContext.SnapshotSequence, initialContext.CandidateFirstSequence,
+                        initialContext.CandidateLastSequence, initialContext.DeliveredFirstSequence,
+                        initialContext.DeliveredLastSequence, initialContext.DeclaredCharacterLimit,
+                        initialContext.DeliveredCharacterCount, initialContext.Truncated, initialContext.OverLimit,
+                        initialContext.TruncatedMessageCount, initialContext.ContextFormatVersion), now));
 
                 return JoinTransactionResult.Success(
                     meeting, agent, connection, currentParticipants, initialContext);
@@ -147,19 +168,46 @@ public sealed class AgentCollaborationService(
             return Failure("agent_operation_conflict", "The Agent join conflicted with another operation.");
         }
 
+        await PublishChangedActivitiesAsync(preflightMeeting.ID);
         if (!outcome.Succeeded) return MapTransactionFailure(outcome.ErrorCode!);
 
         var registration = new AgentConnectionRegistration(
             outcome.Meeting!.ID,
             outcome.Agent!.ID,
             outcome.Connection!.ID,
-            transportBinding);
+            transportBinding)
+        {
+            ConnectionGeneration = outcome.Connection.ConnectionGeneration,
+            BindingVersion = outcome.Connection.BindingVersion
+        };
         if (!connectionRegistry.TryRegister(session, registration))
         {
             connectionRegistry.Unregister(session, registration.ConnectionSessionId);
-            await connectionCompensator.DisconnectAsync(registration, UtcNow(), CancellationToken.None);
+            await ReconcileOwnedBindingAsync(registration, AgentTaskFailureCode.TransportClosed, CancellationToken.None);
             return Failure("agent_operation_unavailable", "The Agent connection could not be registered.");
         }
+        var activated = false;
+        try
+        {
+            activated = await transactionRunner.RunAsync(registration.MeetingId, async token =>
+            {
+                if (!connectionRegistry.IsRegistered(registration.MeetingId, registration.ParticipantId,
+                        registration.ConnectionSessionId, registration.TransportBinding)) return false;
+                return await recoveryRepository.ActivateAsync(ToFence(registration), UtcNow(), options.ConnectionLeaseSeconds, token);
+            }, cancellationToken);
+            activated = activated && connectionRegistry.IsRegistered(registration.MeetingId, registration.ParticipantId,
+                registration.ConnectionSessionId, registration.TransportBinding);
+        }
+        finally
+        {
+            if (!activated)
+            {
+                connectionRegistry.Retire(registration);
+                await ReconcileOwnedBindingAsync(registration, AgentTaskFailureCode.TransportClosed, CancellationToken.None);
+            }
+        }
+        if (!activated)
+            return Failure("agent_operation_unavailable", "The Agent connection could not be activated.");
         await PublishActivityAsync(registration.MeetingId, registration.ParticipantId, notifyPresence: true);
 
         return AgentOperationResult.Success(BuildJoinResult(outcome), "The Agent joined the meeting.");
@@ -170,6 +218,9 @@ public sealed class AgentCollaborationService(
         McpTransportSessionKey? transportSession,
         CancellationToken cancellationToken = default)
     {
+        var route = await ResolveProtocolAsync(request.ConnectionSessionId, transportSession, request.WaitTimeoutSeconds is not null, cancellationToken);
+        if (route.Error is not null) return route.Error;
+        if (route.Reliable) return await WaitReliableAsync(request, transportSession, cancellationToken);
         if (!TryResolveRegistration(request.ConnectionSessionId, transportSession, out var registration))
             return Failure("connection_invalid", "The connection session is invalid.");
 
@@ -180,12 +231,13 @@ public sealed class AgentCollaborationService(
 
         var stopwatch = Stopwatch.StartNew();
         var timeout = TimeSpan.FromSeconds(options.WaitTimeoutSeconds);
+        var bindingCancellation = connectionRegistry.GetBindingCancellationToken(transportSession!.Value, registration);
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
             // Observe before probing the database: deletion/task creation between
             // the probe and the wait must not lose its wakeup.
-            using var observationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            using var observationCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, bindingCancellation);
             var observation = taskSignals.WaitAsync(registration.MeetingId, registration.ParticipantId,
                 timeout - stopwatch.Elapsed, observationCancellation.Token);
             try
@@ -247,7 +299,11 @@ public sealed class AgentCollaborationService(
                         "No Agent mention arrived before the wait timeout.");
                 }
 
-                await observation;
+                try { await observation; }
+                catch (OperationCanceledException) when (bindingCancellation.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
+                {
+                    // Probe authoritative meeting/connection state again to preserve deletion errors.
+                }
                 // Always probe again after timeout, wakeup or deletion before returning idle.
             }
             finally
@@ -264,6 +320,9 @@ public sealed class AgentCollaborationService(
         McpTransportSessionKey? transportSession,
         CancellationToken cancellationToken = default)
     {
+        var route = await ResolveProtocolAsync(request.ConnectionSessionId, transportSession, false, cancellationToken);
+        if (route.Error is not null) return route.Error;
+        if (route.Reliable) return await ReplyReliableAsync(request, transportSession, cancellationToken);
         if (!TryResolveRegistration(request.ConnectionSessionId, transportSession, out var registration))
             return Failure("connection_invalid", "The connection session is invalid.");
         if (request.TaskId is not Guid taskId || taskId == Guid.Empty)
@@ -291,7 +350,7 @@ public sealed class AgentCollaborationService(
         ReplyTransactionResult outcome;
         try
         {
-            outcome = await transactionRunner.RunAsync(async token =>
+            outcome = await transactionRunner.RunAsync(registration.MeetingId, async token =>
             {
                 if (await meetings.FindActiveByIdAsync(registration.MeetingId, token) is null)
                     return ReplyTransactionResult.Failure("meeting_not_found");
@@ -300,7 +359,7 @@ public sealed class AgentCollaborationService(
                     registration.MeetingId,
                     registration.ConnectionSessionId,
                     token);
-                if (!IsCurrentConnection(connection, registration))
+                if (!await IsCurrentConnection(connection, registration, token))
                     return ReplyTransactionResult.Failure("connection_invalid");
 
                 var task = await agentRepository.FindTaskForAgentAsync(
@@ -387,6 +446,9 @@ public sealed class AgentCollaborationService(
         McpTransportSessionKey? transportSession,
         CancellationToken cancellationToken = default)
     {
+        var route = await ResolveProtocolAsync(request.ConnectionSessionId, transportSession, request.TaskId is not null, cancellationToken);
+        if (route.Error is not null) return route.Error;
+        if (route.Reliable) return await StatusReliableAsync(request, transportSession, cancellationToken);
         if (!TryResolveRegistration(request.ConnectionSessionId, transportSession, out var registration))
             return Failure("connection_invalid", "The connection session is invalid.");
 
@@ -400,7 +462,7 @@ public sealed class AgentCollaborationService(
             registration.MeetingId,
             registration.ConnectionSessionId,
             cancellationToken);
-        if (connection is null || !IsCurrentConnection(connection, registration))
+        if (connection is null || !await IsCurrentConnection(connection, registration, cancellationToken))
             return Failure("connection_invalid", "The connection session is invalid.");
 
         var cursor = await agentRepository.FindCursorAsync(
@@ -417,10 +479,14 @@ public sealed class AgentCollaborationService(
         var counts = Enum.GetValues<AgentReplyTaskState>()
             .ToDictionary(state => state.ToString().ToLowerInvariant(), state => tasks.Count(task => task.State == state), StringComparer.Ordinal);
         var head = tasks.FirstOrDefault(task => task.State is not AgentReplyTaskState.Replied and not AgentReplyTaskState.Cancelled);
+        var initial = await agentRepository.FindInitialContextAsync(registration.MeetingId,
+            registration.ParticipantId, registration.ConnectionSessionId, cancellationToken);
+        if (initial is null)
+            return Failure("connection_invalid", "The initial context is unavailable.");
         var data = new AgentStatusResultDto(
             registration.MeetingId,
             registration.ParticipantId,
-            new(connection.ID, ToWire(connection.State), connection.DeclaredContextCharacterLimit, ToWire(connection.InitialContextState)),
+            new(connection.ID, ToWire(connection.State), connection.DeclaredContextCharacterLimit, ToWire(initial.State)),
             counts,
             head is null ? null : new(head.ID, head.TriggerSequence, ToWire(head.State),
                 head.State == AgentReplyTaskState.Delivered ? "delivery_not_finalized" : head.FailureCode),
@@ -435,20 +501,25 @@ public sealed class AgentCollaborationService(
     {
         using var lease = await realtimeGate.AcquireSharedAsync(registration.MeetingId, cancellationToken);
         if (lease is null) return "meeting_not_found";
-        return await transactionRunner.RunAsync<string?>(async token =>
+        return await transactionRunner.RunAsync<string?>(registration.MeetingId, async token =>
         {
             if (await meetings.FindActiveByIdAsync(registration.MeetingId, token) is null)
                 return "meeting_not_found";
             var connection = await agentRepository.FindConnectionAsync(registration.MeetingId, registration.ConnectionSessionId, token);
-            if (!IsCurrentConnection(connection, registration)) return "connection_invalid";
+            if (!await IsCurrentConnection(connection, registration, token)) return "connection_invalid";
             var cursor = await agentRepository.FindCursorAsync(registration.MeetingId, registration.ParticipantId, token);
             if (cursor is null) return "connection_invalid";
-            if (connection!.InitialContextState == InitialContextState.Prepared)
+            var initial = await agentRepository.FindInitialContextAsync(registration.MeetingId,
+                registration.ParticipantId, registration.ConnectionSessionId, token);
+            if (initial is null) return "connection_invalid";
+            if (initial.State == InitialContextState.Prepared)
             {
                 var now = UtcNow();
-                connection.ConfirmInitialContext(now);
+                initial.Confirm(now);
+                unitOfWork.RegisterEdit(initial);
+                connection!.Touch(now);
                 unitOfWork.RegisterEdit(connection);
-                if (cursor.AdvanceDeliveredThrough(connection.InitialSnapshotSequence, now))
+                if (cursor.ConfirmThrough(cursor.FirstJoinSnapshotSequence, now))
                     unitOfWork.RegisterEdit(cursor);
             }
             return null;
@@ -464,7 +535,7 @@ public sealed class AgentCollaborationService(
         if (sharedLease is null)
             return WaitProbe.Failure("meeting_not_found");
 
-        return await transactionRunner.RunAsync(async token =>
+        return await transactionRunner.RunAsync(registration.MeetingId, async token =>
         {
             if (await meetings.FindActiveByIdAsync(registration.MeetingId, token) is null)
                 return WaitProbe.Failure("meeting_not_found");
@@ -473,7 +544,7 @@ public sealed class AgentCollaborationService(
                 registration.MeetingId,
                 registration.ConnectionSessionId,
                 token);
-            if (connection is null || !IsCurrentConnection(connection, registration))
+            if (connection is null || !await IsCurrentConnection(connection, registration, token))
                 return WaitProbe.Failure("connection_invalid");
 
             var cursor = await agentRepository.FindCursorAsync(
@@ -526,6 +597,7 @@ public sealed class AgentCollaborationService(
                 context.TruncatedMessageCount,
                 now);
             head.MarkDelivered(now);
+            head.AttachLegacyAttempt(attempt);
             unitOfWork.RegisterEdit(head);
             unitOfWork.RegisterAdd(attempt);
             return WaitProbe.Task(
@@ -547,7 +619,7 @@ public sealed class AgentCollaborationService(
         if (sharedLease is null)
             return false;
 
-        return await transactionRunner.RunAsync(async token =>
+        return await transactionRunner.RunAsync(registration.MeetingId, async token =>
         {
             if (await meetings.FindActiveByIdAsync(registration.MeetingId, token) is null)
                 return false;
@@ -555,7 +627,7 @@ public sealed class AgentCollaborationService(
                 registration.MeetingId,
                 registration.ConnectionSessionId,
                 token);
-            if (!IsCurrentConnection(connection, registration))
+            if (!await IsCurrentConnection(connection, registration, token))
                 return false;
             var task = await agentRepository.FindTaskForAgentAsync(
                 registration.MeetingId,
@@ -602,15 +674,30 @@ public sealed class AgentCollaborationService(
             && registration.ConnectionSessionId == requestedId;
     }
 
-    private static bool IsCurrentConnection(
+    private async Task<bool> IsCurrentConnection(
         AgentConnectionSession? connection,
-        AgentConnectionRegistration registration)
-        => connection is not null
+        AgentConnectionRegistration registration,
+        CancellationToken cancellationToken)
+    {
+        var matches = connection is not null
             && connection.State == AgentConnectionState.Connected
             && connection.MeetingId == registration.MeetingId
             && connection.ParticipantId == registration.ParticipantId
             && connection.ID == registration.ConnectionSessionId
+            && connection.ConnectionGeneration == registration.ConnectionGeneration
+            && connection.BindingVersion == registration.BindingVersion
+            && connectionRegistry.IsRegistered(registration.MeetingId, registration.ParticipantId,
+                registration.ConnectionSessionId, registration.TransportBinding)
             && string.Equals(connection.McpTransportBinding, registration.TransportBinding, StringComparison.Ordinal);
+        if (!matches) return false;
+        var cursor = await agentRepository.FindCursorAsync(registration.MeetingId, registration.ParticipantId, cancellationToken);
+        return cursor is not null && cursor.CurrentConnectionId == registration.ConnectionSessionId
+            && cursor.ConnectionGeneration == registration.ConnectionGeneration;
+    }
+
+    private static AgentConnectionFence ToFence(AgentConnectionRegistration registration) => new(
+        registration.MeetingId, registration.ParticipantId, registration.ConnectionSessionId,
+        registration.ConnectionGeneration, registration.BindingVersion, registration.TransportBinding);
 
     private static string ToWire(AgentConnectionState state) => state.ToString().ToLowerInvariant();
 
@@ -654,6 +741,9 @@ public sealed class AgentCollaborationService(
             return Failure("agent_operation_conflict", "The Agent join conflicted with another operation.");
         if (participant.ParticipantType != ParticipantType.Agent)
             return Failure("agent_name_in_use", "The display name is already in use.");
+        var cursor = await agentRepository.FindCursorAsync(meetingId, participant.ID, cancellationToken);
+        if (cursor?.RequiredReliabilityMode == AgentReliabilityProtocol.ExplicitAck)
+            return Failure("reliability_mode_required", "This Agent requires reliable mode.");
         var connection = await agentRepository.FindConnectedConnectionAsync(
             meetingId, participant.ID, cancellationToken);
         return connection is not null
@@ -693,6 +783,7 @@ public sealed class AgentCollaborationService(
             "agent_name_in_use" => Failure(code, "The display name is already in use."),
             "agent_connection_already_active" => Failure(code, "The Agent already has an active connection."),
             "agent_recovery_not_supported" => Failure(code, "Agent recovery is not supported in this version."),
+            "reliability_mode_required" => Failure(code, "This Agent requires reliable mode."),
             _ => Failure("meeting_not_found", "The meeting is unavailable.")
         };
 
@@ -711,6 +802,7 @@ public sealed class AgentCollaborationService(
 
     private async Task PublishActivityAsync(Guid meetingId, Guid participantId, bool notifyPresence = false)
     {
+        if (!transactionRunner.ChangedParticipants.Contains(participantId)) return;
         try
         {
             var activity = await activityService.FindAsync(meetingId, participantId, CancellationToken.None);
@@ -720,6 +812,12 @@ public sealed class AgentCollaborationService(
         {
             // The committed Agent operation remains authoritative; subscription snapshots recover activity later.
         }
+    }
+
+    private async Task PublishChangedActivitiesAsync(Guid meetingId)
+    {
+        foreach (var participantId in transactionRunner.ChangedParticipants.ToArray())
+            await PublishActivityAsync(meetingId, participantId, notifyPresence: true);
     }
 
     private static AgentOperationResult Failure(string code, string message)

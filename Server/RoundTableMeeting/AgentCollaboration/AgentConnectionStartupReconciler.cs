@@ -1,13 +1,13 @@
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.Repositories;
+using RoundTableMeeting.Domain.AgentCollaboration;
+using RoundTableMeeting.Application.AgentCollaboration;
 
 namespace RoundTableMeeting.AgentCollaboration;
 
 public sealed class AgentConnectionStartupReconciler(
     IServiceScopeFactory scopes,
-    IAgentConnectionRegistry registry,
-    IAgentJoinCoordinator joins,
-    TimeProvider time,
+    AgentCollaborationOptions options,
     ILogger<AgentConnectionStartupReconciler> logger) : BackgroundService
 {
     public override async Task StartAsync(CancellationToken cancellationToken)
@@ -18,7 +18,7 @@ public sealed class AgentConnectionStartupReconciler(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(options.RecoveryScanIntervalSeconds));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try { await ReconcileAsync(stoppingToken); }
@@ -33,18 +33,21 @@ public sealed class AgentConnectionStartupReconciler(
     public async Task ReconcileAsync(CancellationToken cancellationToken = default)
     {
         await using var scope = scopes.CreateAsyncScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IAgentCollaborationRepository>();
-        var participants = scope.ServiceProvider.GetRequiredService<IMeetingParticipantRepository>();
-        foreach (var connection in await repository.ListConnectedConnectionsAsync(cancellationToken))
+        var repository = scope.ServiceProvider.GetRequiredService<IAgentRecoveryRepository>();
+        Guid? afterId = null;
+        while (true)
         {
-            var participant = (await participants.ListAsync(connection.MeetingId, cancellationToken))
-                .SingleOrDefault(item => item.ID == connection.ParticipantId);
-            if (participant is null) continue;
-            // Join holds this lease through database commit and registry registration.
-            await using var lease = await joins.AcquireAsync(connection.MeetingId, participant.NormalizedDisplayName, cancellationToken);
-            if (registry.IsRegistered(connection.MeetingId, connection.ParticipantId, connection.ID, connection.McpTransportBinding)) continue;
-            await repository.DisconnectConnectionAsync(connection.MeetingId, connection.ParticipantId,
-                connection.ID, connection.McpTransportBinding, time.GetUtcNow(), cancellationToken);
+            var batch = await repository.ListUnsettledBatchAsync(afterId, 100, cancellationToken);
+            if (batch.Count == 0) break;
+            foreach (var connection in batch)
+            {
+                await using var itemScope = scopes.CreateAsyncScope();
+                await itemScope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(
+                    new AgentConnectionRegistration(connection.MeetingId, connection.ParticipantId, connection.ID, connection.McpTransportBinding)
+                    { ConnectionGeneration = connection.ConnectionGeneration, BindingVersion = connection.BindingVersion,
+                        ReliabilityMode = connection.ReliabilityMode }, cancellationToken: cancellationToken);
+            }
+            afterId = batch[^1].ID;
         }
     }
 }

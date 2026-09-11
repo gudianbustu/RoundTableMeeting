@@ -8,6 +8,8 @@ namespace RoundTableMeeting.Domain.Repositories;
 
 public interface IAgentCollaborationRepository
 {
+    Task<AgentInitialContextDelivery?> FindInitialContextAsync(Guid meetingId, Guid participantId, Guid connectionSessionId, CancellationToken cancellationToken = default);
+
     Task<IReadOnlyList<AgentConnectionSession>> ListConnectedConnectionsAsync(CancellationToken cancellationToken = default);
 
 	Task<AgentConnectionSession?> FindConnectionAsync(Guid meetingId, Guid connectionSessionId, CancellationToken cancellationToken = default(CancellationToken));

@@ -50,6 +50,7 @@ public static class ServiceCollectionExtensions
 		builder.Services.AddScoped<AgentContextBuilder>();
 		builder.Services.AddScoped<IResolvedMessageAppendCore, ResolvedMessageAppendCore>();
 		builder.Services.AddSingleton<IAgentJoinRateLimiter, AgentJoinRateLimiter>();
+        builder.Services.AddSingleton<IAgentResumeRateLimiter, AgentResumeRateLimiter>();
 		builder.Services.AddSingleton<IAgentConnectionRegistry, AgentConnectionRegistry>();
 		builder.Services.AddSingleton<IAgentJoinCoordinator, AgentJoinCoordinator>();
 		builder.Services.AddSingleton<IAgentConnectionCompensator, AgentConnectionCompensator>();
@@ -100,7 +101,7 @@ public static class ServiceCollectionExtensions
 			};
 		})
 #pragma warning restore MCPEXP002
-		.WithTools<McpAgentTools>(jsonSerializerOptions);
+		.WithTools(AgentToolSchemas.CreateTools(jsonSerializerOptions));
 		builder.Services.AddOptions<SqliteDatabaseOptions>().Bind(builder.Configuration.GetSection("Database")).ValidateDataAnnotations()
 			.Validate((SqliteDatabaseOptions options) => SqliteDatabaseOptions.TryValidate(options.ConnectionString, out string _), "Database connection settings are invalid.")
 			.ValidateOnStart();

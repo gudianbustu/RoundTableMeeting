@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using RoundTableMeeting.Abstraction.Contracts.AgentCollaboration;
 using RoundTableMeeting.Application.AgentCollaboration;
 using RoundTableMeeting.Domain.Entities;
+using RoundTableMeeting.Domain.AgentCollaboration;
 using RoundTableMeeting.Domain.Enums;
 using RoundTableMeeting.Domain.Repositories;
 using Xunit;
@@ -14,6 +15,26 @@ namespace RoundTableMeeting.Application.Tests;
 
 public sealed class AgentContextBuilderTests
 {
+    [Fact]
+    public async Task FrozenReplayPreservesWindowDespiteNewMessagesAndRejectsMissingHistory()
+    {
+        var meeting = Guid.NewGuid();
+        var older = MeetingMessage.CreateSystem(meeting, 1, "System", new string('x', 400), Guid.NewGuid(), BaseTime);
+        var last = MeetingMessage.CreateSystem(meeting, 2, "系统😀", "中文😀\\value\r\nnext", Guid.NewGuid(), BaseTime);
+        var initial = await new AgentContextBuilder(new MessageRepositoryFake([older, last])).BuildInitialAsync(meeting, 2, 256);
+        var window = new AgentContextWindow(initial.SnapshotSequence, initial.CandidateFirstSequence, initial.CandidateLastSequence,
+            initial.DeliveredFirstSequence, initial.DeliveredLastSequence, initial.DeclaredCharacterLimit,
+            initial.DeliveredCharacterCount, initial.Truncated, initial.OverLimit, initial.TruncatedMessageCount, initial.ContextFormatVersion);
+        var later = MeetingMessage.CreateSystem(meeting, 3, "System", "later", Guid.NewGuid(), BaseTime);
+        // Older truncated history is unnecessary for replay; selection is fixed by the saved window.
+        var replay = await new AgentContextBuilder(new MessageRepositoryFake([last, later])).RebuildFrozenAsync(meeting, window);
+        Assert.Equal(initial with { Messages = replay.Messages }, replay);
+        Assert.Equal(last.ID, Assert.Single(replay.Messages).MessageId);
+        await Assert.ThrowsAsync<ArgumentException>(() => new AgentContextBuilder(new MessageRepositoryFake([later])).RebuildFrozenAsync(meeting, window));
+        var unsupported = new AgentContextWindow(0, null, null, null, null, 256, 0, false, false, 0, "future-version");
+        await Assert.ThrowsAsync<ArgumentException>(() => new AgentContextBuilder(new MessageRepositoryFake([])).RebuildFrozenAsync(meeting, unsupported));
+    }
+
     [Fact]
     public async Task TaskContextRejectsMissingDuplicateAndCrossMeetingMessages()
     {

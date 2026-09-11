@@ -15,7 +15,7 @@ public sealed class MessageEventDispatcherService(IServiceScopeFactory scopeFact
         {
             try { if (await DispatchBatchAsync(stoppingToken) == 0) await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { }
-            catch (Exception exception) { logger.LogError(exception, "Message event dispatch scan failed. ExceptionType: {ExceptionType}", exception.GetType().Name); await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); }
+            catch (Exception exception) { logger.LogError("Message event dispatch scan failed. ExceptionType: {ExceptionType}", exception.GetType().Name); await Task.Delay(TimeSpan.FromSeconds(2), stoppingToken); }
         }
     }
 
@@ -51,7 +51,7 @@ public sealed class MessageEventDispatcherService(IServiceScopeFactory scopeFact
             {
                 var suspended = await FailAsync(candidate.Id, candidate.ConsumerName, leaseId, candidate.AttemptCount, CancellationToken.None);
                 if (suspended) logger.LogWarning("Message delivery suspended. DeliveryId: {DeliveryId}, ConsumerName: {ConsumerName}, AttemptCount: {AttemptCount}", candidate.Id, candidate.ConsumerName, candidate.AttemptCount + 1);
-                logger.LogError(exception, "Message event consumer failed. DeliveryId: {DeliveryId}, ExceptionType: {ExceptionType}", candidate.Id, exception.GetType().Name);
+                logger.LogError("Message event consumer failed. DeliveryId: {DeliveryId}, ExceptionType: {ExceptionType}", candidate.Id, exception.GetType().Name);
             }
         }
         return processed;

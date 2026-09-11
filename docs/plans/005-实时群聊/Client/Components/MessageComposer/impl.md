@@ -10,4 +10,4 @@ Props 至少包括 `participants`、`draft`、`sendState`、`failedSubmission`�
 
 ## 3. 状态
 
-发送中禁用重复提交但保留正文；失败显示重试并复用原 ClientSubmissionId；成功由父模块清空草稿。按钮、重试和连接动作提供 aria-label/tooltip。
+发送中禁用重复提交但保留正文；保存中的提交不代表失败，只有 send=failed 才显示失败提示和重试按钮。重新发送期间隐藏旧错误及重试按钮；失败重试复用原 ClientSubmissionId；成功由父模块清空草稿。按钮、重试和连接动作提供 aria-label/tooltip。

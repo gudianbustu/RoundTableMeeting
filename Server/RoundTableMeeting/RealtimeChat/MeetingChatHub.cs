@@ -42,7 +42,7 @@ public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions
         }
         catch (Exception exception) when (exception is not HubException)
         {
-            logger.LogError(exception, "Meeting chat subscription failed. MeetingId: {MeetingId}, ConnectionId: {ConnectionId}, ExceptionType: {ExceptionType}", meetingId, Context.ConnectionId, exception.GetType().Name);
+            logger.LogError("Meeting chat subscription failed. MeetingId: {MeetingId}, ConnectionId: {ConnectionId}, ExceptionType: {ExceptionType}", meetingId, Context.ConnectionId, exception.GetType().Name);
             throw;
         }
     }

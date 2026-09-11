@@ -6,6 +6,16 @@ namespace RoundTableMeeting.Abstraction.Services;
 
 public interface IAgentCollaborationService
 {
+    Task<AgentOperationResult> ResumeReliableAsync(AgentResumeRequest request, McpTransportSessionKey? transportSession, string? sourceAddress = null, CancellationToken cancellationToken = default);
+
+    Task<AgentOperationResult> ConfirmReliableAsync(AgentConfirmContextRequest request, McpTransportSessionKey? transportSession, CancellationToken cancellationToken = default);
+
+    Task<AgentOperationResult> RenewReliableAsync(AgentLeaseRequest request, McpTransportSessionKey? transportSession, CancellationToken cancellationToken = default);
+
+    Task<AgentOperationResult> ReportFailureReliableAsync(AgentFailureRequest request, McpTransportSessionKey? transportSession, CancellationToken cancellationToken = default);
+
+    Task<AgentOperationResult> RetryReliableAsync(AgentRetryRequest request, McpTransportSessionKey? transportSession, CancellationToken cancellationToken = default);
+
 	Task<AgentOperationResult> JoinAsync(AgentJoinRequest request, McpTransportSessionKey? transportSession, CancellationToken cancellationToken = default(CancellationToken));
 
 	Task<AgentOperationResult> WaitAsync(AgentWaitRequest request, McpTransportSessionKey? transportSession, CancellationToken cancellationToken = default(CancellationToken));

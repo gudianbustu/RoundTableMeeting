@@ -3,7 +3,7 @@ using RoundTableMeeting.Domain.Enums;
 
 namespace RoundTableMeeting.Domain.Entities;
 
-public sealed class AgentTaskDeliveryAttempt : BaseEntity
+public sealed partial class AgentTaskDeliveryAttempt : BaseEntity
 {
 	private const long MaximumSequence = 9007199254740991L;
 

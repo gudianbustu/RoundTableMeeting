@@ -3,7 +3,7 @@ using RoundTableMeeting.Domain.Enums;
 
 namespace RoundTableMeeting.Domain.Entities;
 
-public sealed class AgentConnectionSession : BaseEntity
+public sealed partial class AgentConnectionSession : BaseEntity
 {
 	private const long MaximumSequence = 9007199254740991L;
 
@@ -19,12 +19,6 @@ public sealed class AgentConnectionSession : BaseEntity
 
 	public int DeclaredContextCharacterLimit { get; private set; }
 
-	public long InitialSnapshotSequence { get; private set; }
-
-	public InitialContextState InitialContextState { get; private set; }
-
-	public DateTimeOffset? InitialContextConfirmedAtUtc { get; private set; }
-
 	public string McpTransportBinding { get; private set; } = string.Empty;
 
 	public DateTimeOffset ConnectedAtUtc { get; private set; }
@@ -39,7 +33,7 @@ public sealed class AgentConnectionSession : BaseEntity
 	{
 	}
 
-	private AgentConnectionSession(Guid meetingId, Guid participantId, int declaredContextCharacterLimit, long initialSnapshotSequence, string mcpTransportBinding, DateTimeOffset connectedAtUtc)
+	private AgentConnectionSession(Guid meetingId, Guid participantId, int declaredContextCharacterLimit, string mcpTransportBinding, DateTimeOffset connectedAtUtc)
 	{
 		if (meetingId == Guid.Empty)
 		{
@@ -53,39 +47,19 @@ public sealed class AgentConnectionSession : BaseEntity
 		{
 			throw new ArgumentOutOfRangeException("declaredContextCharacterLimit");
 		}
-		if ((initialSnapshotSequence < 0 || initialSnapshotSequence > 9007199254740991L) ? true : false)
-		{
-			throw new ArgumentOutOfRangeException("initialSnapshotSequence");
-		}
 		McpTransportBinding = NormalizeBinding(mcpTransportBinding);
 		MeetingId = meetingId;
 		ParticipantId = participantId;
 		DeclaredContextCharacterLimit = declaredContextCharacterLimit;
-		InitialSnapshotSequence = initialSnapshotSequence;
-		InitialContextState = InitialContextState.Prepared;
 		State = AgentConnectionState.Connected;
 		ConnectedAtUtc = connectedAtUtc;
 		LastActivityAtUtc = connectedAtUtc;
 		CreatedAtUtc = connectedAtUtc;
 	}
 
-	public static AgentConnectionSession Create(Guid meetingId, Guid participantId, int declaredContextCharacterLimit, long initialSnapshotSequence, string mcpTransportBinding, DateTimeOffset connectedAtUtc)
+	public static AgentConnectionSession Create(Guid meetingId, Guid participantId, int declaredContextCharacterLimit, string mcpTransportBinding, DateTimeOffset connectedAtUtc)
 	{
-		return new AgentConnectionSession(meetingId, participantId, declaredContextCharacterLimit, initialSnapshotSequence, mcpTransportBinding, connectedAtUtc);
-	}
-
-	public bool ConfirmInitialContext(DateTimeOffset confirmedAtUtc)
-	{
-		if (InitialContextState == InitialContextState.Confirmed)
-		{
-			return false;
-		}
-		EnsureConnected();
-		EnsureActivityTime(confirmedAtUtc);
-		InitialContextState = InitialContextState.Confirmed;
-		InitialContextConfirmedAtUtc = confirmedAtUtc;
-		LastActivityAtUtc = confirmedAtUtc;
-		return true;
+		return new AgentConnectionSession(meetingId, participantId, declaredContextCharacterLimit, mcpTransportBinding, connectedAtUtc);
 	}
 
 	public void Touch(DateTimeOffset activityAtUtc)
@@ -97,7 +71,7 @@ public sealed class AgentConnectionSession : BaseEntity
 
 	public bool Disconnect(DateTimeOffset disconnectedAtUtc)
 	{
-		if (State == AgentConnectionState.Disconnected)
+		if (State is AgentConnectionState.Disconnected or AgentConnectionState.Superseded)
 		{
 			return false;
 		}

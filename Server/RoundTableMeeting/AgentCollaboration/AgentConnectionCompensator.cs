@@ -5,6 +5,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.Repositories;
+using RoundTableMeeting.Domain.AgentCollaboration;
+using RoundTableMeeting.Application.AgentCollaboration;
+using RoundTableMeeting.Domain.Enums;
 
 namespace RoundTableMeeting.AgentCollaboration;
 
@@ -17,14 +20,14 @@ public sealed class AgentConnectionCompensator(IServiceScopeFactory scopeFactory
 			bool result;
 			await using (AsyncServiceScope scope = scopeFactory.CreateAsyncScope())
 			{
-				IAgentCollaborationRepository repository = scope.ServiceProvider.GetRequiredService<IAgentCollaborationRepository>();
-				result = await repository.DisconnectConnectionAsync(registration.MeetingId, registration.ParticipantId, registration.ConnectionSessionId, registration.TransportBinding, disconnectedAtUtc, cancellationToken);
+                result = await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>()
+                    .ReconcileConnectionAsync(registration, AgentTaskFailureCode.TransportClosed, cancellationToken);
 			}
 			return result;
 		}
 		catch (Exception ex) when (!(ex is OperationCanceledException))
 		{
-			logger.LogError(ex, "Failed to compensate Agent connection {ConnectionSessionId} in meeting {MeetingId}.", registration.ConnectionSessionId, registration.MeetingId);
+			logger.LogError("Failed to compensate Agent connection {ConnectionSessionId} in meeting {MeetingId}. ExceptionType: {ExceptionType}", registration.ConnectionSessionId, registration.MeetingId, ex.GetType().Name);
 			return false;
 		}
 	}

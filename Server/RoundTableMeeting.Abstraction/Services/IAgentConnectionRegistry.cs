@@ -4,6 +4,14 @@ namespace RoundTableMeeting.Abstraction.Services;
 
 public interface IAgentConnectionRegistry
 {
+    ValueTask<IAsyncDisposable> ReserveTransportAsync(McpTransportSessionKey transportSession, CancellationToken cancellationToken = default);
+
+    bool TryActivate(McpTransportSessionKey transportSession, AgentConnectionRegistration registration, AgentConnectionRegistration? expectedPrevious);
+
+    bool Retire(AgentConnectionRegistration registration);
+
+    CancellationToken GetBindingCancellationToken(McpTransportSessionKey transportSession, AgentConnectionRegistration registration);
+
     void TerminateMeeting(Guid meetingId);
 
 	bool ContainsTransport(McpTransportSessionKey transportSession);
