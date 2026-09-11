@@ -518,7 +518,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Contains("no-store", list.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, users.GetArrayLength());
-        Assert.All(users.EnumerateArray(), user => Assert.Equal(["nickname", "userId", "username"], user.EnumerateObject().Select(property => property.Name).OrderBy(name => name)));
+        Assert.All(users.EnumerateArray(), user => Assert.Equal(["isAdmin", "nickname", "userId", "username"], user.EnumerateObject().Select(property => property.Name).OrderBy(name => name)));
 
         using var create = new HttpRequestMessage(HttpMethod.Post, "/api/users");
         create.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");

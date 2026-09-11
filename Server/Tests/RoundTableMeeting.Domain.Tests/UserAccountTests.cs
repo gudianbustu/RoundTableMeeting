@@ -5,6 +5,18 @@ namespace RoundTableMeeting.Domain.Tests;
 public sealed class UserAccountTests
 {
     [Fact]
+    public void NewAccountIsOrdinaryAndRoleChangesPreserveProfile()
+    {
+        var account = UserAccount.Create("alice", "Alice");
+        account.InitializePasswordHash("hash");
+        var id = account.ID;
+        Assert.False(account.IsAdmin);
+        account.SetAdministrator(true); Assert.True(account.IsAdmin);
+        account.SetAdministrator(false); Assert.False(account.IsAdmin);
+        Assert.Equal(id, account.ID); Assert.Equal("Alice", account.Nickname); Assert.Equal("hash", account.PasswordHash);
+    }
+
+    [Fact]
     public void CreateNormalizesUsernameAndNickname()
     {
         var account = UserAccount.Create("  Alice  ", "  Alice  ");
@@ -138,7 +150,7 @@ public sealed class UserAccountTests
     {
         var properties = typeof(UserAccount).GetProperties().Select(property => property.Name).ToArray();
 
-        Assert.Equal(["Username", "NormalizedUsername", "Nickname", "PasswordHash", "ID"], properties);
+        Assert.Equal(["Username", "NormalizedUsername", "Nickname", "IsAdmin", "PasswordHash", "ID"], properties);
         Assert.DoesNotContain("UserId", properties);
         Assert.DoesNotContain("Role", properties);
         Assert.DoesNotContain("Disabled", properties);

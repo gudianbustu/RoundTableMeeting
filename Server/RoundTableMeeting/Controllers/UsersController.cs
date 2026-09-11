@@ -12,11 +12,12 @@ namespace RoundTableMeeting.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/users")]
-[Authorize]
+[Authorize(Policy = "AdminOnly")]
 [NoStoreResponse]
 public sealed class UsersController(IUserManagementService userManagementService) : ControllerBase
 {
     [HttpGet]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status403Forbidden, "application/problem+json")]
     [ProducesResponseType(typeof(IReadOnlyList<UserSummaryDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status500InternalServerError, "application/problem+json")]
@@ -40,6 +41,8 @@ public sealed class UsersController(IUserManagementService userManagementService
             UserManagementStatus.Success => StatusCode(StatusCodes.Status201Created, result.User),
             UserManagementStatus.UsernameConflict => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status409Conflict, "username_conflict"),
             UserManagementStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status400BadRequest, "validation_failed", result.Errors),
+            UserManagementStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status401Unauthorized, "unauthenticated"),
+            UserManagementStatus.Forbidden => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status403Forbidden, "forbidden"),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status500InternalServerError, "internal_error")
         };
     }
@@ -61,6 +64,33 @@ public sealed class UsersController(IUserManagementService userManagementService
             UserManagementStatus.Success => Ok(result.User),
             UserManagementStatus.UserNotFound => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status404NotFound, "user_not_found"),
             UserManagementStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status400BadRequest, "validation_failed", result.Errors),
+            UserManagementStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status401Unauthorized, "unauthenticated"),
+            UserManagementStatus.Forbidden => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status403Forbidden, "forbidden"),
+            _ => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status500InternalServerError, "internal_error")
+        };
+    }
+
+    [HttpPatch("{userId:guid}/admin")]
+    [RequireBrowserOrigin(true)]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType(typeof(UserSummaryDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status403Forbidden, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status500InternalServerError, "application/problem+json")]
+    public async Task<IActionResult> UpdateAdmin(Guid userId, UpdateAdminRequest request, CancellationToken cancellationToken)
+    {
+        var result = await userManagementService.UpdateAdminAsync(userId, request, cancellationToken);
+        return result.Status switch
+        {
+            UserManagementStatus.Success => Ok(result.User),
+            UserManagementStatus.LastAdminRequired => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status409Conflict, "last_admin_required"),
+            UserManagementStatus.UserNotFound => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status404NotFound, "user_not_found"),
+            UserManagementStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status400BadRequest, "validation_failed", result.Errors),
+            UserManagementStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status401Unauthorized, "unauthenticated"),
+            UserManagementStatus.Forbidden => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status403Forbidden, "forbidden"),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status500InternalServerError, "internal_error")
         };
     }
@@ -79,6 +109,8 @@ public sealed class UsersController(IUserManagementService userManagementService
         {
             UserManagementStatus.Success => NoContent(),
             UserManagementStatus.UserNotFound => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status404NotFound, "user_not_found"),
+            UserManagementStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status401Unauthorized, "unauthenticated"),
+            UserManagementStatus.Forbidden => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status403Forbidden, "forbidden"),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status500InternalServerError, "internal_error")
         };
     }

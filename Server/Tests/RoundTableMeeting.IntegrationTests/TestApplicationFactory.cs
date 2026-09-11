@@ -101,6 +101,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
             var values = new Dictionary<string, string?>
             {
                 ["Database:ConnectionString"] = $"Data Source={DatabasePath};Mode=ReadWriteCreate;Default Timeout=5;Foreign Keys=True;Pooling=False"
+                , ["Authentication:InitialAdminUsername"] = "alice"
                 , ["Authentication:AllowedOrigins:0"] = "http://localhost:5173"
                 , ["Authentication:SeedAccounts:0:Username"] = "alice"
                 , ["Authentication:SeedAccounts:0:Nickname"] = "Alice"

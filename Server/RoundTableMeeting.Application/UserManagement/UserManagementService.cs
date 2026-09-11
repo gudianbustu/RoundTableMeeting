@@ -15,7 +15,9 @@ namespace RoundTableMeeting.Application.UserManagement;
 public sealed class UserManagementService(
     IUserAccountRepository userAccountRepository,
     IUnitOfWork unitOfWork,
-    IPasswordHasher<UserAccount> passwordHasher)
+    IPasswordHasher<UserAccount> passwordHasher,
+    ICurrentUserContext currentUser,
+    IAccountTransactionRunner transactionRunner)
     : IUserManagementService, IScopedDependency<IUserManagementService>
 {
     public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(CancellationToken cancellationToken = default)
@@ -23,72 +25,103 @@ public sealed class UserManagementService(
 
     public async Task<UserManagementResult> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
     {
-        var errors = ValidateCreate(request);
-        if (errors.Count > 0) return new(UserManagementStatus.ValidationFailed, Errors: errors);
-
-        UserAccount account;
         try
         {
-            account = UserAccount.Create(request.Username!, request.Nickname!);
-        }
-        catch (ArgumentException exception)
-        {
-            return new(UserManagementStatus.ValidationFailed, Errors: new Dictionary<string, string[]>
-            { [FieldFor(exception.ParamName)] = ["The value is invalid."] });
-        }
+            return await transactionRunner.RunAsync(async token =>
+            {
+                var access = await CheckAccessAsync(token);
+                if (access is not null) return access;
+                var errors = ValidateCreate(request);
+                if (errors.Count > 0) return new(UserManagementStatus.ValidationFailed, Errors: errors);
 
-        var normalizedUsername = account.NormalizedUsername;
-        if (await userAccountRepository.FindByNormalizedUsernameAsync(normalizedUsername, cancellationToken) is not null)
-        {
-            return new(UserManagementStatus.UsernameConflict);
-        }
+                UserAccount account;
+                try
+                {
+                    account = UserAccount.Create(request.Username!, request.Nickname!);
+                }
+                catch (ArgumentException exception)
+                {
+                    return new(UserManagementStatus.ValidationFailed, Errors: new Dictionary<string, string[]>
+                    { [FieldFor(exception.ParamName)] = ["The value is invalid."] });
+                }
 
-        account.InitializePasswordHash(passwordHasher.HashPassword(account, request.InitialPassword!));
-        unitOfWork.RegisterAdd(account);
-        try
-        {
-            await unitOfWork.CommitAsync(cancellationToken);
-        }
-        catch (UsernameConflictException)
-        {
-            return new(UserManagementStatus.UsernameConflict);
-        }
+                var normalizedUsername = account.NormalizedUsername;
+                if (await userAccountRepository.FindByNormalizedUsernameAsync(normalizedUsername, cancellationToken) is not null)
+                {
+                    return new(UserManagementStatus.UsernameConflict);
+                }
 
-        return new(UserManagementStatus.Success, ToDto(account));
+                account.InitializePasswordHash(passwordHasher.HashPassword(account, request.InitialPassword!));
+                unitOfWork.RegisterAdd(account);
+                return new UserManagementResult(UserManagementStatus.Success, ToDto(account));
+            }, cancellationToken);
+        }
+        catch (UsernameConflictException) { return new(UserManagementStatus.UsernameConflict); }
     }
 
     public async Task<UserManagementResult> UpdateNicknameAsync(Guid userId, UpdateNicknameRequest request, CancellationToken cancellationToken = default)
     {
-        var errors = ValidateNickname(request);
-        if (errors.Count > 0) return new(UserManagementStatus.ValidationFailed, Errors: errors);
-
-        var account = await userAccountRepository.FindByIdAsync(userId, cancellationToken);
-        if (account is null) return new(UserManagementStatus.UserNotFound);
-
-        try
+        return await transactionRunner.RunAsync(async token =>
         {
-            account.ChangeNickname(request.Nickname!);
-        }
-        catch (ArgumentException)
-        {
-            return new(UserManagementStatus.ValidationFailed, Errors: new Dictionary<string, string[]>
-            { ["nickname"] = ["The nickname is invalid."] });
-        }
+            var access = await CheckAccessAsync(token);
+            if (access is not null) return access;
+            var errors = ValidateNickname(request);
+            if (errors.Count > 0) return new(UserManagementStatus.ValidationFailed, Errors: errors);
 
-        unitOfWork.RegisterEdit(account);
-        await unitOfWork.CommitAsync(cancellationToken);
-        return new(UserManagementStatus.Success, ToDto(account));
+            var account = await userAccountRepository.FindByIdAsync(userId, cancellationToken);
+            if (account is null) return new(UserManagementStatus.UserNotFound);
+
+            try
+            {
+                account.ChangeNickname(request.Nickname!);
+            }
+            catch (ArgumentException)
+            {
+                return new(UserManagementStatus.ValidationFailed, Errors: new Dictionary<string, string[]>
+                { ["nickname"] = ["The nickname is invalid."] });
+            }
+
+            await userAccountRepository.UpdateNicknameAsync(account.ID, account.Nickname, token);
+            return new UserManagementResult(UserManagementStatus.Success, ToDto(account));
+        }, cancellationToken);
     }
 
     public async Task<UserManagementResult> ResetPasswordAsync(Guid userId, CancellationToken cancellationToken = default)
     {
-        var account = await userAccountRepository.FindByIdAsync(userId, cancellationToken);
-        if (account is null) return new(UserManagementStatus.UserNotFound);
+        return await transactionRunner.RunAsync(async token =>
+        {
+            var access = await CheckAccessAsync(token);
+            if (access is not null) return access;
+            var account = await userAccountRepository.FindByIdAsync(userId, token);
+            if (account is null) return new(UserManagementStatus.UserNotFound);
 
-        account.ReplacePasswordHash(passwordHasher.HashPassword(account, UserManagementConstants.ResetPassword));
-        unitOfWork.RegisterEdit(account);
-        await unitOfWork.CommitAsync(cancellationToken);
-        return new(UserManagementStatus.Success);
+            account.ReplacePasswordHash(passwordHasher.HashPassword(account, UserManagementConstants.ResetPassword));
+            await userAccountRepository.UpdatePasswordHashAsync(account.ID, account.PasswordHash, token);
+            return new UserManagementResult(UserManagementStatus.Success);
+        }, cancellationToken);
+    }
+
+    public Task<UserManagementResult> UpdateAdminAsync(Guid userId, UpdateAdminRequest request, CancellationToken cancellationToken = default)
+        => transactionRunner.RunAsync(async token =>
+        {
+            var access = await CheckAccessAsync(token);
+            if (access is not null) return access;
+            var account = await userAccountRepository.FindByIdAsync(userId, token);
+            if (account is null) return new(UserManagementStatus.UserNotFound);
+            if (account.IsAdmin && !request.IsAdmin && await userAccountRepository.CountAdministratorsAsync(token) <= 1)
+                return new(UserManagementStatus.LastAdminRequired);
+            account.SetAdministrator(request.IsAdmin);
+            await userAccountRepository.UpdateAdministratorAsync(userId, request.IsAdmin, token);
+            return new UserManagementResult(UserManagementStatus.Success, ToDto(account));
+        }, cancellationToken);
+
+    private async Task<UserManagementResult?> CheckAccessAsync(CancellationToken token)
+    {
+        if (!currentUser.IsAuthenticated || currentUser.UserId is not { } id)
+            return new(UserManagementStatus.Unauthenticated);
+        var actor = await userAccountRepository.FindByIdAsync(id, token);
+        return actor is null ? new(UserManagementStatus.Unauthenticated)
+            : actor.IsAdmin ? null : new(UserManagementStatus.Forbidden);
     }
 
     private static Dictionary<string, string[]> ValidateCreate(CreateUserRequest request)
@@ -115,5 +148,5 @@ public sealed class UserManagementService(
         => parameterName?.ToLowerInvariant() switch
         { "nickname" => "nickname", "username" or "value" => "username", _ => "username" };
 
-    private static UserSummaryDto ToDto(UserAccount account) => new(account.ID, account.Username, account.Nickname);
+    private static UserSummaryDto ToDto(UserAccount account) => new(account.ID, account.Username, account.Nickname, account.IsAdmin);
 }

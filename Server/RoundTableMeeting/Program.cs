@@ -55,7 +55,8 @@ try
         await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
         var authenticationOptions = scope.ServiceProvider.GetRequiredService<IOptions<AuthenticationOptions>>().Value;
         await scope.ServiceProvider.GetRequiredService<IAccountSeeder>().SeedAsync(
-            authenticationOptions.SeedAccounts.Select(account => new SeedAccountInput(account.Username!, account.Nickname!, account.Password!)).ToArray());
+            authenticationOptions.SeedAccounts.Select(account => new SeedAccountInput(account.Username!, account.Nickname!, account.Password!)).ToArray(),
+            initialAdminUsername: authenticationOptions.InitialAdminUsername);
     }
 
     app.Use(async (context, next) =>

@@ -24,8 +24,14 @@ public sealed class UserAccount : BaseEntity
     public string Nickname { get; private set; } = string.Empty;
 
     /// <summary>
-    /// 账号密码哈希
+    /// 是否具有用户管理权限
     /// </summary>
+    public bool IsAdmin { get; private set; }
+
+    /// <summary>设置管理员身份，最后管理员约束由应用事务校验。</summary>
+    public void SetAdministrator(bool isAdmin) => IsAdmin = isAdmin;
+
+    /// <summary>账号密码哈希。</summary>
     public string PasswordHash { get; private set; } = string.Empty;
 
     /// <summary>

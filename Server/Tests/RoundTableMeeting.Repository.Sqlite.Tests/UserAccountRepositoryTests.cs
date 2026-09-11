@@ -109,7 +109,7 @@ public sealed class UserAccountRepositoryTests
             {
                 while (await reader.ReadAsync()) columns.Add(reader.GetString(1));
             }
-            Assert.Equal(["ID", "Username", "NormalizedUsername", "Nickname", "PasswordHash"], columns);
+            Assert.Equal(["ID", "Username", "NormalizedUsername", "Nickname", "PasswordHash", "IsAdmin"], columns);
             command.CommandText = "PRAGMA index_list(UserAccounts);";
             var indexText = new List<string>();
             await using (var reader = await command.ExecuteReaderAsync())

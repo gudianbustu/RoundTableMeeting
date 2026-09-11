@@ -13,7 +13,7 @@ import { AuthenticatedHomePage } from './pages/AuthenticatedHomePage'
 import { AuthenticatedLayout } from '@/app/layouts/AuthenticatedLayout'
 import type { AuthenticationContextValue } from './types/authentication'
 
-const user = { userId: 'user-1', username: 'alice', nickname: 'Alice' }
+const user = { userId: 'user-1', username: 'alice', nickname: 'Alice', isAdmin: true }
 
 function value(overrides: Partial<AuthenticationContextValue> = {}): AuthenticationContextValue {
   return {
@@ -21,7 +21,7 @@ function value(overrides: Partial<AuthenticationContextValue> = {}): Authenticat
     login: vi.fn().mockResolvedValue(user),
     logout: vi.fn().mockResolvedValue(undefined),
     retry: vi.fn().mockResolvedValue(undefined),
-    refreshCurrentUser: vi.fn().mockResolvedValue(undefined),
+    identityRevision: 0, refreshRevision: 0, invalidateAdminAccess: vi.fn(), refreshCurrentUser: vi.fn().mockResolvedValue(undefined),
     isLoggingIn: false,
     isLoggingOut: false,
     ...overrides,
@@ -130,23 +130,27 @@ describe('authentication pages and components', () => {
     expect(screen.getByRole('link', { name: '圆桌会议' })).toBeInTheDocument()
     expect(screen.getAllByText('Alice')).toHaveLength(2)
     expect(screen.getByText('user-1')).toBeInTheDocument()
-    expect(screen.getAllByText('alice')).toHaveLength(2)
+    expect(screen.getAllByText('alice')).toHaveLength(1)
   })
 
   it('keeps CurrentUserBar visible on logout failure and disables duplicate logout', async () => {
     const logout = vi.fn().mockRejectedValue({ kind: 'network', message: 'network' })
     const context = value({ state: { status: 'authenticated', user }, logout, isLoggingOut: true, operationError: { kind: 'network', message: 'network' } })
-    withContext(context, <CurrentUserBar />)
+    withContext(context, <MemoryRouter><CurrentUserBar /></MemoryRouter>)
     expect(screen.getByText('Alice')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /退\s*出/ })).toBeDisabled()
+    await userEvent.setup().hover(screen.getByRole('button', { name: /Alice/ }))
+    expect(await screen.findByRole('menuitem', { name: '退出' })).toHaveAttribute('aria-disabled', 'true')
     expect(screen.getByRole('alert')).toHaveTextContent('退出失败，请重试。')
   })
 
   it('triggers the provider logout operation from CurrentUserBar', async () => {
     const logout = vi.fn().mockResolvedValue(undefined)
     const context = value({ state: { status: 'authenticated', user }, logout })
-    withContext(context, <CurrentUserBar />)
-    await userEvent.setup().click(screen.getByRole('button', { name: /退\s*出/ }))
+    withContext(context, <MemoryRouter><CurrentUserBar /></MemoryRouter>)
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Alice' }))
+    expect(await screen.findByRole('link', { name: '个人中心' })).toHaveAttribute('href', '/settings/profile')
+    await userEvent.setup().click(await screen.findByRole('menuitem', { name: '退出' }))
     expect(logout).toHaveBeenCalledOnce()
   })
 

@@ -59,7 +59,8 @@ public sealed class StartupFailureTests
         startInfo.Environment["ASPNETCORE_URLS"] = $"http://127.0.0.1:{port}";
         startInfo.Environment["Database__ConnectionString"] = $"Data Source={directory};Mode=ReadWriteCreate;Default Timeout=5;Foreign Keys=True;Pooling=False";
         startInfo.Environment["Authentication__AllowedOrigins__0"] = "http://localhost:5173";
-        startInfo.Environment["Authentication__SeedAccounts__0__Username"] = "alice";
+        startInfo.Environment["Authentication__InitialAdminUsername"] = "alice";
+            startInfo.Environment["Authentication__SeedAccounts__0__Username"] = "alice";
         startInfo.Environment["Authentication__SeedAccounts__0__Nickname"] = "Alice";
         startInfo.Environment["Authentication__SeedAccounts__0__Password"] = "test-password-alice";
 

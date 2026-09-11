@@ -266,6 +266,7 @@ public sealed partial class McpAgentContractTests
             start.Environment["ASPNETCORE_URLS"] = address.ToString();
             start.Environment["Database__ConnectionString"] = $"Data Source={Path.Combine(directory, "state.db")};Pooling=False;Foreign Keys=True";
             start.Environment["Authentication__AllowedOrigins__0"] = "http://localhost:5173";
+            start.Environment["Authentication__InitialAdminUsername"] = "alice";
             start.Environment["Authentication__SeedAccounts__0__Username"] = "alice";
             start.Environment["Authentication__SeedAccounts__0__Nickname"] = "Alice";
             start.Environment["Authentication__SeedAccounts__0__Password"] = "test-password-alice";

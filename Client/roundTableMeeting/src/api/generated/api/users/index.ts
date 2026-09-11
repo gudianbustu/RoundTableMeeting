@@ -22,6 +22,7 @@ export interface UsersRequestBuilder extends BaseRequestBuilder<UsersRequestBuil
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<UserSummaryDto[]>}
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
+     * @throws {ApiProblemDetails} error when the service returns a 403 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UserSummaryDto[] | undefined>;
@@ -71,6 +72,7 @@ export const UsersRequestBuilderRequestsMetadata: RequestsMetadata = {
         responseBodyContentType: "text/plain;q=0.9",
         errorMappings: {
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            403: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
         adapterMethodName: "sendCollection",

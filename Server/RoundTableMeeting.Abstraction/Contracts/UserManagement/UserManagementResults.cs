@@ -5,6 +5,9 @@ public enum UserManagementStatus
     Success,
     ValidationFailed,
     UsernameConflict,
+    Unauthenticated,
+    Forbidden,
+    LastAdminRequired,
     UserNotFound
 }
 

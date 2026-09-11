@@ -8,7 +8,7 @@ export async function updateNickname(userId: string, input: UpdateNicknameInput,
   try {
     const body: UpdateNicknameRequest = { nickname: input.nickname }
     const user = await getApiClient().api.users.byUserId(userId).nickname.patch(body, signal ? { options: [new AbortRequestOption(signal)] } : undefined)
-    if (!user?.userId || !user.username || !user.nickname) throw new Error('Invalid user summary response')
-    return { userId: user.userId, username: user.username, nickname: user.nickname }
+    if (!user?.userId || !user.username || !user.nickname || typeof user.isAdmin !== 'boolean') throw new Error('Invalid user summary response')
+    return { userId: user.userId, username: user.username, nickname: user.nickname, isAdmin: user.isAdmin }
   } catch (error) { throw toApiError(error) }
 }
