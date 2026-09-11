@@ -1,4 +1,4 @@
-import { Avatar, Empty, Flex, Tag, Typography } from 'antd'
+import { Avatar, Empty, Tag, Typography } from 'antd'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 
@@ -15,7 +15,7 @@ function agentStatus(activity: AgentActivity | undefined) {
   return { online: false, label: undefined, color: 'default' as const }
 }
 
-export function ParticipantList({ participants, presence = {}, agentActivities = {} }: { participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
+export function ParticipantList({ onMention, participants, presence = {}, agentActivities = {} }: { onMention?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
   return <section className="participant-list">
     <Typography.Title level={4}>参与者</Typography.Title>
     {participants.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无参与者" /> :
@@ -24,7 +24,7 @@ export function ParticipantList({ participants, presence = {}, agentActivities =
         const activity = agentActivities[participant.participantId]
         const status = agentStatus(activity)
         const humanOnline = presence[participant.participantId] === 'online'
-        return <Flex key={participant.participantId} align="center" gap="small" className="participant-list-item">
+        return <button type="button" key={participant.participantId} className="participant-list-item" disabled={!onMention} aria-label={`提及 ${participant.displayName}`} title={`点击 @${participant.displayName}`} onClick={() => onMention?.(participant)}>
           <Avatar>{participant.displayName.slice(0, 1)}</Avatar>
           <div className="participant-list-item-content"><Typography.Text strong>{participant.displayName}</Typography.Text><div>
             {participant.isCurrentUser && <Tag>我</Tag>}{participant.isCreator && <Tag color="gold">创建者</Tag>}
@@ -35,7 +35,7 @@ export function ParticipantList({ participants, presence = {}, agentActivities =
             {agent && activity?.state !== 'unknown' && activity?.connectionDisposition === 'taken_over' && <Tag color="blue">已由新连接接管</Tag>}
             <Typography.Text type="secondary">{agent ? 'AI Agent' : '人类参与者'}</Typography.Text>
           </div></div>
-        </Flex>
+        </button>
       })}</div>}
   </section>
 }

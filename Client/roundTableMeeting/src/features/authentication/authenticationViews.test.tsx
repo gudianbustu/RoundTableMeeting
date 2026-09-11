@@ -127,7 +127,7 @@ describe('authentication pages and components', () => {
   it('renders AuthenticatedLayout and Home only with authenticated user data', () => {
     const context = value({ state: { status: 'authenticated', user } })
     withContext(context, <MemoryRouter><Routes><Route element={<AuthenticatedLayout />}><Route path="*" element={<AuthenticatedHomePage />} /></Route></Routes></MemoryRouter>)
-    expect(screen.getByRole('heading', { name: '圆桌会议' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: '圆桌会议' })).toBeInTheDocument()
     expect(screen.getAllByText('Alice')).toHaveLength(2)
     expect(screen.getByText('user-1')).toBeInTheDocument()
     expect(screen.getAllByText('alice')).toHaveLength(2)

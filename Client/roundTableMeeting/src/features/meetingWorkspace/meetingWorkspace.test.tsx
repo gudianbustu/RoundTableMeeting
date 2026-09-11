@@ -39,19 +39,23 @@ describe('meeting workspace contracts', () => {
   })
 
   it('does not expose invitation controls to ordinary members', () => {
-    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: false, participants: [] }} onInvitation={vi.fn()} onHideInvitation={vi.fn()} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: false, participants: [] }} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
     expect(screen.queryByRole('button', { name: '邀请入会' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '显示邀请码' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除会议' })).not.toBeInTheDocument()
   })
 
-  it('renders icon-only header actions with accessible labels for creators', () => {
-    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: true, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onInvitation={vi.fn()} onHideInvitation={vi.fn()} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
-    for (const label of ['邀请入会', '刷新会议', '复制邀请码', '隐藏邀请码', '删除会议']) {
+  it('renders icon-only header actions with accessible labels for creators', async () => {
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: true, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
+    for (const label of ['邀请入会', '刷新会议', '复制邀请码', '更多会议操作']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
-    expect(screen.queryByText('复制邀请码')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '隐藏邀请码' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '显示邀请码' })).not.toBeInTheDocument()
+    expect(screen.getByText('0e04091b-4287-4b4c-8c99-70217a3aeea0').closest('.meeting-code-row')).toContainElement(screen.getByRole('button', { name: '复制邀请码' }))
     expect(screen.queryByText('删除会议')).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '更多会议操作' }))
+    expect(await screen.findByRole('menuitem', { name: /删除会议/ })).toBeInTheDocument()
   })
 
   it('shows site address and meeting code when inviting a human', async () => {

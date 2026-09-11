@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { useEffect, useRef, useState } from 'react'
-import { Button, Empty, Typography } from 'antd'
+import { Button, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage } from '../types/realtimeChat'
 
 function contentNodes(message: ChatMessage): ReactNode[]
@@ -28,10 +28,20 @@ export function MessageTimeline({ messages, hasEarlierMessages, loading, onLoadE
   useEffect(() => { if (atBottom && newMessageCount > 0) onNewMessageClick() }, [atBottom, newMessageCount, onNewMessageClick])
   const jumpToLatest = () => { const element = scrollRef.current; if (element) element.scrollTop = element.scrollHeight; setAtBottom(true); onNewMessageClick() }
   return <section className="message-timeline">
-    <div className="message-timeline-toolbar">
+    {(hasEarlierMessages || (newMessageCount > 0 && !atBottom)) && <div className="message-timeline-toolbar">
       {hasEarlierMessages && <Button size="small" loading={loading} onClick={onLoadEarlier}>加载更早消息</Button>}
       {newMessageCount > 0 && !atBottom && <Button type="link" size="small" onClick={jumpToLatest}>有 {newMessageCount} 条新消息</Button>}
-    </div>
-    {messages.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" /> : <div ref={scrollRef} className="message-timeline-scroll" role="log" aria-label="会议消息">{messages.map(message => <article key={message.messageId} className={'message-item message-' + message.author.kind}><div><Typography.Text strong>{message.author.displayName}</Typography.Text><Typography.Text type="secondary" className="message-author-kind">{message.author.kind === 'agent' ? 'AI Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Typography.Text><Typography.Paragraph>{contentNodes(message)}</Typography.Paragraph><Typography.Text type="secondary">{message.createdAt.toLocaleString()} · #{message.sequence}</Typography.Text></div></article>)}</div>}
+    </div>}
+    {messages.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" /> : <div ref={scrollRef} className="message-timeline-scroll" role="log" aria-label="会议消息">
+      {messages.map(message => <article key={message.messageId} className={'message-item message-' + message.author.kind}>
+        <header className="message-meta">
+          <Tag className="message-sequence">#{message.sequence}</Tag>
+          <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>
+          <time className="message-time" dateTime={message.createdAt.toISOString()}>{message.createdAt.toLocaleString()}</time>
+          <Tag className="message-kind" color={message.author.kind === 'agent' ? 'cyan' : message.author.kind === 'human' ? 'blue' : 'default'}>{message.author.kind === 'agent' ? 'Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Tag>
+        </header>
+        <Typography.Paragraph className="message-body">{contentNodes(message)}</Typography.Paragraph>
+      </article>)}
+    </div>}
   </section>
 }

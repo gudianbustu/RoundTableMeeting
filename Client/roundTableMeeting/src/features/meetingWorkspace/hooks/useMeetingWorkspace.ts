@@ -84,17 +84,19 @@ export function useMeetingWorkspace() {
     setInvitation(created?.meetingId === routeId ? created : undefined)
     void loadDetails(routeId)
   }, [loadDetails, routeId])
-  useEffect(() => {
-    const onFocus = () => { if (routeId) void loadDetails(routeId) }
-    window.addEventListener('focus', onFocus)
-    return () => window.removeEventListener('focus', onFocus)
-  }, [loadDetails, routeId])
-
   const select = (id: string) => { suppressAutoSelect.current = false; createdInvitation.current = undefined; setInvitation(undefined); navigate(`/meetings/${id}`) }
   const refresh = () => { void loadList(false); if (routeId) void loadDetails(routeId) }
   const refreshDetails = useCallback(() => { if (routeId) void loadDetails(routeId, true) }, [loadDetails, routeId])
-  const revealInvitation = async () => { if (!routeId) return; setOperationLoading(true); try { setInvitation(await getMeetingInvitation(routeId)) } catch (value) { setError(value as MeetingWorkspaceApiError) } finally { setOperationLoading(false) } }
-  const hideInvitation = () => { createdInvitation.current = undefined; setInvitation(undefined) }
+  useEffect(() => {
+    if (!routeId || details?.meetingId !== routeId || !details.canManageInvitation || invitation?.meetingId === routeId) return
+    const controller = new AbortController()
+    void getMeetingInvitation(routeId, controller.signal).then(value => {
+      if (!controller.signal.aborted) setInvitation(value)
+    }).catch(value => {
+      if (!controller.signal.aborted) setError(value as MeetingWorkspaceApiError)
+    })
+    return () => controller.abort()
+  }, [routeId, details, invitation])
   const create = async (input: CreateMeetingInput) => {
     setCreateSucceeded(false); setOperationLoading(true)
     try {
@@ -124,7 +126,7 @@ export function useMeetingWorkspace() {
       const apiError = value as MeetingWorkspaceApiError
       if (apiError.code !== 'meeting_not_found' && apiError.status !== 404) { setError(apiError); setOperationLoading(false); return false }
     }
-    setMeetings(items => items.filter(item => item.meetingId !== id)); setDetails(undefined); hideInvitation(); suppressAutoSelect.current = true
+    setMeetings(items => items.filter(item => item.meetingId !== id)); setDetails(undefined); setInvitation(undefined); createdInvitation.current = undefined; suppressAutoSelect.current = true
     navigate('/', { replace: true, state: { suppressMeetingAutoSelect: true } }); setOperationLoading(false); return true
   }
 
@@ -137,5 +139,5 @@ export function useMeetingWorkspace() {
     void loadList(false)
   }, [loadList, navigate])
 
-  return { meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, revealInvitation, hideInvitation, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
+  return { meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
 }

@@ -1,6 +1,19 @@
-import { Button, Space, Tag, Typography } from 'antd'
-import { CopyOutlined, DeleteOutlined, EyeInvisibleOutlined, EyeOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
+import { Button, Dropdown, Popover } from 'antd'
+import { CopyOutlined, DeleteOutlined, EllipsisOutlined, InfoCircleOutlined, ReloadOutlined, UserAddOutlined } from '@ant-design/icons'
 import type { MeetingDetails, MeetingInvitation } from '../types/meetingWorkspace'
-export function MeetingHeader({ meeting, invitation, onInvitation, onHideInvitation, onCopy, onInvite, onRefresh, onDelete }: { meeting: MeetingDetails; invitation?: MeetingInvitation; onInvitation: () => void; onHideInvitation: () => void; onCopy: () => void; onInvite: () => void; onRefresh: () => void; onDelete: () => void }) {
-  return <header className="meeting-header"><div><Space wrap><Typography.Title level={2} style={{ margin: 0 }}>{meeting.name}</Typography.Title>{meeting.canDelete && <Tag color="gold">创建者</Tag>}</Space>{meeting.description && <Typography.Paragraph type="secondary">{meeting.description}</Typography.Paragraph>}{invitation && <Typography.Text copyable={false} code>{invitation.meetingCode}</Typography.Text>}</div><Space wrap>{meeting.canManageInvitation && <Button type="primary" aria-label="邀请入会" title="邀请入会" icon={<UserAddOutlined />} onClick={onInvite} />}<Button aria-label="刷新会议" title="刷新会议" icon={<ReloadOutlined />} onClick={onRefresh} />{meeting.canManageInvitation && (invitation ? <><Button aria-label="复制邀请码" title="复制邀请码" icon={<CopyOutlined />} onClick={onCopy} /><Button aria-label="隐藏邀请码" title="隐藏邀请码" icon={<EyeInvisibleOutlined />} onClick={onHideInvitation} /></> : <Button aria-label="显示邀请码" title="显示邀请码" icon={<EyeOutlined />} onClick={onInvitation} />)}{meeting.canDelete && <Button danger aria-label="删除会议" title="删除会议" icon={<DeleteOutlined />} onClick={onDelete} />}</Space></header>
+export function MeetingHeader({ meeting, invitation, onCopy, onInvite, onRefresh, onDelete }: { meeting: MeetingDetails; invitation?: MeetingInvitation; onCopy: () => void; onInvite: () => void; onRefresh: () => void; onDelete: () => void }) {
+  return <section className="meeting-actions" aria-label="会议操作">
+    <div className="meeting-action-buttons">
+      {meeting.canManageInvitation && <Button type="text" aria-label="邀请入会" title="邀请入会" icon={<UserAddOutlined />} onClick={onInvite} />}
+      <Button type="text" aria-label="刷新会议" title="刷新会议" icon={<ReloadOutlined />} onClick={onRefresh} />
+      {meeting.canDelete && <Dropdown trigger={['click']} placement="topLeft" menu={{ items: [{ key: 'delete', label: '删除会议', icon: <DeleteOutlined />, danger: true }], onClick: ({ key }) => { if (key === 'delete') onDelete() } }}>
+        <Button type="text" aria-label="更多会议操作" title="更多会议操作" icon={<EllipsisOutlined />} />
+      </Dropdown>}
+      {meeting.description && <Popover trigger="click" title="会议描述" content={<div className="meeting-description">{meeting.description}</div>}><Button type="text" aria-label="会议描述" title="会议描述" icon={<InfoCircleOutlined />} /></Popover>}
+    </div>
+    {meeting.canManageInvitation && <div className="meeting-code-row">
+      <span className="meeting-code-text" title={invitation?.meetingCode}>{invitation?.meetingCode ?? '会议码加载中…'}</span>
+      <Button type="text" aria-label="复制邀请码" title="复制邀请码" disabled={!invitation} icon={<CopyOutlined />} onClick={onCopy} />
+    </div>}
+  </section>
 }

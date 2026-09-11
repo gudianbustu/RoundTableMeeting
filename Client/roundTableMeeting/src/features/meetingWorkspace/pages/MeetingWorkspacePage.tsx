@@ -1,5 +1,6 @@
+import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Flex, Input, Modal, Typography, message } from 'antd'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MeetingNavigation } from '../components/MeetingNavigation'
 import { MeetingHeader } from '../components/MeetingHeader'
 import { ParticipantList } from '../components/ParticipantList'
@@ -23,6 +24,7 @@ export function hasUnknownAgentActivity(participants: Participant[], activities:
 
 export function MeetingWorkspacePage() {
   const workspace = useMeetingWorkspace()
+  const composerRef = useRef<MessageComposerHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
@@ -52,7 +54,7 @@ export function MeetingWorkspacePage() {
       messageApi.success('邀请码已复制')
     } catch { messageApi.error('复制失败，请手动选择并复制邀请码') }
   }
-  const openInvite = () => { if (!workspace.invitation) void workspace.revealInvitation(); setInviteOpen(true) }
+  const openInvite = () => setInviteOpen(true)
   const closeDelete = () => { setDeleteOpen(false); setConfirmName('') }
   return <section className="meeting-workspace">
     {contextHolder}
@@ -60,11 +62,10 @@ export function MeetingWorkspacePage() {
     <main className="meeting-main">
       {workspace.error && <Alert closable type="error" showIcon title={workspace.error.code === 'meeting_not_found' ? '会议已不可访问' : '操作未能完成'} description={workspace.error.message} onClose={workspace.clearError} />}
       {workspace.detailLoading ? <Typography.Text>正在加载会议...</Typography.Text> : workspace.details ? <>
-        <MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onInvitation={() => void workspace.revealInvitation()} onHideInvitation={workspace.hideInvitation} onCopy={() => void copyInvitation()} onInvite={openInvite} onRefresh={workspace.refresh} onDelete={() => setDeleteOpen(true)} />
-        <ParticipantList participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} />
-        <RealtimeChatRegion meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        <RealtimeChatRegion composerRef={composerRef} composerTools={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onInvite={openInvite} onRefresh={workspace.refresh} onDelete={() => setDeleteOpen(true)} />} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
+    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList onMention={participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />
     <InviteMeetingDialog open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />
     <JoinMeetingDialog open={joinOpen} loading={workspace.operationLoading} succeeded={workspace.joinSucceeded} previewLoading={workspace.previewLoading} preview={workspace.preview} error={workspace.error?.message} retryAfterSeconds={workspace.error?.retryAfterSeconds} onCancel={() => { workspace.clearJoin(); setJoinOpen(false) }} onPreview={workspace.previewCode} onSubmit={value => void workspace.join(value.code, value.displayName)} />
