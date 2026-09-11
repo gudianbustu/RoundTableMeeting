@@ -2,7 +2,7 @@
 
 ## 1. 文档定位
 
-本文把[AI 参会主题总体设计](design.md)拆解为可执行的服务端、数据库、MCP、事件处理、网页状态、联调和验收步骤；测试矩阵见[测试方案](testPlan.md)。本文只描述主题五的实现顺序和落点，不记录实施日志，也不提前实现主题六的可靠确认、接管和恢复，或主题七的 Agent 协作链与循环保护。
+本文把[AI 参会主题总体设计](design.md)拆解为可执行的服务端、数据库、MCP、事件处理、网页状态、联调和验收步骤；测试矩阵见[测试方案](testPlan.md)。本文只描述主题五的实现顺序和落点，不记录实施日志，也不提前实现主题六的可靠确认、接管和恢复，或主题七的 Agent 相互触发与协作来源追踪。
 
 主题五在现有 002、003、004、005 工程基础上增量实现。正式系统沿用 `.NET 10`、ASP.NET Core、Application/Domain/Abstraction/Repository.Sqlite 分层、EF Core SQLite、显式 `IUnitOfWork` 和 `IMeetingTransactionRunner`；客户端沿用 React、TypeScript、Vite、Kiota、Ant Design、SignalR 和 Vitest。
 
