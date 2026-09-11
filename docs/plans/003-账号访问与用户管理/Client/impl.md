@@ -4,7 +4,7 @@
 
 本文将[客户端设计](design.md)具体化为目录、公共 API Client、认证 Provider、路由和构建步骤。认证状态机见[认证模块实现方案](Modules/Authentication/impl.md)，页面和组件的实现见对应子目录 impl.md，验证编号见[测试方案](../testPlan.md)。
 
-本主题不新增前端状态管理库，建设内部测试所需的最小用户管理页，不建设完整用户后台或会议工作台。
+本轮扩展已有认证和用户管理，并增加个人设置；不新增状态管理库，不重建登录与会议工作台。
 
 ## 2. 依赖与工具链
 
@@ -12,47 +12,7 @@
 
 ## 3. 目录和文件
 
-~~~text
-src/
-  app/
-    layouts/AuthenticatedLayout.tsx
-    providers/AppProviders.tsx
-    router/index.tsx
-  api/
-    client/apiClient.ts
-    client/authenticationEvents.ts
-  features/
-    authentication/
-      api/login.ts
-      api/getCurrentUser.ts
-      api/logout.ts
-      components/LoginForm.tsx
-      components/CurrentUserBar.tsx
-      components/AuthGate.tsx
-      context/AuthenticationContext.ts
-      hooks/useAuthentication.ts
-      pages/LoginPage.tsx
-      pages/AuthenticatedHomePage.tsx
-      providers/AuthenticationProvider.tsx
-      types/authentication.ts
-      index.ts
-    userManagement/
-      api/listUsers.ts
-      api/createUser.ts
-      api/updateNickname.ts
-      api/resetPassword.ts
-      components/UserListTable.tsx
-      components/CreateUserForm.tsx
-      components/EditNicknameForm.tsx
-      components/ResetPasswordDialog.tsx
-      pages/UserManagementPage.tsx
-      types/userManagement.ts
-      index.ts
-  test/
-    authenticationTestUtils.tsx
-~~~
-
-测试与被测文件 colocate。页面和组件不直接 import api/generated；authentication feature 通过自己的 api 适配调用公共 getApiClient()。
+本轮完整增量清单见第 13 节，区分已有文件修改与计划新增文件。保留现有 authentication、userManagement、公共 API Client 和测试工具，不从零生成或覆盖 feature。测试与被测文件放在同一 feature；页面与组件只依赖业务视图类型，不直接 import api/generated。
 
 ## 4. 公共 Kiota Client 调整
 
@@ -62,7 +22,7 @@ src/
 
 ### 4.2 全局 401 通知
 
-在 api/client 增加轻量 authenticationEvents 模块：
+复用 api/client 中既有 authenticationEvents 模块并回归以下行为：
 
 - subscribeUnauthorized(listener) 返回取消订阅函数。
 - notifyUnauthorized() 只通知内存订阅者。
@@ -74,7 +34,7 @@ AuthenticationProvider 订阅事件并把状态转为 anonymous。feature 页面
 
 ### 4.3 重新生成
 
-启动服务端后执行 pnpm generate:api，生成认证路径和 DTO。生成失败时保留旧目录。完成后执行 pnpm test 和 pnpm build，检查请求路径只有一个 /api 前缀且生成结果不含 localhost 绝对地址。
+确认服务端来自本工作树后设置 OPENAPI_URL 并执行 pnpm generate:api，更新 isAdmin、管理员设置和本人接口契约。生成失败时保留旧目录。完成后执行 pnpm test 和 pnpm build，检查请求路径只有一个 /api 前缀且生成结果不含 localhost 绝对地址。
 
 ## 5. AuthenticationProvider 组装
 
@@ -100,8 +60,12 @@ createBrowserRouter([
       {
         element: <AuthenticatedLayout />,
         children: [
-          { index: true, element: <AuthenticatedHomePage /> },
-          { path: '/users', element: <UserManagementPage /> }
+          { path: '/', element: <MeetingWorkspacePage /> },
+          { path: '/meetings/:meetingId', element: <MeetingWorkspacePage /> },
+          { path: '/settings/profile', element: <PersonalSettingsPage /> },
+          { element: <AdminGate />, children: [
+            { path: '/users', element: <UserManagementPage /> }
+          ] }
         ]
       }
     ]
@@ -114,11 +78,11 @@ createBrowserRouter([
 ])
 ~~~
 
-LoginPage 和 NotFoundPage 不套用认证布局；SystemStatusPage 保留既有 AppLayout；只有根 index 进入 AuthGate 和 AuthenticatedLayout。NotFoundPage 自身继续渲染指向 `/system/status` 的返回链接，保持 002 V-008 回归语义。
+LoginPage 和 NotFoundPage 不套用认证布局；SystemStatusPage 保留既有 AppLayout；会议首页、会议详情、用户管理和个人设置均处于 AuthGate 和 AuthenticatedLayout 内；现有 errorElement 和会议路由行为保持不变。NotFoundPage 自身继续渲染指向 `/system/status` 的返回链接，保持 002 V-008 回归语义。
 
 AuthGate 只包受保护路由。登录页已认证时 Navigate 到安全返回路径或 /。/system/status 保持公开并继续作为 002 回归入口。
 
-AuthenticatedLayout 固定显示用户管理入口，所有 authenticated 用户可见，不读取权限状态。`/users` 与 `/` 共用 AuthGate 和布局。
+AuthenticatedLayout 根据当前 isAdmin 显示用户管理入口，所有 authenticated 用户可见个人设置。`/users` 增加 AdminGate，`/settings/profile` 使用 AuthGate 和布局。
 
 生产 SPA fallback 已由 002 支持，/login 和 / 刷新时应返回 index.html；/api/auth/* 不进入 SPA fallback。
 
@@ -130,7 +94,7 @@ authentication/api 包含：
 - getCurrentUser：签名固定为 `getCurrentUser(signal?: AbortSignal): Promise<CurrentUserViewModel>`；unauthenticated 作为 ApiError 抛出给 Provider。
 - logout：签名固定为 `logout(signal?: AbortSignal): Promise<void>`；服务端契约只返回 204、403 或网络/未知错误。204 视为退出成功；403、network、unknown 都作为 ApiError 继续抛出，由 Provider 保持 authenticated；不保留不可达的 401 分支。
 
-LoginInput 只包含 username 和 password；CurrentUserViewModel 只包含 userId、username、nickname。
+LoginInput 只包含 username 和 password；CurrentUserViewModel 包含 userId、username、nickname、isAdmin。
 
 适配层不把 generated model 传给页面，不保存密码，不在日志输出输入。
 
@@ -139,7 +103,8 @@ userManagement/api 固定：
 - `listUsers(signal?) -> Promise<UserSummaryViewModel[]>`；
 - `createUser(input, signal?) -> Promise<UserSummaryViewModel>`；
 - `updateNickname(userId, input, signal?) -> Promise<UserSummaryViewModel>`，调用生成 PATCH operation；
-- `resetPassword(userId, signal?) -> Promise<void>`。
+- `resetPassword(userId, signal?) -> Promise<void>`；
+- `updateAdmin(userId, input, signal?) -> Promise<UserSummaryViewModel>`。
 
 适配函数统一通过 toApiError 转换 ProblemDetails，不读取响应 detail 作为分支。用户名冲突和目标不存在依据 code 处理。初始密码只存在于请求输入生命周期，失败后由表单清空。
 
@@ -185,4 +150,39 @@ pnpm dev
 - `/users` 在认证布局内可访问，未登录返回 `/login`。
 - 添加账号、昵称修改、固定密码重置成功后刷新列表。
 - 当前用户昵称修改后 CurrentUserBar 同步更新。
-- 用户管理菜单不做权限判断，未来由菜单/API 权限统一收紧。
+- 用户管理菜单和 AdminGate 根据 isAdmin 限制，服务端独立检查。
+
+## 12. 个人设置与管理员实施
+
+1. 新增 features/accountSettings，包含 api/updateMyNickname.ts、api/changeMyPassword.ts、pages/PersonalSettingsPage.tsx、types 和 index.ts。API 适配调用 Kiota，支持 AbortSignal；页面只依赖视图类型，不依赖 generated。
+2. 本页用两个 Ant Design Form 分别编辑昵称与密码。密码字段使用 Input.Password；当前密码 autocomplete=current-password，新密码与确认框 autocomplete=new-password。确认字段不发送；输入不做 trim，不写 URL、日志或 storage。
+3. 每个表单独立 loading/error/AbortController 和请求版本。成功或失败清空密码；页面卸载取消请求；旧响应不能覆盖新页面、身份或输入。昵称成功独立调用 refreshCurrentUser，刷新失败不重发保存请求。
+4. CurrentUserDto/UserSummaryDto 与视图适配增加 isAdmin，登录与 me 的假数据同步包含 boolean。不能把 false 误判为响应缺失。
+5. 在 app 路由层实现 AdminGate：进入管理页先刷新当前资料，首次放行仅接受两个版本均匹配的 refreshed 结果；首次确认的 cancelled、错误或过期结果不加载列表。已放行页面仅在 identityRevision 改变或 forbidden 时撤销，普通昵称刷新保持挂载。普通用户显示无权限；管理 forbidden 立即清理列表、关闭弹窗，刷新资料。个人设置 401 复用公共认证失效信号；validation_failed 保持登录。
+6. CurrentUserBar 增加个人设置导航；管理列表显示身份列和“设为管理员/取消管理员”动作，复用 Modal.confirm 或现有确认组件，不增加复杂角色选择器。本人降级成功先退出管理页再同步资料，防止资料刷新失败继续展示列表。
+7. 构建与验证增加个人设置、管理员路由、字段 false、403 区分、两个表单独立状态与请求取消用例；测试覆盖移动端、键盘提交和可访问标签。
+
+## 13. 增量文件与 API 清单
+
+路径相对 `Client/roundTableMeeting/src/`。已有文件修改，新文件按表创建；generated 只能由 Kiota 生成。
+
+| 操作 | 文件或目录 | 本轮职责 |
+| --- | --- | --- |
+| 修改 | features/authentication/types/authentication.ts、context/AuthenticationContext.ts | isAdmin、RefreshCurrentUserResult、identityRevision、refreshRevision |
+| 修改 | features/authentication/providers/AuthenticationProvider.tsx | refreshed/cancelled、版本与竞态处理 |
+| 修改 | features/authentication/api/login.ts、getCurrentUser.ts | 完整解析 boolean isAdmin |
+| 修改 | app/router/index.tsx | 管理页 AdminGate、个人设置路由，保留现有路由及错误边界 |
+| 新增 | app/router/AdminGate.tsx | 进入确认、拒绝与重试状态 |
+| 修改 | app/layouts/AuthenticatedLayout.tsx | 管理菜单按身份显示 |
+| 修改 | features/authentication/components/CurrentUserBar.tsx | 个人设置导航 |
+| 修改 | features/userManagement/types/userManagement.ts、api/listUsers.ts、createUser.ts、updateNickname.ts | 视图 IsAdmin 与适配 |
+| 新增 | features/userManagement/api/updateAdmin.ts | 管理员身份 PATCH |
+| 修改 | features/userManagement/pages/UserManagementPage.tsx、components/UserListTable.tsx | 身份列、确认、本人降级与 forbidden |
+| 新增 | features/accountSettings/api/updateMyNickname.ts、changeMyPassword.ts | 本人接口适配 |
+| 新增 | features/accountSettings/types/accountSettings.ts、pages/PersonalSettingsPage.tsx、index.ts | 两个独立表单和页面公共出口 |
+| 修改 | test/authenticationTestUtils.tsx 与受影响测试数据 | 新字段、刷新结果和版本 |
+| 生成 | api/generated/ | 服务端稳定契约生成输出 |
+
+新增 API 适配：updateAdmin(userId, { isAdmin }, signal?) 返回 UserSummaryViewModel；updateMyNickname({ nickname }, signal?) 返回 CurrentUserViewModel；changeMyPassword({ currentPassword, newPassword }, signal?) 返回 void。确认新密码不进入 HTTP 请求。既有 list/create/updateNickname 的响应都须解析 isAdmin，不只修改列表。
+
+表单状态、刷新 cancelled 分支、页面版本失效应按对应模块实现执行；用户管理 forbidden 时取消在途请求并使其版本失效，防止迟到的列表响应重新填充目录。组件卸载清理沿用现有 AbortController/request version 模式。

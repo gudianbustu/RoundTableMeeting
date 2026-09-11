@@ -122,7 +122,7 @@ Controller 不读取密码哈希、不直接查询 DbContext、不把异常文�
 - 种子用例完成后释放启动 scope 和种子 DTO，不在 Application 或 Repository 缓存明文密码；
 - 种子过程不输出配置对象。
 
-`IAccountSeeder` 和种子输入 DTO 位于 Abstraction，由 Application 实现；Web 负责绑定和验证 Options，在 `IDatabaseInitializer` 成功后把 DTO 集合传给种子用例。Application 不引用 Web Options 或配置 Provider，只使用仓储和 `IUnitOfWork` 创建缺失账号；Repository 不读取配置或决定种子流程。任何需要人类登录的环境缺少有效账号都必须启动失败。
+`IAccountSeeder` 和种子输入 DTO 位于 Abstraction，由 Application 实现；Web 负责绑定和验证 Options，在 `IDatabaseInitializer` 成功后把 DTO 集合传给种子用例。Application 不引用 Web Options 或配置 Provider，通过仓储和事务创建缺失账号，并在无管理员时初始化指定管理员；Repository 不读取配置或决定种子流程。任何需要人类登录的环境缺少有效账号都必须启动失败。
 
 测试可以使用随机临时数据库和测试配置，不能依赖开发数据库中的账号。
 
@@ -149,3 +149,11 @@ Controller 不读取密码哈希、不直接查询 DbContext、不把异常文�
 - 登录审计、风险评分或通知服务。
 
 这些能力要在核心会议、群聊和 AI 协作链路完成后，按新的需求和设计进入。
+
+## 管理员资料与初始管理员
+
+CurrentUserDto 增加必填 bool IsAdmin；登录与 me 都从数据库映射，不从 Cookie 读取管理员快照。ICurrentUserContext 仍只提供 IsAuthenticated 和 UserId；当前身份不存在时保持 401 语义。
+
+种子契约增加可选 initialAdminUsername，由 Web 从 Authentication:InitialAdminUsername 映射。缺失账号默认普通用户；当数据库没有管理员时，必须通过显式配置找到一个账号并在事务中提升，否则启动失败。有管理员时忽略该配置，不覆盖已有昵称、密码和身份。完整初始化顺序以 [服务端设计](../../design.md)第 5.3 节为唯一规则。
+
+管理员运行期查询通过 IAdministratorAccessService 读取当前数据库；不引入角色 Claim 或跨请求缓存。个人修改密码由独立 AccountSettingsService 执行，复用现有 PasswordHasher/密码验证规则，不混入登录返回类型或 Cookie 操作。
