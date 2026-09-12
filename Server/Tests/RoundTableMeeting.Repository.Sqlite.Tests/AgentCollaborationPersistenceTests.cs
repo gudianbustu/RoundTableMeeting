@@ -329,7 +329,9 @@ public sealed class AgentCollaborationPersistenceTests
 		AgentContextCursor cursor = AgentContextCursor.Create(meeting.ID, agent.ID, 0L, BaseTime);
 		AgentReplyTask task = AgentReplyTask.Create(Guid.NewGuid(), meeting.ID, agent.ID, message.ID, message.Sequence, mention.ID, MessageAuthorKind.Human, human.ID, 0L, Guid.NewGuid(), BaseTime);
 		AgentTaskDeliveryAttempt attempt = AgentTaskDeliveryAttempt.Create(task.ID, connection.ID, meeting.ID, 1L, 1L, 12000, 24, truncated: false, overLimit: false, 0, BaseTime);
-		context.AddRange(user, meeting, human, agent, message, mention, connection, cursor, task, attempt);
+		context.AddRange(user, meeting, human, agent, message, mention, connection, cursor, AgentCollaborationBoundary.Create(meeting.ID));
+		await context.SaveChangesAsync();
+		context.AddRange(task, attempt);
         context.Add(AgentInitialContextDelivery.Create(meeting.ID, agent.ID, connection.ID,
             new(0, null, null, null, null, 12000, 0, false, false, 0, "agent-context-v1"), BaseTime));
 		await context.SaveChangesAsync();

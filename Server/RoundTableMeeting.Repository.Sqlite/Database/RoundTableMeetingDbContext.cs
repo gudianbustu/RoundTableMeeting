@@ -22,6 +22,7 @@ public sealed class RoundTableMeetingDbContext(DbContextOptions<RoundTableMeetin
     public DbSet<RoundTableMeeting.Domain.Entities.AgentConnectionSession> AgentConnectionSessions => Set<RoundTableMeeting.Domain.Entities.AgentConnectionSession>();
     public DbSet<RoundTableMeeting.Domain.Entities.AgentContextCursor> AgentContextCursors => Set<RoundTableMeeting.Domain.Entities.AgentContextCursor>();
     public DbSet<RoundTableMeeting.Domain.Entities.AgentReplyTask> AgentReplyTasks => Set<RoundTableMeeting.Domain.Entities.AgentReplyTask>();
+    public DbSet<RoundTableMeeting.Domain.Entities.AgentCollaborationBoundary> AgentCollaborationBoundaries => Set<RoundTableMeeting.Domain.Entities.AgentCollaborationBoundary>();
     public DbSet<RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt> AgentTaskDeliveryAttempts => Set<RoundTableMeeting.Domain.Entities.AgentTaskDeliveryAttempt>();
     public DbSet<RoundTableMeeting.Domain.Entities.AgentInitialContextDelivery> AgentInitialContextDeliveries => Set<RoundTableMeeting.Domain.Entities.AgentInitialContextDelivery>();
     public DbSet<RoundTableMeeting.Domain.Entities.AgentRecoveryOperation> AgentRecoveryOperations => Set<RoundTableMeeting.Domain.Entities.AgentRecoveryOperation>();

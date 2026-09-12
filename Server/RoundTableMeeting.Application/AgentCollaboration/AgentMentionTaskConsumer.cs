@@ -4,6 +4,7 @@ using RoundTableMeeting.Domain.Entities;
 using RoundTableMeeting.Domain.Enums;
 using RoundTableMeeting.Domain.Repositories;
 using RoundTableMeeting.Domain.UnitOfWork;
+using MessageAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
 
 namespace RoundTableMeeting.Application.AgentCollaboration;
 
@@ -47,7 +48,7 @@ public sealed class AgentMentionTaskConsumer(
             cancellationToken);
         if (eventMessage is null
             || eventMessage.Sequence != envelope.Sequence
-            || eventMessage.AuthorKind != RoundTableMeeting.Domain.Enums.MessageAuthorKind.Human)
+            || eventMessage.AuthorKind == MessageAuthorKind.System)
             return [];
 
         var eventMentions = await messages.ListMentionsAsync(
@@ -65,6 +66,11 @@ public sealed class AgentMentionTaskConsumer(
             .ToArray();
         if (agents.Length == 0) return [];
 
+        var boundary = await agentRepository.FindBoundaryAsync(envelope.MeetingId, cancellationToken)
+            ?? throw new InvalidOperationException($"Agent collaboration boundary missing for meeting {envelope.MeetingId}.");
+        if (eventMessage.AuthorKind == MessageAuthorKind.Agent
+            && eventMessage.Sequence <= boundary.AgentTriggerStartSequence) return [];
+
         var createdAgents = new List<Guid>();
         var now = timeProvider.GetUtcNow();
         foreach (var agent in agents)
@@ -76,54 +82,59 @@ public sealed class AgentMentionTaskConsumer(
             if (cursor is null || cursor.AllocatedThroughSequence >= envelope.Sequence)
                 continue;
 
-            var candidates = await messages.ListAfterSequenceThroughAsync(
-                envelope.MeetingId,
-                cursor.AllocatedThroughSequence,
-                envelope.Sequence,
-                cancellationToken);
-            var existingTasks = (await agentRepository.ListTasksAsync(
-                    envelope.MeetingId,
-                    agent.ID,
-                    cancellationToken))
-                .ToDictionary(task => task.TriggerMessageId);
             var allocationCursor = cursor.AllocatedThroughSequence;
-
-            foreach (var candidate in candidates)
+            var scanCursor = allocationCursor;
+            while (scanCursor < envelope.Sequence)
             {
-                if (candidate.AuthorKind != RoundTableMeeting.Domain.Enums.MessageAuthorKind.Human) continue;
-
-                if (existingTasks.TryGetValue(candidate.ID, out var existingTask))
+                // Page reads, but keep all targets and every page in the same meeting transaction.
+                var candidates = await messages.ListAsync(envelope.MeetingId, null, scanCursor,
+                    envelope.Sequence, 256, cancellationToken);
+                if (candidates.Count == 0) break;
+                var pageEnd = candidates[^1].Sequence;
+                var candidateIds = candidates.Select(item => item.ID).ToArray();
+                var mentions = (await messages.ListMentionsForMessagesAsync(envelope.MeetingId, candidateIds, cancellationToken))
+                    .Where(item => item.TargetParticipantId == agent.ID).ToLookup(item => item.MessageId);
+                var existingTasks = (await agentRepository.ListTasksInRangeAsync(envelope.MeetingId, agent.ID,
+                    scanCursor, pageEnd, cancellationToken)).ToDictionary(task => task.TriggerMessageId);
+                var sources = (await agentRepository.ListReplySourcesAsync(envelope.MeetingId,
+                    candidates.Where(item => item.AuthorKind == MessageAuthorKind.Agent
+                        && item.Sequence > boundary.AgentTriggerStartSequence && mentions.Contains(item.ID))
+                        .Select(item => item.ID).ToArray(), cancellationToken))
+                    .ToDictionary(task => task.ReplyMessageId!.Value);
+                foreach (var candidate in candidates)
                 {
-                    allocationCursor = Math.Max(allocationCursor, existingTask.TriggerSequence);
-                    continue;
+                    if (candidate.AuthorKind == MessageAuthorKind.System
+                        || candidate.AuthorKind == MessageAuthorKind.Agent && candidate.Sequence <= boundary.AgentTriggerStartSequence)
+                        continue;
+                    if (existingTasks.TryGetValue(candidate.ID, out var existingTask))
+                    {
+                        allocationCursor = Math.Max(allocationCursor, existingTask.TriggerSequence);
+                        continue;
+                    }
+                    var mention = mentions[candidate.ID].FirstOrDefault();
+                    if (mention is null) continue;
+
+                    var taskId = Guid.NewGuid();
+                    var key = AgentReplyIdempotencyKeyFactory.Create(taskId);
+                    AgentReplyTask task;
+                    if (candidate.AuthorKind == MessageAuthorKind.Human)
+                    {
+                        task = AgentReplyTask.Create(taskId, envelope.MeetingId, agent.ID, candidate.ID,
+                            candidate.Sequence, mention.ID, candidate.AuthorKind, candidate.AuthorParticipantId,
+                            allocationCursor, key, now);
+                    }
+                    else
+                    {
+                        if (!sources.TryGetValue(candidate.ID, out var parent))
+                            throw new InvalidOperationException($"Agent reply source missing for message {candidate.ID}.");
+                        task = AgentReplyTask.CreateDerived(taskId, agent.ID, candidate, mention, parent, allocationCursor, key, now);
+                    }
+                    unitOfWork.RegisterAdd(task);
+                    existingTasks.Add(candidate.ID, task);
+                    allocationCursor = candidate.Sequence;
+                    createdAgents.Add(agent.ID);
                 }
-
-                var mentions = candidate.ID == eventMessage.ID
-                    ? eventMentions
-                    : await messages.ListMentionsAsync(
-                        envelope.MeetingId,
-                        candidate.ID,
-                        cancellationToken);
-                var mention = mentions.FirstOrDefault(item => item.TargetParticipantId == agent.ID);
-                if (mention is null) continue;
-
-                var taskId = Guid.NewGuid();
-                var task = AgentReplyTask.Create(
-                    taskId,
-                    envelope.MeetingId,
-                    agent.ID,
-                    candidate.ID,
-                    candidate.Sequence,
-                    mention.ID,
-                    candidate.AuthorKind,
-                    candidate.AuthorParticipantId,
-                    allocationCursor,
-                    AgentReplyIdempotencyKeyFactory.Create(taskId),
-                    now);
-                unitOfWork.RegisterAdd(task);
-                existingTasks.Add(candidate.ID, task);
-                allocationCursor = candidate.Sequence;
-                createdAgents.Add(agent.ID);
+                scanCursor = pageEnd;
             }
 
             if (allocationCursor > cursor.AllocatedThroughSequence)

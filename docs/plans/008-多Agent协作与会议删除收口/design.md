@@ -72,7 +72,7 @@ AgentCollaborationBoundary 使用 Guid ID 主键、MeetingId 唯一索引及指�
 
 父引用采用 (ParentTaskId, MeetingId) → AgentReplyTasks(ID, MeetingId) 的 Restrict 复合外键；MeetingId 保持非空并可与其他关系共享，同链关系由触发器检查。SQLite 在任一子键为 NULL 时不校验该复合引用，因此删除时仅置空 ParentTaskId，无需清空 MeetingId 或增加影子会议列。根 ChainId 通过复合外键保证同会议，Human 作者由触发器检查。来源作者、来源参与者、触发消息/提及及 ChainId 均不可改写；父引用仅有 §4 的删除例外。
 
-把现有非唯一索引 IX_AgentReplyTasks_ReplyMessageId_MeetingId 替换为同名、同列顺序的部分唯一索引（WHERE ReplyMessageId IS NOT NULL）。它保证回复归属唯一；既有 (MeetingId, AgentParticipantId, TriggerMessageId) 唯一键保证触发去重，两者用途不同。保留原回复外键及被引用端候选键；子表索引不是外键有效性的前提。特定唯一冲突映射为 AgentCollaborationConflictException，再沿用 agent_operation_conflict；不得将任意约束错误吞成幂等成功。
+把现有非唯一索引 IX_AgentReplyTasks_ReplyMessageId_MeetingId 替换为同名、同列顺序的部分唯一索引（WHERE ReplyMessageId IS NOT NULL）。它保证回复归属唯一；既有 (MeetingId, AgentParticipantId, TriggerMessageId) 唯一键保证触发去重，两者用途不同。保留原回复外键及被引用端候选键；子表索引不是外键有效性的前提。 任务范围查询使用 (MeetingId, AgentParticipantId, TriggerSequence) 索引；队首查询使用 (MeetingId, AgentParticipantId, TriggerSequence, ID) 部分索引，条件为 State 不等于 Replied 且不等于 Cancelled，避免扫描已终结历史。特定唯一冲突映射为 AgentCollaborationConflictException，再沿用 agent_operation_conflict；不得将任意约束错误吞成幂等成功。
 
 任务表重建必须保留既有六个归属触发器：agent_attempt_owner_insert、agent_attempt_owner_update、agent_task_owner_update、agent_connection_owner_update、agent_retry_owner_insert、agent_retry_owner_update。迁移显式重建受影响触发器，验证 sqlite_master 名称、定义与实际行为，并执行 foreign_key_check。生产连接同步/异步打开后及初始化迁移前后均验证 PRAGMA foreign_keys=1，不满足时拒绝使用连接/启动；连接串 Foreign Keys=True 保留，不依赖测试连接的默认值。
 

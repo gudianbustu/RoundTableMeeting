@@ -1,5 +1,7 @@
 # AI 参会主题测试方案
 
+当前实现已接入 [008 多 Agent 协作与会议删除收口](../008-多Agent协作与会议删除收口/design.md)：Human 有效提及继续创建根任务；Agent 有效提及仅在会议启用边界之后派生，System 不触发。旧边界内 Agent 不追溯，旧 Human 待办仍补齐。legacy/可靠驻留模板分别为 `resident-instruction-v3-legacy` / `resident-instruction-v3-reliable`，仅可靠 join/resume 声明 `multi_agent_collaboration_v1`；共 9 个工具（既有 4 个、可靠专属 5 个）。来源随任务恢复保持，删除屏障提交返回 202 后仍由后台清理父引用、边界及原有资源；008 的新增验收见其 [testPlan.md](../008-多Agent协作与会议删除收口/testPlan.md)，本文件原有通过证据不代替该验收，旧服务夹具的 v1/v2 仍保留。
+
 ## 1. 文档定位
 
 本文定义主题五“AI 参会”的 Domain、Application、Repository.Sqlite、架构边界、MCP HTTP、消息事件消费者、SignalR、客户端、参考 Agent、浏览器和发布回归测试。实施顺序见[主题实现方案](impl.md)，业务契约和范围边界见[主题总体设计](design.md)。
@@ -151,7 +153,7 @@
 | AI-E004 | P0 | Human 多目标 mention | 一条消息提及多个 Agent 时，各 Agent 各有一个独立任务和独立候选范围 |
 | AI-E005 | P0 | 同消息重复提及 | 同一 Human 消息多次提及同一 Agent 时只创建一个任务；代表 TriggerMentionId 按最小 StartOffset 选择 |
 | AI-E006 | P0 | System 消息 | System 消息即使含有可解析文本也不创建主题五任务，delivery 正常完成 |
-| AI-E007 | P0 | Agent 消息 | Agent 消息的通用 mention 记录保留；主题五消费者跳过任务创建，不能形成自触发或 Agent 间循环 |
+| AI-E007 | P0 | Agent 消息 | 旧启用边界内 Agent 消息仅保留通用 mention、不追溯；边界之后的 Agent 间提及及自提及派生独立任务，新增验收归 008 |
 | AI-E008 | P0 | 非 Active 会议 | 消费时会议已 Deleting/删除，完成或取消本次 delivery，不创建任务、不唤醒等待者 |
 | AI-E009 | P0 | 事件 20 先于 10 | 已持久化的 10、20 均为 Human @AI 时，先消费 20 能补齐任务 10、20；范围依次为 (cursor,10]、(10,20] |
 | AI-E010 | P0 | 事件 10 后到达 | 10 的 delivery 随后到达只命中已有唯一任务；不倒退 AllocatedThroughSequence，不创建重复任务或负范围 |
@@ -235,7 +237,7 @@
 | AI-M019 | P1 | 会话多 Agent | 同一 MCP host 中两个独立 Agent 会话可同时 join 同一会议，彼此任务、状态和回复不串线 |
 | AI-M020 | P1 | 配置约束 | contextCharacterLimit、等待上限、回复长度和限流配置启动时校验；非法配置阻止启动或返回稳定配置错误 |
 | AI-M021 | P1 | 同源部署边界 | /mcp 使用同源 HTTPS/真实传输配置；浏览器 Cookie 不作为 Agent 身份凭证，不向页面暴露 MCP 内部标识 |
-| AI-M022 | P1 | 驻留指令契约 | join 返回 residentInstructionVersion=resident-instruction-v1 和固定版本 residentInstruction，包含等待、任务处理、回复参数和继续等待要求；指令不写入 MeetingMessage |
+| AI-M022 | P1 | 驻留指令契约 | join 返回 residentInstructionVersion=resident-instruction-v3-legacy 和固定版本 residentInstruction，包含等待、任务处理、回复参数和继续等待要求；指令不写入 MeetingMessage |
 
 ## 13. SignalR Agent presence 和 activity 测试
 

@@ -14,7 +14,7 @@ using Xunit;
 
 namespace RoundTableMeeting.IntegrationTests;
 
-public sealed class AgentMentionTaskConsumerTests
+public sealed partial class AgentMentionTaskConsumerTests
 {
 	private sealed record MeetingSeed(Guid MeetingId, Guid HumanId, Guid FirstAgentId, Guid? SecondAgentId);
 
@@ -88,7 +88,8 @@ public sealed class AgentMentionTaskConsumerTests
 	{
 		using TestApplicationFactory factory = new TestApplicationFactory();
 		factory.CreateClient();
-		MeetingSeed first = await SeedMeetingAsync(factory, includeSecondAgent: true);
+		// Sequence 1 represents a pre-upgrade Agent message and must not be replay-triggered.
+		MeetingSeed first = await SeedMeetingAsync(factory, includeSecondAgent: true, boundarySequence: 1);
 		MeetingSeed second = await SeedMeetingAsync(factory, includeSecondAgent: false);
 		MessageSeed agentMessage = await AddMessageAsync(factory, first, 1L, RoundTableMeeting.Domain.Enums.MessageAuthorKind.Agent, "@Analyst from agent", new MentionInput(first.FirstAgentId, "Analyst", 0, 8));
 		MessageSeed systemMessage = await AddMessageAsync(factory, first, 2L, RoundTableMeeting.Domain.Enums.MessageAuthorKind.System, "@Analyst from system", new MentionInput(first.FirstAgentId, "Analyst", 0, 8));
@@ -140,7 +141,7 @@ public sealed class AgentMentionTaskConsumerTests
 		}
 	}
 
-	private static async Task<MeetingSeed> SeedMeetingAsync(TestApplicationFactory factory, bool includeSecondAgent)
+	private static async Task<MeetingSeed> SeedMeetingAsync(TestApplicationFactory factory, bool includeSecondAgent, long boundarySequence = 0)
 	{
 		MeetingSeed result;
 		await using (AsyncServiceScope scope = factory.Services.CreateAsyncScope())
@@ -155,6 +156,7 @@ public sealed class AgentMentionTaskConsumerTests
 			MeetingParticipant? secondAgent = includeSecondAgent ? MeetingParticipant.CreateAgent(meeting.ID, "Reviewer", now) : null;
 			AgentContextCursor firstCursor = AgentContextCursor.Create(meeting.ID, firstAgent.ID, 0L, now);
 			db.AddRange(user, meeting, human, firstAgent, firstCursor);
+			db.Add(AgentCollaborationBoundary.Create(meeting.ID, boundarySequence));
 			if (secondAgent != null)
 			{
 				db.Add(secondAgent);

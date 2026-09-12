@@ -13,6 +13,9 @@ public sealed class AgentCollaborationCleanupService(RoundTableMeetingDbContext 
     {
         if (dbContext.Database.CurrentTransaction is null)
             throw new InvalidOperationException("Agent cleanup requires the meeting deletion transaction.");
+        if (!await dbContext.Meetings.AnyAsync(meeting => meeting.ID == meetingId
+                && meeting.LifecycleState == MeetingLifecycleState.Deleting, cancellationToken))
+            throw new InvalidOperationException("Agent cleanup requires a Deleting meeting.");
         var tasks = await dbContext.AgentReplyTasks.AsTracking()
             .Where(task => task.MeetingId == meetingId && task.State != AgentReplyTaskState.Replied && task.State != AgentReplyTaskState.Cancelled)
             .ToArrayAsync(cancellationToken);
@@ -22,7 +25,8 @@ public sealed class AgentCollaborationCleanupService(RoundTableMeetingDbContext 
         await dbContext.AgentContextCursors.Where(item => item.MeetingId == meetingId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CurrentConnectionId, (Guid?)null), cancellationToken);
         await dbContext.AgentReplyTasks.Where(item => item.MeetingId == meetingId)
-            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CurrentAttemptId, (Guid?)null), cancellationToken);
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.CurrentAttemptId, (Guid?)null)
+                .SetProperty(item => item.ParentTaskId, (Guid?)null), cancellationToken);
         await dbContext.AgentTaskDeliveryAttempts.Where(item => item.MeetingId == meetingId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.ReplacementAttemptId, (Guid?)null), cancellationToken);
         await dbContext.AgentConnectionSessions.Where(item => item.MeetingId == meetingId)
@@ -33,5 +37,6 @@ public sealed class AgentCollaborationCleanupService(RoundTableMeetingDbContext 
         await dbContext.AgentReplyTasks.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.AgentContextCursors.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
         await dbContext.AgentConnectionSessions.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
+        await dbContext.AgentCollaborationBoundaries.Where(item => item.MeetingId == meetingId).ExecuteDeleteAsync(cancellationToken);
     }
 }

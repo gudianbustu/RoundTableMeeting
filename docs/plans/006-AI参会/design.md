@@ -1,5 +1,7 @@
 # AI 参会主题总体设计
 
+当前实现已接入 [008 多 Agent 协作与会议删除收口](../008-多Agent协作与会议删除收口/design.md)：Human 有效提及继续创建根任务；Agent 有效提及仅在会议启用边界之后派生，System 不触发。旧边界内 Agent 不追溯，旧 Human 待办仍补齐。legacy/可靠驻留模板分别为 `resident-instruction-v3-legacy` / `resident-instruction-v3-reliable`，仅可靠 join/resume 声明 `multi_agent_collaboration_v1`；共 9 个工具（既有 4 个、可靠专属 5 个）。来源随任务恢复保持，删除屏障提交返回 202 后仍由后台清理父引用、边界及原有资源；008 的新增验收见其 [testPlan.md](../008-多Agent协作与会议删除收口/testPlan.md)，本文件原有通过证据不代替该验收，旧服务夹具的 v1/v2 仍保留。
+
 ## 1. 文档定位
 
 本文是“AI 参会”主题的总体设计，负责冻结外部 AI Agent 作为会议参与者加入和参与讨论所需的业务边界、AI 参与者与连接会话契约、MCP 能力、上下文投递规则、回复任务状态、网页展示和删除闭环扩展。服务端、客户端、模块、参考 Agent 和测试的具体实现分别由本目录后续子文档负责。
@@ -157,7 +159,7 @@ AI 回复与人类消息共用：
 - `MeetingId`、`AgentParticipantId`；
 - `TriggerMessageId`、`TriggerSequence`；
 - `TriggerMentionId`：用于诊断具体提及出现；同一消息多次提及目标 AI 时，固定取 `StartOffset` 最小的提及记录作为代表；
-- `SourceAuthorKind`、`SourceParticipantId`：保存触发消息的作者类型和参与者；主题五实际只会写入 Human 作者，系统消息不会创建 AI 任务；
+- `SourceAuthorKind`、`SourceParticipantId`：保存触发消息的作者类型和参与者；基础阶段仅写入 Human；当前 008 同时写入启用边界之后的 Agent 来源，系统消息不会创建 AI 任务；
 - `CandidateFromSequenceExclusive`、`CandidateToSequenceInclusive`；
 - `State`：`Queued`、`Delivered`、`Processing`、`Replied`、`Failed`、`Cancelled`；
 - `ReplyIdempotencyKey`：由服务端根据 `TaskId` 派生的稳定 Guid；算法固定为 UUIDv5，命名空间为 `8b8b9e45-72bf-46a0-a9e6-6e0f43f317c0`，名称为 `agent-reply:` 加 `TaskId.ToString("D").ToLowerInvariant()`；只在 `AgentReplyTask` 表内建立唯一约束，不给共享 `MeetingMessage` 表增加全局唯一约束；
@@ -248,7 +250,7 @@ MCP 工具不使用浏览器 Cookie 作为 Agent 身份。加入成功后的工�
 - 当前会议参与者摘要；
 - 固定版本的 `residentInstruction`；
 - `initialContext`：快照序号、候选范围、实际范围、裁剪元数据和消息列表；
-- `residentInstructionVersion = resident-instruction-v1`；
+- `residentInstructionVersion = resident-instruction-v3-legacy`；
 - `nextAction = wait_for_mention`。
 
 加入事务必须完成：
@@ -266,7 +268,7 @@ MCP 工具不使用浏览器 Cookie 作为 Agent 身份。加入成功后的工�
 
 ### 6.3 驻留参与指令
 
-服务器返回的指令使用固定模板，版本字段固定为 `resident-instruction-v1`，并且至少表达：
+服务器返回的指令使用固定模板，版本字段固定为 `resident-instruction-v3-legacy`，并且至少表达：
 
 - 当前 Agent 已加入哪个会议和使用什么显示名称；
 - 只在明确被 `@` 时处理消息；
@@ -404,7 +406,7 @@ MCP 工具不使用浏览器 Cookie 作为 Agent 身份。加入成功后的工�
 
 1. 检查会议仍为 `Active`；否则完成本次 delivery，不创建任务。
 2. 按 `MessageId` 回查完整消息和提及记录。
-3. 主题五只允许 Human 作者触发任务；System 消息不触发任务，Agent 消息继续保留主题四的通用提及记录，但本消费者跳过任务创建。
+3. Human 有效提及创建根任务；008 启用后，超过会议边界的 Agent 有效提及创建派生任务，边界内不追溯；System 不触发。
 4. 按 `TargetParticipantId` 去重，同一消息对同一 Agent 只创建一个任务。
 5. 只为当前会议内仍存在的 Agent 参与者创建任务。
 6. 在 Agent 的顺序补齐事务中查询到当前事件序号为止的全部缺失 Human 提及，按序记录候选范围、推进分配位置并保存任务。

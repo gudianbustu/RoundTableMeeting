@@ -59,6 +59,12 @@ try
             initialAdminUsername: authenticationOptions.InitialAdminUsername);
     }
 
+    if (await MessageEventMaintenance.TryRunAsync(args, app.Services))
+    {
+        await app.DisposeAsync();
+        return;
+    }
+
     app.Use(async (context, next) =>
     {
         using (LogContext.PushProperty("traceId", RoundTableMeeting.Errors.TraceIdResolver.Resolve(context)))

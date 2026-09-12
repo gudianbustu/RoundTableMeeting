@@ -80,3 +80,15 @@ Windows 自动设置专用目录仅当前用户可访问，并以命名管道互
 传输失效或旧 resume 操作已被补偿为失效时，先关闭旧会话，再建立新 MCP 会话并 resume；新传输使用新的 resume operationId，同一传输重放保留原值。恢复时先查已保存任务：已回复只清理本地待提交状态；旧尝试失效则丢弃旧正文，等待新尝试。服务端省略已确认初始上下文时保留本地原历史。连接被接管返回 connection_superseded 时停止，不反向接管。已生成正文在回复前落盘可避免同一有效尝试重复生成；进程在生成与保存之间崩溃仍可能再次生成，不承诺外部副作用恰好一次。
 
 运行 `node --test index.test.mjs reliable.test.mjs reliable-recovery.test.mjs reliable-state.test.mjs reliable-conflict.test.mjs` 验证传输超时/多路响应、状态互斥、Unix 遗留锁并发拒绝与人工清理后单一归属、丢响应重放、恢复后的回复识别和尝试隔离、独立续租、显式重试、有界激活重查和可取消退避。真实模型、十分钟驻留、进程崩溃和浏览器验收以主题六 testPlan 的实际结果为准。
+
+## 多 Agent 协作
+
+主题 008 启用后，Human 与 Agent 的有效 @AI 都能创建任务，包括自我提及和同条多目标。两种模式均支持；只有可靠模式 join/resume 的 capabilities 声明 multi_agent_collaboration_v1，legacy 不新增能力字段。新版模板标识分别为 resident-instruction-v3-legacy 和 resident-instruction-v3-reliable；旧服务缺少该能力时，不宣称支持 Agent 相互触发。
+
+任务及状态摘要可带 collaboration，包含 chainId、parentTaskId、sourceAuthorKind、sourceParticipantId。根任务 parentTaskId 为 null；宿主保存原任务对象即可保留新增字段。忽略这些字段的旧宿主仍能等待和回复。回复成功只表示消息已接受，下游异步派生；不要因此生成第二条回复。
+
+双宿主使用不同 AGENT_NAME 和独立 AGENT_STATE_FILE，让人类 @A，A 回复中有效 @B，B 根据其实际上下文回答。具体问题、协作顺序和结束条件由参与者决定。固定脚本的轮数只由测试宿主控制；服务器没有业务循环截断、自动共识/冻结判定或暂停入口。需要停止时在外部宿主 quit、Ctrl+C 或停止模型；只停模型但仍续租时，网站可能继续显示处理中。
+
+升级须停止所有旧版本写入进程和事件分发，再启动新版本执行迁移。新旧实例不能重叠写库。无需清空旧 Human 待处理任务；旧 Agent 消息按迁移边界不追溯派生。
+
+持久化事件因数据损坏进入 Suspended 时，先停服务并修复损坏事实，再使用相同数据库配置执行 `dotnet RoundTableMeeting.dll --resume-message-event=<投递ID>`。该本地维护命令通过 DI 调用恢复服务，只接受 Active 会议中的 Suspended 投递，成功退出后正常启动服务继续原事件；不会开放网页或 MCP 维护端点，不以 retry_task 代替事件恢复。恢复命令不修补数据、不输出正文或凭据。

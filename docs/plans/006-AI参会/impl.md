@@ -1,5 +1,7 @@
 # AI 参会主题实现方案
 
+当前实现已接入 [008 多 Agent 协作与会议删除收口](../008-多Agent协作与会议删除收口/design.md)：Human 有效提及继续创建根任务；Agent 有效提及仅在会议启用边界之后派生，System 不触发。旧边界内 Agent 不追溯，旧 Human 待办仍补齐。legacy/可靠驻留模板分别为 `resident-instruction-v3-legacy` / `resident-instruction-v3-reliable`，仅可靠 join/resume 声明 `multi_agent_collaboration_v1`；共 9 个工具（既有 4 个、可靠专属 5 个）。来源随任务恢复保持，删除屏障提交返回 202 后仍由后台清理父引用、边界及原有资源；008 的新增验收见其 [testPlan.md](../008-多Agent协作与会议删除收口/testPlan.md)，本文件原有通过证据不代替该验收，旧服务夹具的 v1/v2 仍保留。
+
 ## 1. 文档定位
 
 本文把[AI 参会主题总体设计](design.md)拆解为可执行的服务端、数据库、MCP、事件处理、网页状态、联调和验收步骤；测试矩阵见[测试方案](testPlan.md)。本文只描述主题五的实现顺序和落点，不记录实施日志，也不提前实现主题六的可靠确认、接管和恢复，或主题七的 Agent 相互触发与协作来源追踪。
@@ -70,7 +72,7 @@
 5. 为 MCP 入口建立统一错误映射：领域/数据库异常在 Tool 边界转换为设计中的稳定错误码；不把堆栈、SQL、会议码或完整正文作为 MCP 错误返回。
 6. 为 Agent 模块建立独立的 Application service facade。MCP Tool 只做输入反序列化、当前传输会话读取、取消令牌传递和结果序列化；所有会议、参与者、任务和消息规则进入 facade。
 7. 先接入 `get_agent_status` 的空状态实现和 `join_meeting` 的输入校验，再接入持久化，确保 MCP 工具发现、错误格式和会话绑定先稳定。
-8. 固定 `residentInstructionVersion=resident-instruction-v1`，指令模板内容与版本由 `AgentResidentInstruction` 单点维护；版本字段与指令文本一起返回。
+8. 固定 `residentInstructionVersion=resident-instruction-v3-legacy`，指令模板内容与版本由 `AgentResidentInstruction` 单点维护；版本字段与指令文本一起返回。
 
 ### 4.3 阶段 2：领域模型与 SQLite 持久化
 
@@ -125,7 +127,7 @@
 
 1. 在主题四 `IMessageEventConsumerCatalog` 注册新的 `agent-mention-task-v1`，使用独立 `MessageEventDelivery`，不复用 `realtime-broadcast-v1`。
 2. 消费者通过事件 `MessageId` 回查完整消息、提及和会议状态；会议非 `Active` 时不创建任务并完成本次 delivery。
-3. 只把 Human 作者消息中的合法提及物化为任务；System 消息不触发，Agent 消息的通用提及记录保留但主题五消费者跳过。
+3. Human 合法提及物化为根任务；008 消费者按会议边界筛选 Agent 来源并从父回复派生任务，旧 Agent 提及仅保留通用记录；System 不触发。
 4. 按目标 Agent 去重，同一消息对同一 Agent 只创建一个任务；只处理当前会议内仍存在的 `ParticipantType.Agent`。
 5. 对每个目标 Agent 启动参与者级顺序补齐事务：锁定 `AllocatedThroughSequence`，查询从该位置之后到当前事件序号之间所有尚未物化的 Human `@AI` 消息，按 `Sequence` 升序创建缺失任务。
 6. 第一个缺失任务的 `CandidateFromSequenceExclusive` 使用当前分配游标，后续任务使用前一任务的 `TriggerSequence`；每个任务的终点是自己的触发序号；每成功创建一个任务就推进分配游标。

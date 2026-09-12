@@ -1,5 +1,7 @@
 # AI 任务连续性与接管测试方案
 
+当前实现已接入 [008 多 Agent 协作与会议删除收口](../008-多Agent协作与会议删除收口/design.md)：Human 有效提及继续创建根任务；Agent 有效提及仅在会议启用边界之后派生，System 不触发。旧边界内 Agent 不追溯，旧 Human 待办仍补齐。legacy/可靠驻留模板分别为 `resident-instruction-v3-legacy` / `resident-instruction-v3-reliable`，仅可靠 join/resume 声明 `multi_agent_collaboration_v1`；共 9 个工具（既有 4 个、可靠专属 5 个）。来源随任务恢复保持，删除屏障提交返回 202 后仍由后台清理父引用、边界及原有资源；008 的新增验收见其 [testPlan.md](../008-多Agent协作与会议删除收口/testPlan.md)，本文件原有通过证据不代替该验收，旧服务夹具的 v1/v2 仍保留。
+
 ## 1. 定位与完成规则
 
 本方案验收[主题设计](design.md)及[实现步骤](impl.md)，下表 140 项列出本主题完整验收要求及当前逐项证据，协议、领域、持久化、恢复并发、真实模型与浏览器验收均已完成。
@@ -307,7 +309,7 @@ pnpm build
 
 发布验证从现有 Server/RoundTableMeeting/RoundTableMeeting.csproj 输出到隔离的 artifacts 子目录，使用独立 SQLite。验证 /mcp 工具发现、应用启动、SPA、SignalR、数据库迁移与删除恢复。HTTP OpenAPI/Kiota 与 SignalR 镜像契约分开验证，不把 MCP DTO 误当 REST 自动生成能力。
 
-必须回归账号认证和授权、会议创建/加入/切换/删除、Human 消息发送与历史补齐、presence、乱序广播去重、事件分发器重试，以及主题五 Human @AI 正常参会路径。可靠模式仍不能让 Agent/System 消息触发主题七任务。
+必须回归账号认证和授权、会议创建/加入/切换/删除、Human 消息发送与历史补齐、presence、乱序广播去重、事件分发器重试，以及主题五 Human @AI 正常参会路径。System 消息仍不触发任务；旧边界内 Agent 提及不追溯，008 启用边界之后的 Agent 提及应派生任务，可靠模式和 legacy 均适用。
 
 ## 10. 完成门
 

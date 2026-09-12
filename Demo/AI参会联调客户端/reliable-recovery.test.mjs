@@ -143,3 +143,28 @@ test('a fatal business error cancels concurrent renewal backoff', { timeout: 500
   f.agent.backoff = ReliableAgent.prototype.backoff
   await assert.rejects(f.agent.run(), error => error.code === 'connection_superseded')
 })
+
+test('resume accepts collaboration summaries and recovers a committed derived reply without generation', async () => {
+  const collaboration = { chainId: 'root-message', parentTaskId: 'parent-task', sourceAuthorKind: 'agent' }
+  const summary = { taskId: 'completed', state: 'replied', collaboration }
+  const calls = []
+  let f
+  f = savedFixture({ state: { version: 1, url: 'test', join: { meetingCode: 'code', displayName: 'ReferenceAgent', recoveryKey: 'private-key' },
+    connectionSessionId: 'original', initialConfirmed: true,
+    task: { taskId: 'completed', deliveryAttemptId: 'attempt', replyContent: 'saved reply', collaboration } },
+  makeTransport: () => ({ async open() {}, fail() {}, async close() { return true },
+    async tool(name, args) {
+      calls.push({ name, args })
+      if (name === 'resume_agent') return { succeeded: true, data: { kind: 'resumed',
+        capabilities: [...capabilities, 'multi_agent_collaboration_v1'], leasePolicy,
+        lastRepliedTask: summary, connection: { initialContextState: 'confirmed' } } }
+      assert.equal(name, 'get_agent_status')
+      return { succeeded: true, data: { queueHead: null, requestedTask: summary } }
+    } }), log: event => { if (event === 'reply_recovered') f.agent.stop() } })
+  await f.agent.run()
+  assert.equal(f.saved().task, null)
+  assert.deepEqual(f.saved().initial.lastRepliedTask.collaboration, collaboration)
+  assert.deepEqual(calls.map(call => call.name), ['resume_agent', 'get_agent_status'])
+  assert.equal(calls[1].args.taskId, 'completed')
+  for (const call of calls) assert.equal(Object.hasOwn(call.args, 'collaboration'), false)
+})

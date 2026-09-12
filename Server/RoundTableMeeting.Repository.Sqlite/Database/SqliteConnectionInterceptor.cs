@@ -48,6 +48,9 @@ public sealed class SqliteConnectionInterceptor : DbConnectionInterceptor
         using var command = sqliteConnection.CreateCommand();
         command.CommandText = $"PRAGMA busy_timeout = {BusyTimeoutMilliseconds};";
         command.ExecuteNonQuery();
+        command.CommandText = "PRAGMA foreign_keys;";
+        if (Convert.ToInt32(command.ExecuteScalar()) != 1)
+            throw new InvalidOperationException("SQLite foreign key enforcement must be enabled.");
     }
 
     /// <summary>
@@ -63,5 +66,8 @@ public sealed class SqliteConnectionInterceptor : DbConnectionInterceptor
         await using var command = sqliteConnection.CreateCommand();
         command.CommandText = $"PRAGMA busy_timeout = {BusyTimeoutMilliseconds};";
         await command.ExecuteNonQueryAsync(cancellationToken);
+        command.CommandText = "PRAGMA foreign_keys;";
+        if (Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken)) != 1)
+            throw new InvalidOperationException("SQLite foreign key enforcement must be enabled.");
     }
 }

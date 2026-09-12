@@ -270,7 +270,7 @@ public sealed partial class AgentCollaborationService(
                         "mention", probe.TaskId, "processing", probe.TriggerMessageId,
                         probe.TriggerSequence, probe.TriggerMentionId, probe.SourceParticipantId,
                         probe.DeliveryAttemptId, probe.ReplyIdempotencyKey, probe.Context!,
-                        AgentCollaborationContract.ReplyToolName);
+                        AgentCollaborationContract.ReplyToolName) { Collaboration = probe.Collaboration };
                     bool finalized;
                     try
                     {
@@ -489,7 +489,7 @@ public sealed partial class AgentCollaborationService(
             new(connection.ID, ToWire(connection.State), connection.DeclaredContextCharacterLimit, ToWire(initial.State)),
             counts,
             head is null ? null : new(head.ID, head.TriggerSequence, ToWire(head.State),
-                head.State == AgentReplyTaskState.Delivered ? "delivery_not_finalized" : head.FailureCode),
+                head.State == AgentReplyTaskState.Delivered ? "delivery_not_finalized" : head.FailureCode) { Collaboration = CollaborationFor(head) },
             cursor.DeliveredThroughSequence,
             cursor.AllocatedThroughSequence);
         return AgentOperationResult.Success(data, "The Agent status was read.");
@@ -859,6 +859,7 @@ public sealed partial class AgentCollaborationService(
         long DeliveredFirstSequence,
         long DeliveredLastSequence)
     {
+        public AgentCollaborationSourceDto? Collaboration { get; init; }
         public static WaitProbe Empty() => new(true, null, false, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, 0, Guid.Empty, null, null, 0, 0);
 
         public static WaitProbe Failure(string code) => new(false, code, false, Guid.Empty, Guid.Empty, Guid.Empty, Guid.Empty, 0, Guid.Empty, null, null, 0, 0);
@@ -869,7 +870,8 @@ public sealed partial class AgentCollaborationService(
             AgentContextDto context,
             long deliveredFirstSequence,
             long deliveredLastSequence)
-            => new(true, null, true, task.ID, attempt.ID, task.ReplyIdempotencyKey, task.TriggerMessageId, task.TriggerSequence, task.TriggerMentionId, task.SourceParticipantId, context, deliveredFirstSequence, deliveredLastSequence);
+            => new(true, null, true, task.ID, attempt.ID, task.ReplyIdempotencyKey, task.TriggerMessageId, task.TriggerSequence, task.TriggerMentionId, task.SourceParticipantId, context, deliveredFirstSequence, deliveredLastSequence)
+                { Collaboration = CollaborationFor(task) };
     }
 
     private sealed record ReplyTransactionResult(

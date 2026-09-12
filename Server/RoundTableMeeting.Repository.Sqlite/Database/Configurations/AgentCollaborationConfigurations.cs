@@ -65,7 +65,7 @@ public sealed class AgentReplyTaskConfiguration : IEntityTypeConfiguration<Agent
 		{
 			table.HasCheckConstraint("CK_AgentReplyTasks_State", "State IN ('Queued', 'Delivered', 'Processing', 'Replied', 'Failed', 'Cancelled')");
 			table.HasCheckConstraint("CK_AgentReplyTasks_CandidateRange", "CandidateFromSequenceExclusive BETWEEN 0 AND 9007199254740990 AND CandidateFromSequenceExclusive < CandidateToSequenceInclusive AND CandidateToSequenceInclusive = TriggerSequence AND TriggerSequence BETWEEN 1 AND 9007199254740991");
-			table.HasCheckConstraint("CK_AgentReplyTasks_Source", "(SourceAuthorKind = 'System' AND SourceParticipantId IS NULL) OR (SourceAuthorKind IN ('Human', 'Agent') AND SourceParticipantId IS NOT NULL)");
+			table.HasCheckConstraint("CK_AgentReplyTasks_Source", "SourceAuthorKind IN ('Human', 'Agent') AND SourceParticipantId IS NOT NULL");
 			table.HasCheckConstraint("CK_AgentReplyTasks_Timestamps", "(State != 'Delivered' OR DeliveredAtUtc IS NOT NULL) AND (State != 'Processing' OR ProcessingAtUtc IS NOT NULL) AND (State != 'Replied' OR (RepliedAtUtc IS NOT NULL AND ReplyMessageId IS NOT NULL)) AND (State != 'Failed' OR (FailedAtUtc IS NOT NULL AND FailureCode IS NOT NULL)) AND (State != 'Cancelled' OR CancelledAtUtc IS NOT NULL)");
 		});
 		builder.HasKey((AgentReplyTask x) => x.ID);
@@ -99,7 +99,15 @@ public sealed class AgentReplyTaskConfiguration : IEntityTypeConfiguration<Agent
 			.OnDelete(DeleteBehavior.Restrict);
 		builder.HasIndex((AgentReplyTask x) => new { x.MeetingId, x.AgentParticipantId, x.TriggerMessageId }).IsUnique();
 		builder.HasIndex((AgentReplyTask x) => x.ReplyIdempotencyKey).IsUnique();
+		builder.HasOne<MeetingMessage>().WithMany().HasForeignKey(x => new { x.ChainId, x.MeetingId })
+			.HasPrincipalKey(x => new { x.ID, x.MeetingId }).OnDelete(DeleteBehavior.Restrict);
+		builder.HasOne<AgentReplyTask>().WithMany().HasForeignKey(x => new { x.ParentTaskId, x.MeetingId })
+			.HasPrincipalKey(x => new { x.ID, x.MeetingId }).OnDelete(DeleteBehavior.Restrict);
+		builder.HasIndex(x => new { x.ReplyMessageId, x.MeetingId }).IsUnique().HasFilter("ReplyMessageId IS NOT NULL");
 		builder.HasIndex((AgentReplyTask x) => new { x.MeetingId, x.AgentParticipantId, x.State, x.TriggerSequence, x.ID });
+		builder.HasIndex((AgentReplyTask x) => new { x.MeetingId, x.AgentParticipantId, x.TriggerSequence });
+		builder.HasIndex((AgentReplyTask x) => new { x.MeetingId, x.AgentParticipantId, x.TriggerSequence, x.ID })
+			.HasFilter("State <> 'Replied' AND State <> 'Cancelled'");
 	}
 }
 

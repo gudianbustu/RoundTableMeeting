@@ -1,5 +1,7 @@
 # AI 任务连续性与接管主题设计
 
+当前实现已接入 [008 多 Agent 协作与会议删除收口](../008-多Agent协作与会议删除收口/design.md)：Human 有效提及继续创建根任务；Agent 有效提及仅在会议启用边界之后派生，System 不触发。旧边界内 Agent 不追溯，旧 Human 待办仍补齐。legacy/可靠驻留模板分别为 `resident-instruction-v3-legacy` / `resident-instruction-v3-reliable`，仅可靠 join/resume 声明 `multi_agent_collaboration_v1`；共 9 个工具（既有 4 个、可靠专属 5 个）。来源随任务恢复保持，删除屏障提交返回 202 后仍由后台清理父引用、边界及原有资源；008 的新增验收见其 [testPlan.md](../008-多Agent协作与会议删除收口/testPlan.md)，本文件原有通过证据不代替该验收，旧服务夹具的 v1/v2 仍保留。
+
 ## 1. 定位与依据
 
 本目录编号 007，对应总体计划中的主题六“AI 任务连续性与接管”。本主题设计已冻结，当前已接入生产可靠工具、持久化恢复状态、连接/任务扫描、版本化 activity 与可靠参考客户端；实现进度见 impl.md。文中能力、配置和测试是本主题完整实施要求，不代表已经全部实现或验收通过。
@@ -17,7 +19,7 @@
 5. 用户已确认：自动重试耗尽后保留失败队首并阻塞后续任务，等待显式重试。断线恢复和接管本身不重置耗尽计数；可恢复的非耗尽任务在恢复后继续。
 6. 不设置模型生成回复的固定截止时间；保持有效续租的 Processing 任务可以长期执行。连接存活、收到上下文和完成回复分别判断。
 7. 会议删除屏障优先于全部恢复操作，删除后不能由旧会话、重试、接管或重启复活。
-8. 继续支持多个 AI 各自独立排队，本主题仍只由 Human 的有效提及创建任务。AI 相互触发与协作来源追踪归主题七。
+8. 继续支持多个 AI 各自独立排队，基础触发由 Human 有效提及创建；当前 008 已扩展启用边界后的 Agent 有效提及，沿用相同队列与恢复规则。
 
 本主题不增加平台模型、角色管理、外部记忆迁移、消息补发分页、人工跳过失败任务、管理后台或新传输协议。接管只接续会议身份与服务端任务，不声称恢复外部 Agent 的思考、文件或工具副作用。
 
@@ -274,7 +276,7 @@ AI 回复仍由外层 Agent 事务调用 IResolvedMessageAppendCore.AppendAgentA
 | reply_to_mention | 保留现有五个输入字段和结果；可靠模式强制已确认尝试 |
 | get_agent_status | connectionSessionId、可选 taskId；要求当前有效绑定，可靠模式还要求有效租约，只读返回队首、任务计数、回复摘要、模式、连接原因、租约、确认位置、重试次数和 nextAction |
 
-除 join/resume 外，所有工具均要求当前 MCP 绑定，不接受 recoveryKey 作为普通业务调用捷径。恢复密钥不在成功响应中回显。对 MCP 工具描述更新驻留指令版本 resident-instruction-v2，明确确认、续租、错误分流和停止旧循环。
+除 join/resume 外，所有工具均要求当前 MCP 绑定，不接受 recoveryKey 作为普通业务调用捷径。恢复密钥不在成功响应中回显。当前可靠驻留指令版本为 resident-instruction-v3-reliable，明确确认、续租、错误分流和停止旧循环。
 
 ### 9.3 响应结构与动作
 
@@ -284,7 +286,7 @@ join 成功正常返回 kind=joined；只查询到需要恢复的结果时成功
 
 已确认初始快照的 join 重放不再返回 confirm_context；返回当前状态导出的动作，避免客户端对历史成功响应重复初始化。任务 confirm 的幂等重放若任务已 Replied 且尝试有效则返回确认事实和 nextAction=wait_for_mention，不再次要求生成回复；已失效或被替代的尝试仍拒绝。
 
-capabilities 固定为字符串数组，可靠模式包含 explicit_context_ack、connection_resume、explicit_takeover、connection_lease、task_retry、client_wait_timeout；legacy 不公布这些能力。客户端入会前通过 tools/list 中的可选字段识别协商入口，入会后以响应模式和 capabilities 为准。基础上下文格式不变，新增 contextPurpose/replayReason 属于外层投递元数据。
+capabilities 固定为字符串数组，可靠模式包含 explicit_context_ack、connection_resume、explicit_takeover、connection_lease、task_retry、client_wait_timeout、multi_agent_collaboration_v1；legacy 不公布这些能力。客户端入会前通过 tools/list 中的可选字段识别协商入口，入会后以响应模式和 capabilities 为准。基础上下文格式不变，新增 contextPurpose/replayReason 属于外层投递元数据。
 
 ### 9.4 字段与 DTO 映射
 

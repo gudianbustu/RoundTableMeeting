@@ -21,8 +21,9 @@ public sealed class AccountTransactionTests : IDisposable
     {
         await using var context = Context();
         var migrations = context.Database.GetMigrations().ToArray();
-        Assert.EndsWith("AddUserAccountAdmin", migrations[^1]);
-        await context.GetService<IMigrator>().MigrateAsync(migrations[^2]);
+        var adminMigration = Array.FindIndex(migrations, item => item.EndsWith("AddUserAccountAdmin", StringComparison.Ordinal));
+        Assert.True(adminMigration > 0);
+        await context.GetService<IMigrator>().MigrateAsync(migrations[adminMigration - 1]);
         var id = Guid.NewGuid();
         await context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({id}, {"old"}, {"OLD"}, {"Original"}, {"original-hash"})");
         await context.Database.MigrateAsync();

@@ -8,6 +8,8 @@ namespace RoundTableMeeting.Domain.Repositories;
 
 public interface IMessageRepository
 {
+    Task<IReadOnlyList<MessageMention>> ListMentionsForMessagesAsync(Guid meetingId, IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken = default);
+
 	Task<MeetingMessage?> FindBySubmissionAsync(Guid meetingId, Guid participantId, Guid submissionId, CancellationToken cancellationToken = default(CancellationToken));
 
 	Task<MeetingMessage?> FindSystemBySubmissionAsync(Guid meetingId, Guid submissionId, CancellationToken cancellationToken = default(CancellationToken));

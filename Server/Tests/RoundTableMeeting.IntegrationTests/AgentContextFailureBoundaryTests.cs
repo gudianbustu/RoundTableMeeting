@@ -87,6 +87,9 @@ public sealed partial class McpAgentContractTests
 
     private sealed class FaultingContextRepository(MessageRepository core, ContextReadFault fault) : IMessageRepository
     {
+        public Task<IReadOnlyList<MessageMention>> ListMentionsForMessagesAsync(Guid meetingId, IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken = default)
+            => core.ListMentionsForMessagesAsync(meetingId, messageIds, cancellationToken);
+
         public async Task<IReadOnlyList<MeetingMessage>> ListAfterSequenceThroughAsync(Guid meetingId, long after, long through, CancellationToken token = default)
         {
             if (fault.Mode == "temporary") throw new InvalidOperationException("injected-private-context-database-failure");

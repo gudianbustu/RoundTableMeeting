@@ -66,6 +66,16 @@ public sealed partial class McpAgentContractTests
         await ReliableForTestAsync(factory.Services, s => s.ConfirmReliableAsync(new(id, "initial", joined.InitialDeliveryId), transport));
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker first");
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker second");
+        var allocationDeadline = DateTimeOffset.UtcNow.AddSeconds(10);
+        while (true)
+        {
+            await using var allocationScope = factory.Services.CreateAsyncScope();
+            var allocationDb = allocationScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
+            var allocated = await allocationDb.AgentReplyTasks.CountAsync(task => task.MeetingId == meeting.MeetingId);
+            if (allocated == 2) break;
+            Assert.True(DateTimeOffset.UtcNow < allocationDeadline, $"Expected two allocated tasks, found {allocated}.");
+            await Task.Delay(25);
+        }
         var first = Assert.IsType<AgentMentionResultDto>((await ReliableForTestAsync(factory.Services, s => s.WaitReliableAsync(new(id), transport))).Data);
         await ReliableForTestAsync(factory.Services, s => s.ConfirmReliableAsync(new(id, "task", TaskId: first.TaskId, DeliveryAttemptId: first.DeliveryAttemptId), transport));
         var failureRequest = new AgentFailureRequest(id, first.TaskId, first.DeliveryAttemptId, "agent_permanent_failure");

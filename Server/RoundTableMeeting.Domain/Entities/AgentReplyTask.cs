@@ -13,6 +13,10 @@ public sealed partial class AgentReplyTask : BaseEntity
 
 	public Guid TriggerMessageId { get; private set; }
 
+	public Guid ChainId { get; private set; }
+
+	public Guid? ParentTaskId { get; private set; }
+
 	public long TriggerSequence { get; private set; }
 
 	public Guid TriggerMentionId { get; private set; }
@@ -88,6 +92,7 @@ public sealed partial class AgentReplyTask : BaseEntity
 		MeetingId = meetingId;
 		AgentParticipantId = agentParticipantId;
 		TriggerMessageId = triggerMessageId;
+		ChainId = triggerMessageId;
 		TriggerSequence = triggerSequence;
 		TriggerMentionId = triggerMentionId;
 		SourceAuthorKind = sourceAuthorKind;
@@ -101,6 +106,9 @@ public sealed partial class AgentReplyTask : BaseEntity
 
 	public static AgentReplyTask Create(Guid taskId, Guid meetingId, Guid agentParticipantId, Guid triggerMessageId, long triggerSequence, Guid triggerMentionId, MessageAuthorKind sourceAuthorKind, Guid? sourceParticipantId, long candidateFromSequenceExclusive, Guid replyIdempotencyKey, DateTimeOffset createdAtUtc)
 	{
+		if (!Enum.IsDefined(sourceAuthorKind)) throw new ArgumentOutOfRangeException(nameof(sourceAuthorKind));
+		if (sourceAuthorKind != MessageAuthorKind.Human)
+			throw new ArgumentException("Only Human messages create root tasks; Agent messages require a verified parent.", nameof(sourceAuthorKind));
 		return new AgentReplyTask(taskId, meetingId, agentParticipantId, triggerMessageId, triggerSequence, triggerMentionId, sourceAuthorKind, sourceParticipantId, candidateFromSequenceExclusive, replyIdempotencyKey, createdAtUtc);
 	}
 

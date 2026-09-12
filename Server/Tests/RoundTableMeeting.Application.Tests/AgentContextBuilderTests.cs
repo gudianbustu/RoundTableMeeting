@@ -67,6 +67,9 @@ public sealed class AgentContextBuilderTests
 
 	private sealed class MessageRepositoryFake(IReadOnlyList<MeetingMessage> messages) : IMessageRepository
 	{
+        public Task<IReadOnlyList<MessageMention>> ListMentionsForMessagesAsync(Guid meetingId, IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<MessageMention>>([]);
+
 		public Task<MessageSequenceSummary> GetSequenceSummaryAsync(Guid meetingId, CancellationToken cancellationToken = default(CancellationToken))
 		{
 			MeetingMessage[] array = messages.Where((MeetingMessage message) => message.MeetingId == meetingId).ToArray();

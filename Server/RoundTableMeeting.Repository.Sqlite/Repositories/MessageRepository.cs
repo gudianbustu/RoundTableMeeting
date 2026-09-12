@@ -8,6 +8,12 @@ namespace RoundTableMeeting.Repository.Sqlite.Repositories;
 
 public sealed class MessageRepository(RoundTableMeetingDbContext dbContext) : IMessageRepository, IScopedDependency<IMessageRepository>
 {
+    public async Task<IReadOnlyList<MessageMention>> ListMentionsForMessagesAsync(Guid meetingId,
+        IReadOnlyList<Guid> messageIds, CancellationToken cancellationToken = default)
+        => await dbContext.MessageMentions.AsNoTracking()
+            .Where(item => item.MeetingId == meetingId && messageIds.Contains(item.MessageId))
+            .OrderBy(item => item.StartOffset).ToArrayAsync(cancellationToken);
+
     public Task<MeetingMessage?> FindBySubmissionAsync(Guid meetingId, Guid participantId, Guid submissionId, CancellationToken cancellationToken = default)
         => dbContext.MeetingMessages.AsNoTracking().SingleOrDefaultAsync(x => x.MeetingId == meetingId && x.AuthorParticipantId == participantId && x.ClientSubmissionId == submissionId, cancellationToken);
 

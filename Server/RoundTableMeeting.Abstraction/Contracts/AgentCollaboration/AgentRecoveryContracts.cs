@@ -18,7 +18,7 @@ public static class AgentReliabilityProtocol
     public static IReadOnlyList<string> Capabilities { get; } = Array.AsReadOnly(new[]
     {
         "explicit_context_ack", "connection_resume", "explicit_takeover",
-        "connection_lease", "task_retry", "client_wait_timeout"
+        "connection_lease", "task_retry", "client_wait_timeout", "multi_agent_collaboration_v1"
     });
 }
 

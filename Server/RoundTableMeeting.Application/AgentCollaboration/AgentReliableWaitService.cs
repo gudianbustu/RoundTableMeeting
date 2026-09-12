@@ -134,7 +134,7 @@ public sealed partial class AgentCollaborationService
     private static AgentOperationResult Mention(AgentReplyTask task, AgentTaskDeliveryAttempt attempt, AgentContextDto context, bool replayed, string? reason) =>
         AgentOperationResult.Success(new AgentMentionResultDto("mention", task.ID, "delivered", task.TriggerMessageId, task.TriggerSequence,
             task.TriggerMentionId, task.SourceParticipantId, attempt.ID, task.ReplyIdempotencyKey, context, AgentReliabilityProtocol.ConfirmTool)
-        { ConfirmationDeadline = attempt.ConfirmationDeadlineUtc, Replayed = replayed, ReplayReason = reason, ContextPurpose = "task" }, "An Agent mention is ready for confirmation.");
+        { Collaboration = CollaborationFor(task), ConfirmationDeadline = attempt.ConfirmationDeadlineUtc, Replayed = replayed, ReplayReason = reason, ContextPurpose = "task" }, "An Agent mention is ready for confirmation.");
 
     private static AgentContextWindow AttemptWindow(AgentTaskDeliveryAttempt attempt) => new(attempt.CandidateLastSequence,
         attempt.CandidateFirstSequence, attempt.CandidateLastSequence, attempt.DeliveredFirstSequence, attempt.DeliveredLastSequence,

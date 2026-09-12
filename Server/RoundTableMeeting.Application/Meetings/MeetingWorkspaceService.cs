@@ -56,6 +56,7 @@ public sealed class MeetingWorkspaceService(
             var owner = MeetingParticipant.CreateHuman(meeting.ID, userId, account.Nickname, UtcNow());
             var newReceipt = MeetingCreationReceipt.Create(userId, request.CreationRequestId, meeting.ID, UtcNow());
             unitOfWork.RegisterAdd(meeting);
+            unitOfWork.RegisterAdd(AgentCollaborationBoundary.Create(meeting.ID));
             unitOfWork.RegisterAdd(owner);
             unitOfWork.RegisterAdd(newReceipt);
             return (MeetingOperationStatus.Created, meeting);

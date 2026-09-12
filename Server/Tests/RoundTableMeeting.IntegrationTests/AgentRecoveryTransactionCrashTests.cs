@@ -9,9 +9,11 @@ namespace RoundTableMeeting.IntegrationTests;
 public sealed partial class McpAgentContractTests
 {
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task RealProcessCrashBeforeReplyResponseRollsBackOrReplaysTheWholeReply(bool afterCommit)
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public async Task RealProcessCrashBeforeReplyResponseRollsBackOrReplaysTheWholeReply(bool afterCommit, bool collaborate)
     {
         await using var host = new RecoveryProcessHost(faultInjection: true);
         await host.StartAsync();
@@ -33,9 +35,10 @@ public sealed partial class McpAgentContractTests
         var attemptId = mention.GetProperty("deliveryAttemptId").GetGuid();
         var replyKey = mention.GetProperty("replyIdempotencyKey").GetGuid();
         await ProcessCallAsync(oldSdk, "confirm_context", new { connectionSessionId = id, kind = "task", taskId, deliveryAttemptId = attemptId });
+        var replyContent = collaborate ? "@Worker Transaction reply" : "@Alice Transaction reply";
         host.ArmCrash("reply", afterCommit);
         var pending = ActivationCallAsync(oldSdk, "reply_to_mention", new { connectionSessionId = id, taskId,
-            deliveryAttemptId = attemptId, replyIdempotencyKey = replyKey, content = "@Alice Transaction reply" });
+            deliveryAttemptId = attemptId, replyIdempotencyKey = replyKey, content = replyContent });
         try
         {
             await host.WaitForCrashPointAsync();
@@ -49,7 +52,7 @@ public sealed partial class McpAgentContractTests
         Guid? committedMessage = null;
         await using (var db = host.Database())
         {
-            var task = await db.AgentReplyTasks.SingleAsync();
+            var task = await db.AgentReplyTasks.SingleAsync(task => task.ID == taskId);
             Assert.Equal(afterCommit ? AgentReplyTaskState.Replied : AgentReplyTaskState.Processing, task.State);
             committedMessage = task.ReplyMessageId;
             Assert.Equal(afterCommit, committedMessage.HasValue);
@@ -73,14 +76,30 @@ public sealed partial class McpAgentContractTests
             await ProcessCallAsync(newSdk, "confirm_context", new { connectionSessionId = id, kind = "task", taskId, deliveryAttemptId = attemptId });
         }
         var result = (await ProcessCallAsync(newSdk, "reply_to_mention", new { connectionSessionId = id, taskId,
-            deliveryAttemptId = attemptId, replyIdempotencyKey = replyKey, content = "@Alice Transaction reply" })).GetProperty("data");
+            deliveryAttemptId = attemptId, replyIdempotencyKey = replyKey, content = replyContent })).GetProperty("data");
         Assert.Equal(afterCommit, result.GetProperty("replayed").GetBoolean());
         if (afterCommit) Assert.Equal(committedMessage, result.GetProperty("message").GetProperty("messageId").GetGuid());
         await using var final = host.Database();
         Assert.Equal(2, await final.MeetingMessages.CountAsync());
         Assert.Equal(2, await final.MessageAppendedEvents.CountAsync());
         Assert.Equal(2, await final.MessageMentions.CountAsync());
-        Assert.Equal(AgentReplyTaskState.Replied, (await final.AgentReplyTasks.SingleAsync()).State);
+        Assert.Equal(AgentReplyTaskState.Replied, (await final.AgentReplyTasks.SingleAsync(task => task.ID == taskId)).State);
+        if (collaborate)
+        {
+            var child = await CrashMentionAsync(newSdk, id);
+            var childId = child.GetProperty("taskId").GetGuid();
+            var childAttempt = child.GetProperty("deliveryAttemptId").GetGuid();
+            Assert.Equal(taskId, child.GetProperty("collaboration").GetProperty("parentTaskId").GetGuid());
+            Assert.Equal(mention.GetProperty("triggerMessageId").GetGuid(), child.GetProperty("collaboration").GetProperty("chainId").GetGuid());
+            Assert.Equal(result.GetProperty("message").GetProperty("messageId").GetGuid(), child.GetProperty("triggerMessageId").GetGuid());
+            Assert.Equal(2, await final.AgentReplyTasks.CountAsync());
+            await ProcessCallAsync(newSdk, "confirm_context", new { connectionSessionId = id, kind = "task", taskId = childId, deliveryAttemptId = childAttempt });
+            await ProcessCallAsync(newSdk, "reply_to_mention", new { connectionSessionId = id, taskId = childId,
+                deliveryAttemptId = childAttempt, replyIdempotencyKey = child.GetProperty("replyIdempotencyKey").GetGuid(), content = "Downstream finished" });
+            Assert.Equal(3, await final.MeetingMessages.CountAsync());
+            Assert.Equal(3, await final.MessageAppendedEvents.CountAsync());
+            Assert.Equal(2, await final.AgentReplyTasks.CountAsync(task => task.State == AgentReplyTaskState.Replied));
+        }
         Assert.Equal(0, await final.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
     }
 

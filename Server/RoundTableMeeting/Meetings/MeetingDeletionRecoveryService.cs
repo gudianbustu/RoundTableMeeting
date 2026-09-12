@@ -64,6 +64,8 @@ public sealed class MeetingDeletionRecoveryService(
             {
                 var meeting = await meetings.FindByIdAsync(meetingId, token);
                 if (meeting is null) return true;
+                if (meeting.LifecycleState != Domain.Enums.MeetingLifecycleState.Deleting)
+                    throw new InvalidOperationException("Deletion recovery requires a Deleting meeting.");
                 await agents.DeleteForMeetingAsync(meetingId, deletedAt, token);
                 await messages.DeleteForMeetingAsync(meetingId, token);
                 foreach (var participant in await participants.ListAsync(meetingId, token)) unitOfWork.RegisterDelete(participant);

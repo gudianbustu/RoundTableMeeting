@@ -218,7 +218,7 @@ public sealed partial class McpAgentContractTests
 		Assert.Equal(meeting.MeetingId, data.GetProperty("meeting").GetProperty("meetingId").GetGuid());
 		Assert.Equal("Analyst", data.GetProperty("agent").GetProperty("displayName").GetString());
 		Assert.Equal("prepared", data.GetProperty("connection").GetProperty("initialContextState").GetString());
-		Assert.Equal("resident-instruction-v1", data.GetProperty("residentInstructionVersion").GetString());
+		Assert.Equal("resident-instruction-v3-legacy", data.GetProperty("residentInstructionVersion").GetString());
 		Assert.Equal("wait_for_mention", data.GetProperty("nextAction").GetString());
 		Assert.Equal(2, data.GetProperty("participants").GetArrayLength());
 		Assert.Equal("agent-context-v1", context.GetProperty("contextFormatVersion").GetString());

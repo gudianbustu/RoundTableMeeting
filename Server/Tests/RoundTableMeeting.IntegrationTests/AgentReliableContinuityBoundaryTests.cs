@@ -12,8 +12,10 @@ namespace RoundTableMeeting.IntegrationTests;
 
 public sealed partial class McpAgentContractTests
 {
-    [Fact]
-    public async Task ReliableReplyFailureBetweenMessageAppendAndTaskMarkRollsBackEveryWrite()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReliableReplyFailureBetweenMessageAppendAndTaskMarkRollsBackEveryWrite(bool collaborate)
     {
         using var original = new TestApplicationFactory();
         var fault = new AppendFailureSwitch();
@@ -45,7 +47,7 @@ public sealed partial class McpAgentContractTests
         Assert.True((await ActivationCallAsync(sdk, "confirm_context", new
         { connectionSessionId = id, kind = "task", taskId, deliveryAttemptId = attemptId })).GetProperty("succeeded").GetBoolean());
         var replyArgs = new { connectionSessionId = id, taskId, deliveryAttemptId = attemptId,
-            replyIdempotencyKey = task.GetProperty("replyIdempotencyKey").GetGuid(), content = "@Alice result" };
+            replyIdempotencyKey = task.GetProperty("replyIdempotencyKey").GetGuid(), content = collaborate ? "@Worker result" : "@Alice result" };
         var failed = await ActivationCallAsync(sdk, "reply_to_mention", replyArgs);
         Assert.Equal("agent_operation_unavailable", failed.GetProperty("errorCode").GetString());
         Assert.DoesNotContain("private-database", failed.GetRawText());
@@ -72,7 +74,18 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(2, await final.MessageMentions.CountAsync());
         Assert.Equal(2, await final.MessageAppendedEvents.CountAsync());
         Assert.Equal(4, await final.MessageEventDeliveries.CountAsync());
-        Assert.Equal(AgentReplyTaskState.Replied, (await final.AgentReplyTasks.SingleAsync()).State);
+        Assert.Equal(AgentReplyTaskState.Replied, (await final.AgentReplyTasks.SingleAsync(item => item.ID == taskId)).State);
+        if (collaborate)
+        {
+            var child = await CrashMentionAsync(sdk, id);
+            Assert.Equal(taskId, child.GetProperty("collaboration").GetProperty("parentTaskId").GetGuid());
+            Assert.Equal(task.GetProperty("triggerMessageId").GetGuid(), child.GetProperty("collaboration").GetProperty("chainId").GetGuid());
+            Assert.Equal(reply.GetProperty("data").GetProperty("message").GetProperty("messageId").GetGuid(), child.GetProperty("triggerMessageId").GetGuid());
+            var replay = await ActivationCallAsync(sdk, "reply_to_mention", replyArgs);
+            Assert.True(replay.GetProperty("data").GetProperty("replayed").GetBoolean());
+            Assert.Equal(2, await final.AgentReplyTasks.CountAsync());
+            Assert.Equal(2, await final.MeetingMessages.CountAsync());
+        }
     }
 
     [Theory]

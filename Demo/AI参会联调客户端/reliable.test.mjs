@@ -66,23 +66,26 @@ test('transport multiplexes an SSE wait and renewal, and times out a stalled bod
   } finally { await client.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)) }
 })
 
-function fixture({ permanent = false, slow = false, loseReply = false } = {}) {
+function fixture({ permanent = false, slow = false, loseReply = false, collaboration } = {}) {
   let saved
   let taskState = 'queued'
   let generationCount = 0
+  let generationInput
   let replies = 0
   let renewals = 0
   let retryCalls = 0
   const events = []
   const calls = []
   const mention = { kind: 'mention', taskId: 'task', deliveryAttemptId: 'attempt', replyIdempotencyKey: 'key', context: {} }
-  const summary = () => ({ taskId: 'task', currentAttemptId: 'attempt', state: taskState, retryExhausted: taskState === 'failed' })
+  if (collaboration) mention.collaboration = structuredClone(collaboration)
+  const summary = () => ({ taskId: 'task', currentAttemptId: 'attempt', state: taskState, retryExhausted: taskState === 'failed',
+    ...(collaboration ? { collaboration: structuredClone(collaboration) } : {}) })
   let agent
   const transport = { async open() {}, fail(error) { this.failure = error }, async close() { return true },
     async tool(name, args) {
       calls.push({ name, args: structuredClone(args) })
       let data
-      if (name === 'join_meeting') data = { kind: 'joined', connection: { connectionSessionId: 'connection' }, initialDeliveryId: 'initial', capabilities, leasePolicy }
+      if (name === 'join_meeting') data = { kind: 'joined', connection: { connectionSessionId: 'connection' }, initialDeliveryId: 'initial', capabilities: collaboration ? [...capabilities, 'multi_agent_collaboration_v1'] : capabilities, leasePolicy }
       else if (name === 'confirm_context') { if (args.kind === 'task') taskState = 'processing'; data = { kind: 'context_confirmed' } }
       else if (name === 'get_agent_status') data = { queueHead: taskState === 'replied' ? null : summary(), requestedTask: args.taskId ? summary() : null }
       else if (name === 'wait_for_mention') { taskState = 'delivered'; data = mention }
@@ -98,14 +101,15 @@ function fixture({ permanent = false, slow = false, loseReply = false } = {}) {
     } }
   agent = new ReliableAgent({ url: 'test', meetingCode: 'private-code', store: {
     async acquire() { return saved }, async save(state) { saved = structuredClone(state) }, async release() {},
-  }, transportFactory: () => transport, generate: async (_, signal) => {
+  }, transportFactory: () => transport, generate: async (input, signal) => {
     generationCount++
+    generationInput = structuredClone(input)
     if (slow) await delay(2200, undefined, { signal })
     return 'private-reply'
   }, fault: permanent ? 'permanent_failure' : null,
   dropResponses: loseReply ? ['join_meeting', 'wait_for_mention', 'confirm_context', 'reply_to_mention'] : [],
   log: (event, detail) => { events.push([event, detail]); if (event === 'replied') agent.stop() } })
-  return { agent, events, calls, counts: () => ({ generationCount, replies, renewals, retryCalls }), saved: () => saved }
+  return { agent, events, calls, generationInput: () => generationInput, counts: () => ({ generationCount, replies, renewals, retryCalls }), saved: () => saved }
 }
 
 test('lost join, confirm, wait and reply responses replay without regenerating or duplicating', async () => {
@@ -209,3 +213,24 @@ test('superseded recovery stops without reverse takeover', async () => {
   await assert.rejects(agent.run(), error => error.code === 'connection_superseded')
   assert.deepEqual(calls, ['resume_agent'])
 })
+
+for (const [name, collaboration] of [
+  ['old server', undefined],
+  ['root', { chainId: 'root-message', parentTaskId: null, sourceAuthorKind: 'human' }],
+  ['derived', { chainId: 'root-message', parentTaskId: 'parent-task', sourceAuthorKind: 'agent' }],
+]) {
+  test(`collaboration compatibility preserves ${name} input without changing tool arguments`, async () => {
+    const f = fixture({ collaboration, loseReply: true })
+    await f.agent.run()
+    assert.deepEqual(f.generationInput().mention.collaboration, collaboration)
+    assert.equal(f.generationInput().initial.capabilities.includes('multi_agent_collaboration_v1'), Boolean(collaboration))
+    assert.equal(f.counts().generationCount, 1)
+    assert.equal(f.counts().replies, 1)
+    for (const call of f.calls) {
+      assert.equal(Object.hasOwn(call.args, 'collaboration'), false)
+      assert.equal(Object.hasOwn(call.args, 'chainId'), false)
+      assert.equal(Object.hasOwn(call.args, 'parentTaskId'), false)
+    }
+    assert.doesNotMatch(JSON.stringify(f.events), /root-message|parent-task/)
+  })
+}

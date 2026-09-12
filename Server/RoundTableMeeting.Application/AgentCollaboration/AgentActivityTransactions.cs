@@ -49,15 +49,15 @@ public sealed class AgentActivityTransactions(IMeetingTransactionRunner transact
     private async Task<Dictionary<Guid, (AgentContextCursor Cursor, AgentActivityPayload Payload)>> ReadStatesAsync(Guid meetingId, CancellationToken token)
     {
         var result = new Dictionary<Guid, (AgentContextCursor, AgentActivityPayload)>();
-        var connections = await agents.ListConnectionsAsync(meetingId, cancellationToken: token);
         foreach (var participant in (await participants.ListAsync(meetingId, token)).Where(item => item.ParticipantType == ParticipantType.Agent))
         {
             var cursor = await agents.FindCursorAsync(meetingId, participant.ID, token);
             if (cursor is null) continue;
-            var connection = connections.SingleOrDefault(item => item.ID == cursor.CurrentConnectionId);
+            var connection = cursor.CurrentConnectionId is Guid connectionId
+                ? await agents.FindConnectionAsync(meetingId, connectionId, token) : null;
             var initial = connection is null ? null : await agents.FindInitialContextAsync(meetingId, participant.ID, connection.ID, token);
-            var tasks = await agents.ListTasksAsync(meetingId, participant.ID, token);
-            result[participant.ID] = (cursor, AgentActivityPayload.Build(connection, initial, tasks));
+            var head = await agents.FindQueueHeadAsync(meetingId, participant.ID, token);
+            result[participant.ID] = (cursor, AgentActivityPayload.Build(connection, initial, head is null ? [] : [head]));
         }
         return result;
     }

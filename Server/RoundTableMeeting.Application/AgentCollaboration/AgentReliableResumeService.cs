@@ -158,6 +158,7 @@ public sealed partial class AgentCollaborationService
         };
         return new(task.ID, task.TriggerSequence, ToWire(task.State), task.FailureCode)
         {
+            Collaboration = CollaborationFor(task),
             Reason = reason, CurrentAttemptId = task.CurrentAttemptId, ConfirmationDeadline = attempt?.ConfirmationDeadlineUtc,
             RetryCycle = task.RetryCycle, AutomaticRetryCount = task.AutomaticRetryCount, RetryExhausted = task.RetryExhausted,
             StopReason = RoundTableMeeting.Domain.AgentCollaboration.AgentTaskFailurePolicy.ToWire(task.StopReason),

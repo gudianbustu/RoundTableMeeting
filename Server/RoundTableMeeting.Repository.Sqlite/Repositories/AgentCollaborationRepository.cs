@@ -13,6 +13,33 @@ namespace RoundTableMeeting.Repository.Sqlite.Repositories;
 
 public sealed class AgentCollaborationRepository(RoundTableMeetingDbContext dbContext) : IAgentCollaborationRepository, IScopedDependency<IAgentCollaborationRepository>, IScopedDependency, IRegisterType, IRegisterType<IAgentCollaborationRepository>
 {
+    public Task<AgentReplyTask?> FindQueueHeadAsync(Guid meetingId, Guid participantId, CancellationToken cancellationToken = default)
+        => dbContext.AgentReplyTasks.AsNoTracking().Where(item => item.MeetingId == meetingId
+            && item.AgentParticipantId == participantId
+            && item.State != RoundTableMeeting.Domain.Enums.AgentReplyTaskState.Replied
+            && item.State != RoundTableMeeting.Domain.Enums.AgentReplyTaskState.Cancelled)
+            .OrderBy(item => item.TriggerSequence).ThenBy(item => item.ID).FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<AgentReplyTask>> ListTasksInRangeAsync(Guid meetingId, Guid participantId,
+        long after, long through, CancellationToken cancellationToken = default)
+        => await dbContext.AgentReplyTasks.AsNoTracking().Where(item => item.MeetingId == meetingId
+            && item.AgentParticipantId == participantId && item.TriggerSequence > after && item.TriggerSequence <= through)
+            .ToArrayAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<AgentReplyTask>> ListReplySourcesAsync(Guid meetingId,
+        IReadOnlyList<Guid> replyMessageIds, CancellationToken cancellationToken = default)
+        => await dbContext.AgentReplyTasks.AsNoTracking().Where(item => item.MeetingId == meetingId
+            && item.ReplyMessageId.HasValue && replyMessageIds.Contains(item.ReplyMessageId.Value))
+            .ToArrayAsync(cancellationToken);
+
+    public Task<AgentCollaborationBoundary?> FindBoundaryAsync(Guid meetingId, CancellationToken cancellationToken = default)
+        => dbContext.AgentCollaborationBoundaries.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.MeetingId == meetingId, cancellationToken);
+
+    public Task<AgentReplyTask?> FindTaskByReplyMessageAsync(Guid meetingId, Guid replyMessageId, CancellationToken cancellationToken = default)
+        => dbContext.AgentReplyTasks.AsNoTracking()
+            .SingleOrDefaultAsync(item => item.MeetingId == meetingId && item.ReplyMessageId == replyMessageId, cancellationToken);
+
     public Task<AgentInitialContextDelivery?> FindInitialContextAsync(Guid meetingId, Guid participantId,
         Guid connectionSessionId, CancellationToken cancellationToken = default)
         => dbContext.AgentInitialContextDeliveries.AsNoTracking().SingleOrDefaultAsync(item =>

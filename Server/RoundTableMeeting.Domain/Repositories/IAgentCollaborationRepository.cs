@@ -8,6 +8,16 @@ namespace RoundTableMeeting.Domain.Repositories;
 
 public interface IAgentCollaborationRepository
 {
+    Task<AgentCollaborationBoundary?> FindBoundaryAsync(Guid meetingId, CancellationToken cancellationToken = default);
+
+    Task<AgentReplyTask?> FindTaskByReplyMessageAsync(Guid meetingId, Guid replyMessageId, CancellationToken cancellationToken = default);
+
+    Task<AgentReplyTask?> FindQueueHeadAsync(Guid meetingId, Guid participantId, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AgentReplyTask>> ListTasksInRangeAsync(Guid meetingId, Guid participantId, long after, long through, CancellationToken cancellationToken = default);
+
+    Task<IReadOnlyList<AgentReplyTask>> ListReplySourcesAsync(Guid meetingId, IReadOnlyList<Guid> replyMessageIds, CancellationToken cancellationToken = default);
+
     Task<AgentInitialContextDelivery?> FindInitialContextAsync(Guid meetingId, Guid participantId, Guid connectionSessionId, CancellationToken cancellationToken = default);
 
     Task<IReadOnlyList<AgentConnectionSession>> ListConnectedConnectionsAsync(CancellationToken cancellationToken = default);

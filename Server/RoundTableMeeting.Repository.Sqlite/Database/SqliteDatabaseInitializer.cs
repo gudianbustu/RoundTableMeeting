@@ -29,6 +29,12 @@ public sealed class SqliteDatabaseInitializer(
         try
         {
             var connection = dbContext.Database.GetDbConnection();
+            await using (var initialForeignKeys = connection.CreateCommand())
+            {
+                initialForeignKeys.CommandText = "PRAGMA foreign_keys;";
+                if (Convert.ToInt32(await initialForeignKeys.ExecuteScalarAsync(cancellationToken)) != 1)
+                    throw new InvalidOperationException("SQLite foreign key enforcement must be enabled before migration.");
+            }
             await using (var pragma = connection.CreateCommand())
             {
                 pragma.CommandText = "PRAGMA journal_mode = WAL;";
@@ -50,6 +56,10 @@ public sealed class SqliteDatabaseInitializer(
             }
 
             await dbContext.Database.MigrateAsync(cancellationToken);
+            await using var foreignKeys = connection.CreateCommand();
+            foreignKeys.CommandText = "PRAGMA foreign_keys;";
+            if (Convert.ToInt32(await foreignKeys.ExecuteScalarAsync(cancellationToken)) != 1)
+                throw new InvalidOperationException("SQLite foreign key enforcement was lost during migration.");
         }
         finally
         {

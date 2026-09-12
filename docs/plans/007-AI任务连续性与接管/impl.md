@@ -1,5 +1,7 @@
 # AI 任务连续性与接管实现方案
 
+当前实现已接入 [008 多 Agent 协作与会议删除收口](../008-多Agent协作与会议删除收口/design.md)：Human 有效提及继续创建根任务；Agent 有效提及仅在会议启用边界之后派生，System 不触发。旧边界内 Agent 不追溯，旧 Human 待办仍补齐。legacy/可靠驻留模板分别为 `resident-instruction-v3-legacy` / `resident-instruction-v3-reliable`，仅可靠 join/resume 声明 `multi_agent_collaboration_v1`；共 9 个工具（既有 4 个、可靠专属 5 个）。来源随任务恢复保持，删除屏障提交返回 202 后仍由后台清理父引用、边界及原有资源；008 的新增验收见其 [testPlan.md](../008-多Agent协作与会议删除收口/testPlan.md)，本文件原有通过证据不代替该验收，旧服务夹具的 v1/v2 仍保留。
+
 ## 1. 定位与实施前提
 
 本文件拆解[主题设计](design.md)，测试要求见 [testPlan.md](testPlan.md)。当前已落地领域恢复状态、SQLite 迁移、可靠模式服务及九个生产 MCP 工具，并接入连接关闭、重启与租约/确认超时扫描、版本化 activity 与网页投影。可靠参考客户端已具备恢复、独立续租、显式确认、故障注入和模型接口；并发/崩溃矩阵、真实模型两轮回复及跨租约续租、浏览器验收均已通过，当前主题实现与验收完成。
@@ -9,7 +11,7 @@
 现有落点：
 
 - Application/AgentCollaboration/AgentCollaborationService：JoinAsync、WaitAsync、ReplyAsync、初始确认与投递最终化。
-- AgentMentionTaskConsumer：按分配游标补齐任务，保持离线分配和 Human 触发边界。
+- AgentMentionTaskConsumer：按分配游标补齐任务，保持离线分配，Human 根任务及 008 启用边界后的 Agent 派生任务均按序补齐。
 - Domain/Entities：AgentConnectionSession、AgentContextCursor、AgentReplyTask、AgentTaskDeliveryAttempt。
 - Repository.Sqlite：AgentCollaborationRepository、AgentCollaborationConfigurations、AgentCollaborationCleanupService。
 - Web host/AgentCollaboration：McpAgentTools、AgentConnectionRegistry、AgentConnectionStartupReconciler；现有 Server/RoundTableMeeting/Hosting/ServiceCollectionExtensions.cs 的 WithHttpTransport.options.RunSessionHandler，在 server.RunAsync 的 finally 中移除注册并调用 DisconnectAsync；阶段 0 验证这个真实挂接点在重绑、并发关闭下的语义。
