@@ -29,6 +29,9 @@ public sealed class MeetingWorkspaceContractTests
         var meetingId = createBody.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var meetingCode = createBody.GetProperty("invitation").GetProperty("meetingCode").GetString();
         Assert.True(Guid.TryParseExact(meetingCode, "D", out _));
+        Assert.True(createBody.GetProperty("meeting").GetProperty("canManageInvitation").GetBoolean());
+        using var outsiderInvitation = JsonPost($"/api/meetings/{meetingId}/invitation", null);
+        Assert.Equal(HttpStatusCode.NotFound, (await bob.SendAsync(outsiderInvitation)).StatusCode);
         Assert.Equal(1, createBody.GetProperty("meeting").GetProperty("participants").GetArrayLength());
         var meetingList = await alice.GetFromJsonAsync<JsonElement[]>("/api/meetings");
         var list = Assert.IsType<JsonElement[]>(meetingList);
@@ -43,9 +46,18 @@ public sealed class MeetingWorkspaceContractTests
         Assert.Equal(HttpStatusCode.OK, joined.StatusCode);
         Assert.Equal(2, joinBody.GetProperty("participants").GetArrayLength());
         Assert.False(joinBody.TryGetProperty("meetingCode", out _));
+        Assert.True(joinBody.GetProperty("canManageInvitation").GetBoolean());
+        Assert.False(joinBody.GetProperty("canDelete").GetBoolean());
+        var details = await bob.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}");
+        Assert.True(details.GetProperty("canManageInvitation").GetBoolean());
 
         using var invitation = JsonPost($"/api/meetings/{meetingId}/invitation", null);
-        Assert.Equal(HttpStatusCode.NotFound, (await bob.SendAsync(invitation)).StatusCode);
+        var invitationResponse = await bob.SendAsync(invitation);
+        Assert.Equal(HttpStatusCode.OK, invitationResponse.StatusCode);
+        Assert.True(invitationResponse.Headers.CacheControl?.NoStore);
+        Assert.Equal(meetingCode, (await invitationResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("meetingCode").GetString());
+        using var deniedDeletion = JsonPost($"/api/meetings/{meetingId}/deletion", new { confirmationName = "Architecture" });
+        Assert.Equal(HttpStatusCode.Forbidden, (await bob.SendAsync(deniedDeletion)).StatusCode);
 
         using var deletion = JsonPost($"/api/meetings/{meetingId}/deletion", new { confirmationName = "Architecture" });
         Assert.Equal(HttpStatusCode.Accepted, (await alice.SendAsync(deletion)).StatusCode);
@@ -56,6 +68,8 @@ public sealed class MeetingWorkspaceContractTests
             await Task.Delay(50);
         }
         Assert.Equal(HttpStatusCode.NotFound, (await bob.GetAsync($"/api/meetings/{meetingId}")).StatusCode);
+        using var deletedInvitation = JsonPost($"/api/meetings/{meetingId}/invitation", null);
+        Assert.Equal(HttpStatusCode.NotFound, (await bob.SendAsync(deletedInvitation)).StatusCode);
         using var oldCode = JsonPost("/api/meetings/join/preview", new { meetingCode });
         Assert.Equal(HttpStatusCode.NotFound, (await bob.SendAsync(oldCode)).StatusCode);
         await using var scope = factory.Services.CreateAsyncScope();

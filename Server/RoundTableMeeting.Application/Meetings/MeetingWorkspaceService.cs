@@ -89,7 +89,7 @@ public sealed class MeetingWorkspaceService(
     {
         if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
         var meeting = await meetings.FindActiveByIdAsync(meetingId, cancellationToken);
-        if (meeting is null || meeting.CreatorUserId != userId) return new(MeetingOperationStatus.MeetingNotFound);
+        if (meeting is null || await participants.FindByUserAsync(meetingId, userId, cancellationToken) is null) return new(MeetingOperationStatus.MeetingNotFound);
         return new(MeetingOperationStatus.Success, new(meeting.ID, meeting.MeetingCode.ToString("D").ToLowerInvariant()));
     }
 
@@ -188,7 +188,7 @@ public sealed class MeetingWorkspaceService(
     {
         var all = await participants.ListAsync(meeting.ID, cancellationToken);
         var mapped = all.Select(p => new ParticipantDto(p.ID, p.DisplayName, p.ParticipantType == Domain.Enums.ParticipantType.Human ? ParticipantKind.Human : ParticipantKind.Agent, p.UserId == userId, p.UserId == meeting.CreatorUserId, p.JoinedAtUtc)).ToArray();
-        return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), meeting.CreatorUserId == userId, meeting.CreatorUserId == userId, mapped);
+        return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), meeting.CreatorUserId == userId, mapped.Any(p => p.IsCurrentUser && p.Type == ParticipantKind.Human), mapped);
     }
     private bool TryUser(out Guid userId) { userId = currentUser.UserId.GetValueOrDefault(); return currentUser.IsAuthenticated && userId != Guid.Empty; }
     private DateTimeOffset UtcNow() => timeProvider.GetUtcNow();

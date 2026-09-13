@@ -16,7 +16,7 @@
 
 ### 2.2 Abstraction
 
-`RoundTableMeeting.Abstraction` 提供会议列表、详情、创建、加入预检、加入确认、删除和当前成员查询所需的 DTO、枚举和应用服务接口。契约只使用 Guid、字符串、时间和只读集合，不暴露领域实体、EF 查询类型或普通成员无权查看的会议码。
+`RoundTableMeeting.Abstraction` 提供会议列表、详情、创建、加入预检、加入确认、删除和当前成员查询所需的 DTO、枚举和应用服务接口。契约只使用 Guid、字符串、时间和只读集合，不暴露领域实体、EF 查询类型或非成员无权查看的会议码。
 
 ### 2.3 Application
 
@@ -125,13 +125,13 @@ Web 组合根固定注册 `TimeProvider.System` 单例；Application 只依赖 `
 
 `Created` 与 `Replayed` 只用于创建结果，使 Controller 分别返回 `201` 和 `200`；删除屏障成功使用 `Accepted` 并映射 `202`；其他查询或命令使用 Success。加入限流属于 Web 入口结果，不进入 Application 的 `MeetingOperationStatus`。
 
-结果类型不暴露领域实体、数据库异常或普通成员无权查看的会议码。
+结果类型不暴露领域实体、数据库异常或非成员无权查看的会议码。
 
 ## 6. 用例语义
 
 ### 6.1 创建
 
-应用服务先验证当前用户和字段；`IsAuthenticated = false`、`UserId` 为空或空 Guid 都按未认证处理。随后通过既有 `IUserAccountRepository.FindByIdAsync(UserId)` 读取账号昵称，再进入显式短事务。事务内先按 `CreatorUserId + CreationRequestId` 查询创建回执：Active 回执只有在关联 Meeting 仍存在且为 Active 时才允许重放；保存内容一致则返回原会议及创建者邀请信息，内容不一致则返回 `409 creation_request_mismatch`。Active 回执指向缺失、Deleting 或其他不可访问会议，以及 Deleted 回执，统一返回 `409 creation_request_consumed`，不能重新创建会议。不存在回执时生成会议码，原子创建 Meeting、MeetingParticipant 和 Active 回执。账号记录不存在时按未认证处理，不从客户端资料或 Cookie Claim 回退昵称。会议码以 Guid 明文持久化，但只在创建者有权获得的 DTO 和短生命周期内存状态中对外出现；提交失败时废弃当前作用域，不重用同一 DbContext。
+应用服务先验证当前用户和字段；`IsAuthenticated = false`、`UserId` 为空或空 Guid 都按未认证处理。随后通过既有 `IUserAccountRepository.FindByIdAsync(UserId)` 读取账号昵称，再进入显式短事务。事务内先按 `CreatorUserId + CreationRequestId` 查询创建回执：Active 回执只有在关联 Meeting 仍存在且为 Active 时才允许重放；保存内容一致则返回原会议及人类成员邀请信息，内容不一致则返回 `409 creation_request_mismatch`。Active 回执指向缺失、Deleting 或其他不可访问会议，以及 Deleted 回执，统一返回 `409 creation_request_consumed`，不能重新创建会议。不存在回执时生成会议码，原子创建 Meeting、MeetingParticipant 和 Active 回执。账号记录不存在时按未认证处理，不从客户端资料或 Cookie Claim 回退昵称。会议码以 Guid 明文持久化，但只在已入会人类成员有权获得的 DTO 和短生命周期内存状态中对外出现；提交失败时废弃当前作用域，不重用同一 DbContext。
 
 若 MeetingCode 唯一索引发生随机碰撞，本次创建按内部错误失败并废弃当前作用域；不在失败后的 DbContext 上重试。用户重新提交创建请求时生成全新会议和会议码。
 
@@ -141,7 +141,7 @@ Web 组合根固定注册 `TimeProvider.System` 单例；Application 只依赖 `
 
 ### 6.3 详情
 
-先检查会议为 Active，再检查当前账号参与关系。成功后返回基本信息、当前账号参与者信息和全部静态参与者，不返回会议码。参与者固定按 `JoinedAtUtc` 升序、ParticipantId 升序返回。创建者需要会议码时调用单独的邀请信息用例；该用例先检查创建者权限，再读取持久化的 Guid 并格式化为标准 `D` 字符串。服务端日志和请求追踪上下文始终不包含会议码。
+先检查会议为 Active，再检查当前账号参与关系。成功后返回基本信息、当前账号参与者信息和全部静态参与者，不返回会议码。参与者固定按 `JoinedAtUtc` 升序、ParticipantId 升序返回。已入会人类成员需要会议码时调用单独的邀请信息用例；该用例先检查 Active 状态和当前账号成员关系，再读取持久化的 Guid 并格式化为标准 `D` 字符串。服务端日志和请求追踪上下文始终不包含会议码。
 
 ### 6.4 加入预检
 
@@ -164,9 +164,9 @@ Web 组合根固定注册 `TimeProvider.System` 单例；Application 只依赖 `
 | 方法 | 路径 | 认证 | 作用 |
 | --- | --- | --- | --- |
 | `GET` | `/api/meetings` | 必须认证 | `200 OK`，当前用户参与的会议列表 |
-| `POST` | `/api/meetings` | 必须认证 | 首次创建返回 `201 Created`；相同 CreationRequestId 重放返回 `200 OK`，响应均为详情和创建者邀请信息 |
+| `POST` | `/api/meetings` | 必须认证 | 首次创建返回 `201 Created`；相同 CreationRequestId 重放返回 `200 OK`，响应均为详情和人类成员邀请信息 |
 | `GET` | `/api/meetings/{meetingId}` | 必须认证 | `200 OK`，读取当前成员可见的详情 |
-| `POST` | `/api/meetings/{meetingId}/invitation` | 必须认证 | `200 OK`，创建者取得会议码邀请信息 |
+| `POST` | `/api/meetings/{meetingId}/invitation` | 必须认证 | `200 OK`，已入会人类成员取得会议码邀请信息 |
 | `POST` | `/api/meetings/join/preview` | 必须认证 | `200 OK`，会议码预检 |
 | `POST` | `/api/meetings/join` | 必须认证 | `200 OK`，确认加入或恢复既有身份 |
 | `POST` | `/api/meetings/{meetingId}/deletion` | 必须认证 | 校验确认名称并建立删除屏障，成功返回 `202 Accepted` |
@@ -182,7 +182,7 @@ Web 组合根固定注册 `TimeProvider.System` 单例；Application 只依赖 `
 | 场景 | HTTP | `code` |
 | --- | --- | --- |
 | 字段无效 | `400` | `validation_failed` |
-| 非成员读取、普通成员请求邀请信息或无效/已删除会议码 | `404` | `meeting_not_found` |
+| 非成员读取、无效/已删除会议码 | `404` | `meeting_not_found` |
 | 显示名称已占用 | `409` | `display_name_taken` |
 | 并发加入需要新作用域重试 | `409` | `meeting_join_conflict` |
 | 相同创建幂等键但内容不一致 | `409` | `creation_request_mismatch` |
@@ -191,7 +191,7 @@ Web 组合根固定注册 `TimeProvider.System` 单例；Application 只依赖 `
 | 加入请求超限 | `429` | `meeting_join_rate_limited` |
 | 数据库故障 | `500` | `internal_error` |
 
-对非成员、普通成员请求邀请信息和无效会议码统一 `meeting_not_found`，不泄露会议存在性。会议码缺失或超过请求长度上限返回 `validation_failed`；通过基础校验后的格式错误、查无会议和删除中会议也统一 `meeting_not_found`。Deleting 是内部恢复状态，不作为公开错误分支，避免物理清理时序改变相同请求的业务语义。
+对非成员和无效会议码统一 `meeting_not_found`，不泄露会议存在性。会议码缺失或超过请求长度上限返回 `validation_failed`；通过基础校验后的格式错误、查无会议和删除中会议也统一 `meeting_not_found`。Deleting 是内部恢复状态，不作为公开错误分支，避免物理清理时序改变相同请求的业务语义。
 
 ## 8. 授权与删除访问屏障
 
@@ -259,7 +259,7 @@ MeetingParticipants
 ## 10. 安全、限流与日志
 
 - 会议码使用 `Guid.NewGuid()` 生成，并按标准 GUID `D` 格式展示和解析。
-- 会议码只在创建成功响应和创建者专属邀请信息响应中返回，禁止出现在普通成员详情、URL、日志、指标、异常和客户端持久化存储。
+- 会议码只在创建成功响应和人类成员邀请信息响应中返回，禁止出现在普通成员详情、URL、日志、指标、异常和客户端持久化存储。
 - 加入预检和加入确认使用 Web 层认证后的 action filter/resource filter 执行，不放在 `UseAuthentication` 之前。请求先经过既有 Origin 边界：缺失或不允许的 Origin 仍由 `OriginValidationMiddleware` 以 `403 origin_not_allowed` 拒绝；通过 Origin 校验后，Cookie 认证先于限流执行，未认证请求固定返回 `401 unauthenticated` 且不消耗加入配额；已认证请求在进入 Controller/Application、查询会议码之前执行限流。预检和确认共享同一账号配额和同一来源地址配额，默认每账号每 5 分钟 30 次、每来源地址每 5 分钟 100 次；窗口和次数通过 `MeetingJoinRateLimit` Options 配置，必须为正数并在启动时校验。任一层超限即拒绝并返回 `429 meeting_join_rate_limited` 与 `Retry-After`。来源地址只在请求来自配置的可信代理时采用转发头。计数器首版使用单实例进程内存储，服务重启会清零，不引入分布式缓存；这是首版单实例部署的明确取舍。限流器不把完整会议码作为 key。
 - 会议码输入只接受 JSON；服务端去除首尾空白后使用 `Guid.TryParseExact(value, "D")` 或等价严格 D 格式解析，大小写不敏感，错误响应不回显会议码。
 - 请求完成日志只记录路由模板、状态、耗时、用户标识摘要和会议 ID；会议码、名称全文、背景全文和消息内容不进入日志。

@@ -73,7 +73,7 @@
 ### 4.3 阶段 2：会议码、时间和事务
 
 1. 在 Web 组合根注册 `TimeProvider.System`，Application 只依赖框架 `TimeProvider` 抽象，测试使用可替换单例。
-2. 创建事务内调用 `Guid.NewGuid()` 生成会议码，保存为 Guid；创建者邀请信息按标准小写 `D` 格式返回。
+2. 创建事务内调用 `Guid.NewGuid()` 生成会议码，保存为 Guid；人类成员邀请信息按标准小写 `D` 格式返回。
 3. 加入输入只 Trim 首尾空白并使用 `Guid.TryParseExact(value, "D")` 或等价规则解析；大小写不敏感，不自动修复内部空白、缺失连字符或其他 Guid 格式。
 4. 新增 `IMeetingTransactionRunner.ExecuteAsync<TResult>(Func<CancellationToken, Task<TResult>>, CancellationToken)`。
 5. Runner 与 Scoped DbContext、物理连接、`IUnitOfWork` 共用 scope；绑定同一 EF Core transaction，禁止嵌套，异常/取消回滚。
@@ -87,7 +87,7 @@
 2. 创建：读取账号昵称，事务内先查询创建回执；一致重放、内容 mismatch、Consumed、首次创建分别返回固定结果。
 3. 列表：按当前参与者 `JoinedAtUtc DESC, MeetingId ASC` 返回 Active 会议。
 4. 详情：成员可见、不含会议码；参与者按 `JoinedAtUtc ASC, ParticipantId ASC`。
-5. 邀请信息：仅创建者读取并返回标准 `D` 格式会议码。
+5. 邀请信息：已入会人类成员读取并返回标准 `D` 格式会议码。
 6. 预检：规范化会议码，返回最小预览和 `meetingId`，不创建参与者。
 7. 加入：事务内复查 Active、按 `MeetingId + UserId` 幂等、按名称唯一约束创建 Human 参与者。
 8. 删除：校验成员、创建者和确认名称，事务内 Active -> Deleting，提交后排队清理。
@@ -135,7 +135,7 @@
 1. 执行服务端全部测试、客户端全部测试、架构依赖检查和 Kiota 生成。
 2. 执行 `pnpm build`、`dotnet build`、`dotnet test` 和 `dotnet publish`。
 3. 使用两个账号浏览器完成创建、复制邀请码、预检、加入、切换、刷新、静态参与者刷新和删除。
-4. 验证普通成员看不到邀请码，非成员无法通过深链接读取详情。
+4. 验证普通人类成员可见并复制邀请码，非成员无法通过深链接读取详情。
 5. 验证删除后旧会议码失效、其他标签页回无选择工作台、服务重启后 Deleting 清理继续。
 6. 检查 DOM、Network、Console、缓存头、Origin、状态码、无敏感日志和无布局溢出。
 

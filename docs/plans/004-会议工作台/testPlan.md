@@ -72,7 +72,7 @@
 | MW-A007 | P0 | 会议列表 | 只返回 Active 成员会议，按 JoinedAt DESC、MeetingId ASC |
 | MW-A008 | P0 | 非成员详情 | 返回 MeetingNotFound，不加载参与者或邀请码 |
 | MW-A009 | P0 | 成员详情 | 返回不含会议码的详情，参与者按 JoinedAt ASC、ParticipantId ASC |
-| MW-A010 | P0 | 创建者邀请信息 | 仅创建者读取并返回标准小写 GUID `D` 格式邀请码，普通成员视为 NotFound |
+| MW-A010 | P0 | 人类成员邀请信息 | 已入会人类成员读取并返回标准小写 GUID `D` 格式邀请码，非成员视为 NotFound |
 | MW-A011 | P0 | 预检有效会议码 | 返回 meetingId、名称、背景、默认昵称，不创建参与者 |
 | MW-A012 | P0 | 预检无效/Deleting 会议码 | 统一 MeetingNotFound，不泄露存在性 |
 | MW-A013 | P0 | 首次加入 | 事务内复查 Active，创建 Human Participant |
@@ -145,8 +145,8 @@
 | MW-H009 | P0 | 创建网络重试 | 相同 CreationRequestId 返回 `200`，不重复创建 |
 | MW-H010 | P0 | 创建 mismatch/consumed | `409` 固定 code，不返回旧邀请码 |
 | MW-H011 | P0 | 普通成员详情 | `200` 但无 meetingCode |
-| MW-H012 | P0 | 普通成员邀请信息 | `404 meeting_not_found` |
-| MW-H013 | P0 | 创建者邀请信息 | `200 MeetingInvitationDto`，含会议码且 no-store |
+| MW-H012 | P0 | 普通成员邀请信息 | `200 MeetingInvitationDto`，与创建者会议码一致且 no-store |
+| MW-H013 | P0 | 人类成员邀请信息 | `200 MeetingInvitationDto`，含会议码且 no-store |
 | MW-H014 | P0 | 非成员详情/删除 | `404 meeting_not_found` |
 | MW-H015 | P0 | 成员非创建者删除 | `403 meeting_creator_required` |
 | MW-H016 | P0 | 预检成功 | 返回 meetingId、名称、背景、默认名称，无参与者和会议码 |
@@ -204,7 +204,7 @@
 | MW-V019 | P1 | Retry-After | 从会议 feature 错误元数据 retryAfterSeconds 显示可再次尝试时间，不修改共享 ApiError、不显示剩余次数 |
 | MW-V020 | P0 | 删除确认 | 页面挂载对话框，完整名称、Trim+NFC、Ordinal 大小写敏感 |
 | MW-V021 | P1 | 删除后果提示 | 列出参与者记录和会议码失效，保留后续消息/AI/连接扩展位 |
-| MW-V022 | P0 | 普通成员界面 | 不渲染邀请码和删除操作 |
+| MW-V022 | P0 | 普通成员界面 | 渲染邀请码与邀请入口，不渲染删除操作 |
 | MW-V023 | P1 | `human | agent` 渲染 | 文字类型标记，不只依赖颜色 |
 | MW-V024 | P1 | 网络错误 | 保留当前确认详情，显示重试，不显示假数据 |
 | MW-V025 | P1 | 移动端关键断点 | 导航折叠、按钮和长名称不溢出 |

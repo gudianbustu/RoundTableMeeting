@@ -98,7 +98,7 @@ Hook 使用 `useReducer` 或等价状态组合，维护：
 
 ### 7.1 创建
 
-对话框打开时生成 `crypto.randomUUID()` 的 creationRequestId。同一打开周期内所有提交和网络重试复用该 ID。201/200 都更新列表、详情和创建者邀请信息；mismatch/consumed 停止提交并刷新列表，不能自动换 ID。
+对话框打开时生成 `crypto.randomUUID()` 的 creationRequestId。同一打开周期内所有提交和网络重试复用该 ID。201/200 都更新列表、详情和人类成员邀请信息；mismatch/consumed 停止提交并刷新列表，不能自动换 ID。
 
 ### 7.2 加入
 

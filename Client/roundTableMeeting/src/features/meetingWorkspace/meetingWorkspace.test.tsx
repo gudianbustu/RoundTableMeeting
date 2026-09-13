@@ -38,10 +38,11 @@ describe('meeting workspace contracts', () => {
     expect(preview).toHaveBeenCalledWith('8f14e45f-ea5e-4f5a-a7e9-2c9d5a02b761')
   })
 
-  it('does not expose invitation controls to ordinary members', () => {
-    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: false, participants: [] }} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
-    expect(screen.queryByRole('button', { name: '邀请入会' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '显示邀请码' })).not.toBeInTheDocument()
+  it('exposes invitation controls to ordinary human members', () => {
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
+    expect(screen.getByRole('button', { name: '邀请入会' })).toBeInTheDocument()
+    expect(screen.getByText('0e04091b-4287-4b4c-8c99-70217a3aeea0')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '复制邀请码' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: '删除会议' })).not.toBeInTheDocument()
   })
 
