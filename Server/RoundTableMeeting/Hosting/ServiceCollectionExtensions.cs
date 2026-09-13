@@ -146,7 +146,7 @@ public static class ServiceCollectionExtensions
 			options.Cookie.Path = "/";
 			options.Cookie.HttpOnly = true;
 			options.Cookie.SameSite = SameSiteMode.Lax;
-			options.Cookie.SecurePolicy = (builder.Environment.IsProduction() ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest);
+			options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 			options.ExpireTimeSpan = TimeSpan.FromHours(8);
 			options.SlidingExpiration = false;
 			options.Events.OnRedirectToLogin = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 401, "unauthenticated");

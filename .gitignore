@@ -88,3 +88,4 @@ logs/
 .agents/skills/generated/
 .agents/skills/gitnexus/
 CLAUDE.md
+publish/

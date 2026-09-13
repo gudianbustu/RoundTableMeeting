@@ -23,7 +23,7 @@
     <UserSecretsId>roundtablemeeting-development</UserSecretsId>
   </PropertyGroup>
 
-  <Target Name="BuildClient" BeforeTargets="ComputeFilesToPublish">
+  <Target Name="BuildClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(PublishClient)' != 'false'">
     <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm run check:toolchain" />
     <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm install --frozen-lockfile" />
     <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm build" />
