@@ -351,7 +351,7 @@ dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration
 | AB-003 | P0 | dotnet publish | 自动构建客户端，发布目录包含登录页资源 |
 | AB-004 | P0 | 发布环境刷新 /login | SPA fallback 返回应用并渲染登录页 |
 | AB-005 | P0 | 发布环境未认证 /api/auth/me | JSON 401，不返回 index.html |
-| AB-006 | P1 | 发布 HTTPS 登录 | Cookie 名称、Path、Secure、HttpOnly、SameSite 和会话级属性符合契约 |
+| AB-006 | P1 | 发布 HTTP 与 HTTPS 登录 | 两种协议均可登录与刷新；Secure 按实际协议，HttpOnly、SameSite、Path 和会话属性保持契约；HTTP 不被强制跳转 |
 | AB-007 | P1 | /system/status 回归 | 匿名页面和 API 继续可用 |
 | AB-008 | P1 | 未知 API/Scalar/OpenAPI 回归 | 不被认证布局或 SPA fallback 覆盖 |
 | AB-009 | P0 | 发布环境刷新 /users | SPA fallback 返回应用；管理员身份确认后加载，普通用户无权限且不请求目录 |
@@ -376,7 +376,7 @@ dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration
 
 ### 14.2 发布环境
 
-重复 AU-001 至 AU-008，地址改为发布 HTTPS 地址，额外检查 Secure Cookie、/login 子路径刷新和同源 API。截图输出到忽略目录 artifacts/cdp/003/，不回写实施日志。
+重复 AU-001 至 AU-008，分别使用发布 HTTP 与配置好的 HTTPS 地址；检查 Cookie Secure 按实际协议、/login 子路径刷新和同源 API。截图输出到忽略目录 artifacts/cdp/003/，不回写实施日志。
 
 ## 15. 失败场景矩阵
 

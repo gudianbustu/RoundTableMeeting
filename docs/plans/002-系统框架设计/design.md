@@ -30,7 +30,7 @@
 
 ### 3.1 服务端
 
-- 使用最新稳定版 .NET 10 和 ASP.NET Core。
+- 沿用 .NET 10 和 ASP.NET Core。
 - ASP.NET Core 启动项目命名为 `RoundTableMeeting`，不添加 `.Web` 后缀。
 - 采用启动项目、Application、Domain、Abstraction、具体数据库 Repository 和测试项目组成的模块化单体结构。
 - 正式 HTTP API 使用 Controller。
@@ -156,7 +156,7 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 - 服务端构建、客户端生产构建和自动化测试必须通过。
 - 框架主题暂不默认引入 Playwright。
 - 浏览器冒烟调试使用独立 Profile 的开发模式 Chrome，并通过只绑定 `127.0.0.1` 的 CDP endpoint 检查 DOM、控制台、网络和截图。
-- 生产部署必须使用 HTTPS；开发环境的 localhost HTTP 仅用于本地调试。
+- 部署允许 HTTP 或 HTTPS；不强制证书、反向代理或重定向，按实际公开地址验证同源 API、Origin 与 Cookie。
 
 不能把“CDP 端口已启动”等同于“页面已经完成调试”。验收必须确认已连接正确页面并成功获取所需调试信息。
 
@@ -167,11 +167,11 @@ Kiota 版本通过仓库内的 .NET Tool Manifest 固定。重新生成客户端
 - 用户账号、登录、认证 Cookie 和权限。
 - 会议创建、会议码、参与者和会议列表。
 - 群聊消息、提及和浏览器实时消息。
-- MCP Agent 接入和 AI 回复任务。
+- 官方 CLI Agent 接入与通信恢复。
 - 正式业务页面。
 - Cookie 写请求的具体认证业务；本主题只提供后续主题复用的 Origin 保护元数据、中间件、允许来源策略接口和错误契约。
 
-未来的 SignalR、MCP 端点和 HostedService 可以先落在 `RoundTableMeeting` 宿主项目，业务编排仍由 Application 承担。只有当某类技术入口形成独立适配边界时，才新增能力项目；每条后台任务或消息处理都必须创建独立 DI scope，不能长期持有 Scoped DbContext。
+未来的 SignalR、内部 Agent 协议端点和 HostedService 可以先落在 `RoundTableMeeting` 宿主项目，业务编排仍由 Application 承担。只有当某类技术入口形成独立适配边界时，才新增能力项目；每条后台任务或消息处理都必须创建独立 DI scope，不能长期持有 Scoped DbContext。
 
 这些能力由后续业务主题在本框架上垂直实现。框架主题不能用占位业务实体、模拟账号或模拟会议冒充业务完成。
 

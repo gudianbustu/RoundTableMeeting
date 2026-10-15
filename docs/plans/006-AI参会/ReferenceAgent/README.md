@@ -1,62 +1,91 @@
-# MCP Agent 接入规范
+# 官方 CLI 通用参会指南设计
 
-## 1. 接入与入会
+本文是待随版本交付的通用指南源稿。命令和下载入口为[目标设计](../design.md)，不表示当前服务已发布；实施后必须用真实包验证并将示例与该版本保持一致。宿主只补充实际存在的执行/联网/权限差异，不维护平行MCP教程。
 
-本规范适用于支持 MCP Streamable HTTP 的客户端，不限定 Codex。开发服务地址为 `http://localhost:5043/mcp`；服务端须已启动。容器、远程机器或云端 Agent 的 localhost 不指向服务端，应使用其实际可访问地址；生产接入使用 HTTPS。客户端配置字段以各自文档为准，不提供假定通用的 JSON 配置。
+## 1. 安装与检查
 
-优先使用客户端内置 MCP 支持或官方 SDK。初始化并完成 initialized 通知后，通过工具发现确认 `join_meeting`、`wait_for_mention`、`reply_to_mention`、`get_agent_status` 可用。一次初始化后复用服务端返回的 `Mcp-Session-Id`，不要每次调用重新初始化。协议会话标识由客户端或 SDK 管理，不写入提示词、普通日志或仓库。
+从邀请中的服务外部地址读取/downloads/rtm-agent/latest/manifest.json，固定releaseVersion，再下载同版本SKILL.md、指南、安装脚本、匹配系统/架构的CLI和校验文件。校验不通过停止安装；不得混用latest切换前后的材料。
 
-`join_meeting` 输入 `meetingCode`、`displayName`、`contextCharacterLimit`，字符预算可从 12000 起步。会议码由环境变量或交互输入提供；显示名称由用户指定。成功后保存返回的业务 `connectionSessionId` 和初始上下文。业务连接 ID 不等于 MCP 协议会话 ID，也不能跨协议会话使用。
+运行rtm-agent version与capabilities，检查实际可执行、平台匹配及协议支持；执行rtm-agent start启动后台。启动后台不自动参会，不能只因文件下载成功就报告安装完成。权限/网络不足说明失败阶段，不伪造成功或自行绕过宿主授权。
 
-可直接交给 Agent 的提示词：
+## 2. 加入与会话
+
+示例使用占位符，不把真实邀请码写入公共文档：
 
 ```text
-请配置并连接 MCP Streamable HTTP 服务：<可访问的 MCP 地址>。
-使用 join_meeting 加入会议，会议码：<会议码>，显示名称：<名称>，contextCharacterLimit：12000。
-入会后用 wait_for_mention 持续等待明确 @你的消息，根据返回上下文用 reply_to_mention 作答，原样携带任务 ID、投递尝试 ID 和回复幂等键。
-回复成功或收到 idle 后继续等待，不要只回复一次就停止，也不要主动回复未提及你的消息。
-复用同一 MCP 会话；工具或会话失败时报告实际错误，不要伪造成功。收到明确离开指令时关闭 MCP 会话。
+rtm-agent join --session <会话名> --server <服务地址> --meeting-code <会议码> --name <显示名称>
+rtm-agent status --session <会话名>
 ```
 
-## 2. 参考 Agent 运行流程
+所有参会命令明确session；同安装多个Agent分别命名会话。返回确认会议、参与者和连接，身份已被在线连接占用时普通join不抢占；只有明确需要接管才使用takeover。已经退出必须明确join才能重新参与；关闭会议不可加入。会议码可通过CLI支持的私有输入方式提供，不复制到普通日志。
 
-1. 初始化 MCP 会话并发现工具，然后调用一次 join；失败时按实际错误停止或处理，不循环创建新身份。
-2. 处理初始上下文，使用 join 返回的连接 ID 首次调用 wait，确认初始上下文。
-3. `kind=idle` 是成功的空闲结果，立即复用同一会话继续 wait，不重新 join、不使用故障退避。
-4. `kind=mention` 时读取上下文，保留本次 `taskId`、`deliveryAttemptId`、`replyIdempotencyKey`，生成回复并调用 reply。
-5. reply 成功后再次 wait。回复响应丢失但协议会话仍有效时，可用完全相同的任务字段和正文重试；不得重新生成不同正文冒充同一次幂等重试。
-6. 结束时停止发起新业务调用，取消并结算本地挂起请求，通过 SDK 关闭远程会话或发送协议 DELETE，检查关闭结果后释放连接。关闭失败应报告，不能仅凭本地进程退出宣称服务端已离线。
+## 3. 接收、读取与历史
 
-建议每个 Agent 业务连接保持一个串行的 wait -> reply -> wait 循环，避免重复领取。不要把这个建议写成 MCP 协议要求所有请求并发上限为 1；SSE 接收、取消和协议控制请求不受该业务循环限制。状态诊断优先使用已有的 `get_agent_status`，协议 ping 也不等同于业务恢复或连接租约。
+后台独立接收全部消息并落盘。Agent可自主选择：
 
-参考流程不代替实际模型推理。[固定回复联调客户端](../../../../Demo/AI参会联调客户端/README.md) 只验证传输和任务闭环；真实 Agent 验收必须根据不同提问返回对应内容。该客户端位于独立 Demo，不是通用模型推理宿主。
+```text
+rtm-agent read --session <会话名>
+rtm-agent wait --session <会话名> --mentions-me --timeout 25
+rtm-agent history --session <会话名> --before <消息序号>
+rtm-agent show --session <会话名> --message-id <消息ID> --context 2
+```
 
-## 3. 等待时限与故障处理
+默认正文最多100000字符，可用--max-chars调小；按返回nextCursor/分片偏移继续，直到complete。read获取位置、提及筛选位置与历史查询独立；提及过滤不会吞掉普通消息。idle只说明这次等待无匹配消息，后台仍保持接收；不必重新join。没有阅读ACK，不要求每条提及都回复。是否继续前台等待由Agent工作安排决定。
 
-当前服务端 `AgentCollaboration:WaitTimeoutSeconds` 默认 300 秒，wait 输入只有 `connectionSessionId`，没有客户端指定的等待时长参数。客户端工具时限、执行宿主时限和代理读取时限都需要覆盖服务端等待时长及处理余量。
+## 4. 发言与回复
 
-若客户端硬限制约 90 秒，可由服务管理员在测试实例设置 `AgentCollaboration__WaitTimeoutSeconds=30`，客户端请求时限例如 60 秒，并验证端到端余量。该设置是实例级配置，需要重启生效，不是 Agent 工具参数；本规范不更改默认值或运行中的服务。宿主不支持足够长调用时，选择较短服务端等待或受支持的常驻客户端，不能靠提示词绕过宿主时限。
+```text
+rtm-agent send --session <会话名> --text <正文>
+rtm-agent send --session <会话名> --text-file <UTF-8文件> --reply-to <消息ID>
+```
 
-| 结果 | 客户端动作 |
-| --- | --- |
-| idle | 同会话继续等待 |
-| 单次请求取消，协议会话仍有效 | 等待取消完成再决定下一步；取消本身不等于离线 |
-| wait 响应中断或任务结果丢失 | 调用 get_agent_status 诊断；Delivered/Processing 队首可能阻塞，当前版本不自动重投 |
-| 暂时网络故障且原会话仍可用 | 对可安全重试的操作采用有上限的退避，例如 1/2/4 秒并加抖动；不无限重试，也不盲目重试 join |
-| connection_invalid 或协议会话失效 | 停止旧循环并报告；不能把旧业务连接 ID 移交给新协议会话 |
-| agent_connection_already_active | 不创建第二个连接，不自动踢掉旧会话 |
-| agent_recovery_not_supported | 报告当前版本不支持同名接管；由用户选择测试新身份或新会议 |
-| task_not_available | 查询队首状态，不等同于无任务 idle，不忙循环重试 |
-| meeting_not_found | 停止监听并释放会话 |
+可以自主发言，不需要先领取任务。@用参与者列表中的准确显示名称，不猜测替代目标；找不到时说明。@表达关注，不意味着平台要求某人立即执行。在线、内部接收、服务器已保存都不代表对方理解或完成工作。
 
-请求取消不修改连接状态，不代表任务领取尚未发生。即使继续使用同一协议会话，丢失的任务响应也可能需要后续恢复能力；不能承诺取消后所有任务均自动恢复。会话丢失时也不能通过指数退避保证恢复成功。
+超时显示发送结果待确认，后台按原发送标识核对，不重新生成相同发言冒充重试。只有服务端确认保存才报告已保存。
 
-日志只记录阶段、耗时、状态、错误码和必要的 ID 摘要，不记录会议码、会话令牌、完整上下文或回复正文。单次亚秒级握手不证明所有客户端的不稳定都来自客户端；排查时分别测量初始化、工具发现、入会、空闲等待、提及到回复和关闭。
+## 5. 附件
 
-## 4. 验收与后续边界
+```text
+rtm-agent upload --session <会话名> --file <本地文件>
+rtm-agent send --session <会话名> --attachment <附件ID> --text <说明>
+rtm-agent attachments --session <会话名>
+rtm-agent download --session <会话名> --attachment-id <附件ID> --output <本地路径>
+```
 
-按 [测试方案](../testPlan.md) 的参考 Agent 和浏览器用例验收：普通消息不触发，两轮不同提问分别回复，每次回复后继续等待，跨多次 idle 保持会话，刷新后状态与消息保留，明确关闭后显示离线。长驻留验收至少 10 分钟；记录客户端和服务端时限，不能仅以短时间两轮固定回复代替。
+使用实际能力响应中的文件上限，默认100 MB；任何扩展名均可传递。下载后由Agent自身工具理解内容，平台不做OCR或文档解析。已存在目标文件需显式覆盖选项。附件范围与所属消息一致。
 
-本文描述 legacy 接入；同名接管、租约、显式确认和恢复使用[主题六设计](../../007-AI任务连续性与接管/design.md)及 [可靠参考客户端说明](../../../../Demo/AI参会联调客户端/README.md)。可靠入口为 reliable.mjs；原 index.mjs 继续保留本文的兼容行为。主题六重投保留任务身份和回复幂等键，生成新投递尝试 ID，并拒绝失效旧尝试。完整恢复/崩溃与真实模型验收状态以主题六 testPlan 为准。
+## 6. 历史检索
 
-Streamable HTTP 已支持 SSE 响应或接收流，改成 SSE 不自动消除长连接占用或宿主执行时限。WebSocket、自定义推送、额外 health 工具和指标体系须有兼容性或容量证据再设计，本轮不扩展传输和业务契约。
+```text
+rtm-agent search --session <会话名> --query <关键词或语义问题>
+rtm-agent show --session <会话名> --message-id <命中ID> --context 2
+```
+
+查询结果提供来源、片段、同步/索引范围，展开原文核对。无结果不证明完整会议没有该内容；模型尚未下载或向量失败时继续使用关键词/原文。默认本机生成向量，不把会议原文发送远端生成。上下文压缩后可以重复检索，不存在“已读后不再返回”。
+
+## 7. 恢复与诊断
+
+```text
+rtm-agent reconnect --session <会话名>
+rtm-agent probe --session <会话名> --participant-id <参与者ID>
+rtm-agent diagnose --session <会话名>
+```
+
+后台运行时短暂断网自动退避恢复；后台/电脑重启后显式reconnect。旧连接占用先由服务器探测，确认仍在线不自动替换。被接管后停止反向抢占。probe只确认CLI连接可响应，不表示模型正在工作。参数错误按给出的参数、范围与修正示例处理；凭据或配置失败不靠无限重连解决。
+
+## 8. 断开与退出
+
+```text
+rtm-agent disconnect --session <会话名>
+rtm-agent leave --session <会话名>
+```
+
+disconnect仅停止当前会话的心跳、接收和自动重连，保留参与身份、历史及其他会话；远端通知失败分别报告本地已断开和远端尚未确认。普通前台命令结束不等于断开。
+
+leave明确退出参与，之后只能查看退出前历史；开放会议可用有效会议码明确再加入。创建者不可退出，可暂时离线或在网页明确移除关闭会议。关闭、退出和断开都不代表停止外部模型已经启动的工作。
+
+## 9. 邀请模板与使用规范
+
+网页模板包含：服务地址、会议码、Agent名称、同源SKILL.md/manifest.json、按系统架构安装检查、join/read/send以及reconnect/disconnect指引，并链接本指南。不包含/mcp入口、任务句柄或阅读确认要求。
+
+外部连接器由宿主完成授权，无法访问时通过附件或文本共享，不让会议平台代管第三方账号。不要发送凭据；误发后到所属系统撤销或轮换，平台没有撤回和敏感信息自动拦截。工具能力不足时如实说明，不把使用规范写成平台能保证模型执行正确。

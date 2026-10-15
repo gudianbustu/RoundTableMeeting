@@ -6,7 +6,7 @@
 
 ## 2. 技术基线
 
-- 使用最新稳定版 .NET 10 和 ASP.NET Core。
+- 沿用 .NET 10 和 ASP.NET Core。
 - 使用 `global.json` 锁定实施验证通过的 .NET 10 SDK 小版本，NuGet 包使用精确版本。
 - 启动项目命名为 `RoundTableMeeting`，不添加 `.Web` 后缀。
 - HTTP API 使用 Controller。
@@ -302,7 +302,7 @@ Origin 校验固定规则：
 
 生产环境由 `RoundTableMeeting` 托管 Vite 构建产物，并提供 React Router SPA 回退。SPA fallback 必须显式排除 `/api`、OpenAPI、Scalar 和其他服务端端点；未匹配的 `/api/*` 返回 ProblemDetails 404，不能使用默认 fallback 将未知 API 变成 HTML 200。
 
-`dotnet publish` 必须自动触发或集成客户端生产构建，并将产物放入发布目录。发布环境必须安装 Node `24.20.0` 与 pnpm `11.24.0`，发布前精确校验实际执行工具版本，再执行 `pnpm install --frozen-lockfile`；版本不匹配、依赖安装或前端构建失败必须使 publish 失败，不能静默跳过。具体 MSBuild Target 在 `impl.md` 中确定。生产环境必须使用 HTTPS；localhost 开发环境允许 HTTP。
+`dotnet publish` 必须自动触发或集成客户端生产构建，并将产物放入发布目录。发布环境必须安装 Node `24.20.0` 与 pnpm `11.24.0`，发布前精确校验实际执行工具版本，再执行 `pnpm install --frozen-lockfile`；版本不匹配、依赖安装或前端构建失败必须使 publish 失败，不能静默跳过。具体 MSBuild Target 在 `impl.md` 中确定。部署协议可选 HTTP 或 HTTPS，按实际公开地址配置并验证；不强制证书或反向代理。
 
 ## 14. 服务端测试
 

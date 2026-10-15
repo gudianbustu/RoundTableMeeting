@@ -1,13 +1,5 @@
-# 消息编辑器组件实现方案
+# 消息编辑器实现计划
 
-## 1. 组件接口
+按[设计](design.md)更新既有组件与模块回调，先接入受控状态再处理布局与交互。使用稳定messageId、权限和generation，避免局部组件持有过期会议数据。
 
-Props 至少包括 `participants`、`draft`、`sendState`、`failedSubmission`、`onDraftChange`、`onSubmit` 和 `onRetry`。组件不调用 API、不生成服务器 Sequence。
-
-## 2. 输入和提及
-
-文本域维护原始正文和光标位置；候选选择插入 `@displayName`。提交时父模块规范化正文并重新计算候选范围。未知 `@` 不阻止发送。
-
-## 3. 状态
-
-发送中禁用重复提交但保留正文；保存中的提交不代表失败，只有 send=failed 才显示失败提示和重试按钮。重新发送期间隐藏旧错误及重试按钮；失败重试复用原 ClientSubmissionId；成功由父模块清空草稿。按钮、重试和连接动作提供 aria-label/tooltip。
+验证加载/空/失败、键盘与窄屏行为及设计中的边界；引用[主题测试计划](../../../testPlan.md)相关C场景。当前仅计划，不声称浏览器已通过。

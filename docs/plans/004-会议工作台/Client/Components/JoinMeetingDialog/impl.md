@@ -1,19 +1,9 @@
-# 加入会议对话框实现方案
+# 加入会议对话框实现计划
 
-## 1. 文件和状态
+按[组件设计](design.md)更新现有features/meetingWorkspace/components/JoinMeetingDialog.tsx及其模块调用方；复用既有Ant Design组件、受控输入和错误适配。
 
-文件为 `features/meetingWorkspace/components/JoinMeetingDialog.tsx`。内部状态包括 step、meetingCode、preview、displayName、previewError、joinError 和 submitting。
+1. 先更新视图类型与props，再修改渲染及操作回调，不让组件直接访问Kiota生成Client。
+2. 实现设计中的权限、加载/失败/取消与成功状态；切会时旧回调不得影响新会议。
+3. 覆盖实际用户操作、拒绝边界和键盘可访问性，接入[主题测试计划](../../../testPlan.md)；不把静态字符串断言当作完整验收。
 
-## 2. 会议码输入
-
-粘贴或输入时只 Trim 首尾空白，使用严格的 GUID `D` 格式解析，大小写不敏感，并按小写 `D` 格式展示。内部空白、缺失连字符、带大括号或其他 Guid 格式均不自动修复；解析失败时显示字段错误。会议码只存在内存，关闭对话框或完成加入后清理。
-
-## 3. 预检和加入
-
-预检成功显示 meetingName、description 和 defaultDisplayName；不显示会议码回显、参与者或邀请码。alreadyJoined 显示 existingDisplayName 和“打开会议”，使用 preview.meetingId 导航且不修改名称。未加入时允许修改 displayName，再提交最终加入。
-
-JoinConflict 自动重试一次；DisplayNameTaken 定位显示名称字段；429 读取 Retry-After 提示时间；404 统一会议不可访问。
-
-## 4. 测试
-
-覆盖 `MW-V014`–`MW-V019`、`MW-B004`，并验证首尾空白、标准 GUID `D` 格式、大小写不敏感、非法格式、键盘步骤、Escape、字段错误、重试和敏感值清理。
+当前仅计划，未修改组件代码。

@@ -569,7 +569,7 @@ Development 可把部分框架类别提高到 Information，但不得开启 EF S
 
 IntegrationTests 注入真实 sink 并解析结构化 LogEvent，断言最终响应状态、字段类型和安全边界，不通过替换 Console 文本伪造日志验证。
 
-请求体、响应体、Cookie、Authorization、密码、Token、连接字符串、数据库文件绝对路径、完整聊天消息、AI Prompt 和文件内容不进入日志。宿主启动失败只记录异常类型，不附带原始异常对象；未来业务只能记录消息 ID、任务 ID、会议 ID 等必要标识，不能记录完整内容。
+请求体、响应体、Cookie、Authorization、密码、Token、连接字符串、数据库文件绝对路径、完整聊天消息、AI Prompt 和文件内容不进入日志。宿主启动失败只记录异常类型，不附带原始异常对象；未来业务只能记录消息 ID、连接 ID、会议 ID 等必要标识，不能记录完整内容。
 
 ## 10. Controller、OpenAPI 和状态接口
 
@@ -630,7 +630,7 @@ SPA fallback 只服务 GET/HEAD 且接受 HTML 的非服务端路径。以下前
 6. 构建 WebApplication。
 7. 创建启动 scope，解析 `IDatabaseInitializer` 并等待 `InitializeAsync`；失败时记录 Critical 并终止进程。
 8. 配置请求级 LogContext、集中异常处理和 Serilog 请求日志。
-9. 非 Development 环境启用 HTTPS 重定向和生产安全策略；localhost Development 允许 HTTP 工具链访问。
+9. 根据显式部署配置决定是否启用 HTTPS 重定向；默认不因 Production 环境强制启用。HTTP 部署可直接使用，HTTPS 部署验证证书及可信转发协议，二者均保留 Origin 与认证边界。
 10. 显式调用 `UseRouting()`，使后续中间件可以读取已匹配 Endpoint 元数据。
 11. 在 `UseRouting()` 之后先配置 `UseDefaultFiles()`、`UseStaticFiles()`，使已存在的默认文件和静态资源在认证授权之前直接匿名返回；静态文件短路时不进入 Origin 中间件，也不受全局 FallbackPolicy 拦截。
 12. 配置需要覆盖拒绝响应的通用响应头中间件，再配置 `OriginValidationMiddleware`。两者位于 `UseExceptionHandler` 和 `UseSerilogRequestLogging` 之后，因此动态端点的 403/415 仍进入统一异常边界和请求完成日志。
@@ -649,7 +649,7 @@ Origin 框架测试同样通过测试程序集 ApplicationPart 注入忽略 Open
 - HTTP：`http://localhost:5043`。
 - HTTPS：`https://localhost:7043`。
 
-Vite 代理和 Kiota 生成默认使用 HTTP 5043，避免本地开发证书成为自动化前提；浏览器直接访问服务端时可以使用 HTTPS 7043。生产部署只允许 HTTPS。
+Vite 代理和 Kiota 生成默认使用 HTTP 5043，避免本地开发证书成为自动化前提；浏览器直接访问服务端时可以使用 HTTPS 7043。生产部署可使用 HTTP 或 HTTPS，不自动强制重定向。
 
 ## 12. ASP.NET Core 托管客户端
 
@@ -696,7 +696,7 @@ Web 源项目不提交客户端 `dist/` 到自身 `wwwroot`；publish 时动态�
 3. Development user-secrets 保存开发秘密。
 4. 生产使用环境变量或部署系统的 Secret Provider。
 
-首版至少校验 Database 配置。未来认证、MCP 或外部服务配置由首次使用它们的业务主题增加。任何 secret 都不能出现在日志、ProblemDetails、OpenAPI example、测试快照或客户端构建变量中。
+首版至少校验 Database 配置。未来认证、内部 Agent 协议或外部服务配置由首次使用它们的业务主题增加。任何 secret 都不能出现在日志、ProblemDetails、OpenAPI example、测试快照或客户端构建变量中。
 
 ## 14. 运行和维护命令
 
@@ -744,7 +744,7 @@ dotnet test Server/RoundTableMeeting.slnx --configuration Debug --no-build
 dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration Release --output artifacts/publish
 ```
 
-发布验证从 `artifacts/publish` 启动 `RoundTableMeeting`，不要依赖 Vite 开发服务器。应用自身 TLS 与反向代理终止 TLS 是两种部署方式：本主题验收使用测试 HTTPS 证书和独立 HTTPS 端口；生产若由反向代理终止 TLS，则由部署配置负责只允许 HTTPS 并正确转发协议头。不得把开发证书信任作为发布验收前提。
+发布验证从 `artifacts/publish` 启动 `RoundTableMeeting`，不要依赖 Vite 开发服务器。发布首先验证无证书 HTTP 能访问页面和同源 API；选择 HTTPS 时再验证应用自身 TLS 或可信代理终止 TLS、转发协议和配置的重定向。不得把 HTTPS、反向代理或开发证书信任作为所有部署的前提。
 
 ## 15. 服务端完成标准
 

@@ -405,7 +405,7 @@ Web 项目按[服务端实现方案](../Server/impl.md)中的 MSBuild Target 在
 - `/openapi/*`、`/scalar/*` 不进入 SPA fallback。
 - 非 GET/HEAD 请求不返回 `index.html`。
 
-发布验证使用 `dotnet publish` 生成目录直接启动服务端，不启动 Vite。生产配置使用 HTTPS；本地 Development profile 可以使用 HTTP。生产冒烟使用测试 HTTPS 证书和独立 HTTPS 端口，或在反向代理终止 TLS 的部署边界验证 HTTPS-only、转发协议头和重定向行为；不依赖开发证书信任。
+发布验证使用 `dotnet publish` 生成目录直接启动服务端，不启动 Vite。发布冒烟分别验证无证书 HTTP 访问和显式 HTTPS 配置；后者使用测试证书或可信代理终止 TLS，核对转发协议和配置的重定向。HTTP 不能被默认重定向到未配置 HTTPS，不依赖开发证书信任。
 
 ## 11. 前端客户端完成标准
 

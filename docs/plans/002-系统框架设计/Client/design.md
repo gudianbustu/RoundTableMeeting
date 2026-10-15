@@ -265,7 +265,7 @@ features/systemStatus/pages/
 - ASP.NET Core 托管输出结果。
 - 页面和 API 使用同一源站。
 - React Router 子路径刷新依赖服务端 SPA 回退。
-- `dotnet publish` 自动包含客户端构建结果；发布环境提供 Node `24.20.0` 和 pnpm `11.24.0`，先精确校验实际工具版本，再使用 `pnpm install --frozen-lockfile`；版本不匹配、依赖安装或构建失败必须使发布失败。生产环境必须使用 HTTPS，localhost 开发环境允许 HTTP。
+- `dotnet publish` 自动包含客户端构建结果；发布环境提供 Node `24.20.0` 和 pnpm `11.24.0`，先精确校验实际工具版本，再使用 `pnpm install --frozen-lockfile`；版本不匹配、依赖安装或构建失败必须使发布失败。部署协议可选 HTTP 或 HTTPS，按实际公开地址配置并验证。
 
 ## 16. 浏览器冒烟调试
 

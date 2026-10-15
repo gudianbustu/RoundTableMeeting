@@ -159,7 +159,7 @@ AccountSeeder 实现 IAccountSeeder：
 
 - Cookie.Name = `RoundTableMeeting.Auth`，Path = `/`。
 - HttpOnly = true，SameSite = Lax。
-- 生产 SecurePolicy = Always，Development/Testing = SameAsRequest，支持现有 HTTP 联调。
+- 各环境 SecurePolicy = SameAsRequest，HTTP 不写 Secure，HTTPS 写 Secure；可信代理转发协议在认证前正确还原，不接受不可信来源伪造协议。
 - 会话级 Cookie，不设置持久化 Expires；认证票据 ExpireTimeSpan 固定 8 小时，SlidingExpiration = false。登录 SignInAsync 固定传入 `AuthenticationProperties { IsPersistent = false }`，8 小时只控制加密票据有效期，不写 Cookie Expires。票据过期后 me 返回 unauthenticated。
 - Claim 只保存 UserId，Claim 类型固定为 `round_table_meeting_user_id`，由 Web 常量维护。
 
@@ -217,7 +217,7 @@ LoginRequest 的 DataAnnotations 字段名通过现有模型键归一化输出�
 3. IAccountSeeder.SeedAsync。
 4. 任一步失败，记录安全摘要并终止，不监听端口。
 
-账号种子不塞入 SQLite 初始化器。请求管道固定为：异常处理、Serilog 请求日志、HTTPS、`UseRouting()`、默认文件与静态文件、SensitiveResponseHeadersMiddleware、OriginValidationMiddleware、`UseAuthentication()`、`UseAuthorization()`，随后映射 OpenAPI、Scalar、Controller、API fallback 和 SPA fallback。必须显式调用 `UseRouting()`，两个 metadata 中间件必须严格位于其后，否则无法读取 endpoint metadata。静态资源在认证与 Origin 之前匿名提供；Origin 中间件只对带元数据端点生效，未知 API 继续得到 route_not_found。
+账号种子不塞入 SQLite 初始化器。请求管道固定为：异常处理、Serilog 请求日志、受信转发协议与按配置启用的 HTTPS 重定向、`UseRouting()`、默认文件与静态文件、SensitiveResponseHeadersMiddleware、OriginValidationMiddleware、`UseAuthentication()`、`UseAuthorization()`，随后映射 OpenAPI、Scalar、Controller、API fallback 和 SPA fallback。必须显式调用 `UseRouting()`，两个 metadata 中间件必须严格位于其后，否则无法读取 endpoint metadata。静态资源在认证与 Origin 之前匿名提供；Origin 中间件只对带元数据端点生效，未知 API 继续得到 route_not_found。
 
 登录和退出 action、SystemController、OpenAPI、Scalar、专用 API 404 fallback 与 SPA fallback 显式使用 `[AllowAnonymous]` 或 endpoint `.AllowAnonymous()`。用户管理增量的写 action 必须在具体 action 上声明方法级 `RequireBrowserOrigin`，不能通过 URL、Controller 名称或 HTTP 方法启发式判断。现有 IntegrationTests `Controllers/TestController.cs` 的 `/__test/application-part`、`/__test/throw`、`/__test/validation` 继续承担 002 ApplicationPart、ProblemDetails、字段校验、traceId 和请求日志回归，Controller 类必须显式标记 `[AllowAnonymous]`，保持原 200/400/500 语义。另新增独立测试控制器 `DefaultAuthorizationTestController`（无授权元数据）验证 FallbackPolicy 401，以及独立 `ForbiddenTestController`（始终失败策略）验证 403 forbidden；二者不得复用现有 TestController，也不得改变 002 夹具的预期。
 
@@ -243,7 +243,7 @@ dotnet run --project Server/RoundTableMeeting/RoundTableMeeting.csproj --launch-
 dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration Release --output artifacts/publish
 ~~~
 
-发布验收前通过部署环境注入：`Authentication__AllowedOrigins__0=https://<publish-host>`、`Authentication__SeedAccounts__0__Username`、`Authentication__SeedAccounts__0__Nickname`、`Authentication__SeedAccounts__0__Password`，以及索引 1 的同类三个键；首次部署或无管理员的旧库升级还须显式注入 `Authentication__InitialAdminUsername`。浏览器实际访问 Origin 必须与 AllowedOrigins 完全一致；测试密码不能写入命令历史或提交文件，实际执行时由受保护脚本或 Secret Provider 注入。
+发布验收前通过部署环境注入：`Authentication__AllowedOrigins__0=<实际公开 HTTP 或 HTTPS Origin>`、`Authentication__SeedAccounts__0__Username`、`Authentication__SeedAccounts__0__Nickname`、`Authentication__SeedAccounts__0__Password`，以及索引 1 的同类三个键；首次部署或无管理员的旧库升级还须显式注入 `Authentication__InitialAdminUsername`。浏览器实际访问 Origin 必须与 AllowedOrigins 完全一致；测试密码不能写入命令历史或提交文件，实际执行时由受保护脚本或 Secret Provider 注入。
 
 ## 11. 完成检查
 

@@ -1,266 +1,68 @@
-# 实时群聊服务端设计
+# 实时群聊与附件服务端设计
 
-## 1. 文档定位
+## 1. 范围与归属
 
-本文定义实时群聊主题在服务端的工程分层、消息持久化、统一追加边界、历史接口、SignalR 实时适配、presence、持久化事件分发和会议删除扩展。主题范围与统一消息契约以[主题总体设计](../design.md)为准；具体应用用例和结果状态以[实时群聊模块设计](Modules/RealtimeChat/design.md)为准。
+依据FR-001、FR-003、FR-008、FR-011、FR-013。本文维护统一消息、提及、分页、附件和发送结果契约；权限读取[004服务端](../../004-会议工作台/Server/design.md)，内部Agent身份由[007](../../007-AI任务连续性与接管/design.md)验证，CLI输出分页由[006](../../006-AI参会/design.md)负责。
 
-本主题在现有模块化单体中扩展消息能力，不新增 AI 专用项目或消息通道。浏览器、未来 MCP 和内部系统消息都必须进入相同的 Application 服务和 Repository 事务边界。
+## 2. 统一消息与事务
 
-## 2. 服务端目标
+Human、Agent、System使用同一消息表和序号。MeetingMessages保存ID、MeetingId、Sequence、作者参与者引用/类型/名称快照、Content、CreatedAtUtc、ClientSubmissionId和nullable ReplyToMessageId。System作者参与者为空，系统消息同样进入历史与CLI同步；系统消息不解析人工提及。
 
-服务端完成后应能够：
+消息原文保留传入正文，不以NFC或Trim改写保存内容；判空可使用Trim。提及比较只规范化候选名称，原文偏移始终指向保存文本。允许仅附件消息；正文和附件都空拒绝。CLI100000输出预算不是存储上限，服务端不能套用为正文截断规则。部署请求体保护须显式返回大小错误，不静默裁剪已接受原文。
 
-1. 以统一实体保存人类、Agent 和系统消息。
-2. 为每个会议分配严格递增且唯一的消息序号；正常追加事务不产生服务端断号，同时对实时投递缺口提供客户端补齐能力。
-3. 把提及解析为稳定参与者引用，与消息在同一事务提交。
-4. 提供完整历史、向前增量和浏览器发送 HTTP API。
-5. 通过 SignalR 向授权成员推送已提交消息和 presence 变化。
-6. 使用持久化追加事件隔离消息事务、实时广播和未来 AI 任务处理。
-7. 在删除屏障建立后拒绝所有消息和实时入口，并可重入地清理新增资源。
+唯一键(MeetingId,Sequence)、(MeetingId,ParticipantId,ClientSubmissionId)保证顺序与提交幂等；System使用内部稳定发生键。相同提交ID与相同正文、附件列表、replyTo返回原消息；不同载荷409 submission_mismatch。不是按正文去重。ReplyTo仅可引用同会议有权读取的消息，不要求被提及或领取任务。
 
-## 3. 项目职责
+追加核心在004短事务内验证活跃收发、查幂等、校验附件和引用、分配序号、写消息/提及/附件绑定/持久化追加事件。并发唯一冲突回滚后新作用域核对；不得无限重试或复用污染跟踪状态。返回成功只表示服务端已保存，不表示接收方已读或工作完成。关闭/退出后结果查询仍可读取已保存提交，新增写入仍拒绝。
 
-| 项目 | 本主题职责 |
-| --- | --- |
-| `RoundTableMeeting.Domain` | `MeetingMessage`、`MessageMention`、`MessageAppendedEvent`、作者类型、内容规则和消息仓储契约 |
-| `RoundTableMeeting.Abstraction` | HTTP/SignalR DTO、结果状态、`IMessageAppendService`、历史服务、事件消费者目录、实时 gate 和 presence 契约 |
-| `RoundTableMeeting.Application` | 作者解析、成员与删除屏障校验、消息追加编排、提及解析、历史投影和幂等结果 |
-| `RoundTableMeeting.Repository.Sqlite` | EF Core 映射、Migration、消息查询、序号分配、事件租取和消费确认 |
-| `RoundTableMeeting` | MessagesController、MeetingChatHub、Cookie/Origin/限流、事件后台服务、presence 注册表、删除实时通知和组合根 |
+## 3. 提及表示
 
-Domain、Application 和 Abstraction 不引用 SignalR、`HubConnectionContext`、`HttpContext`、EF Core 或 SQLite。Hub 和 Controller 不直接持有 DbContext。
+MessageMentions保存MessageId、目标ParticipantId、startOffset、length；偏移采用UTF-16代码单元以沿用Web字符串切片，必须落在完整Unicode字符边界。DTO明确offsetUnit=utf16；CLI字符容量为Unicode标量，与提及偏移不混算。
 
-## 4. 持久化模型
+候选从同会议参与者目录获得，名称比较复用004 Trim/NFC/ToUpperInvariant。显式候选必须与原文@显示名称和目标匹配；无候选时服务端按名称最长匹配及词边界解析。未知名称保留普通正文，不猜测替代对象；同目标重复出现保留范围，筛选按目标ID去重。@只提供关注定位，不生成任务、强制回复或遗漏提醒。
 
-### 4.1 MeetingMessages
+## 4. 历史与发送HTTP契约
 
-字段固定为：`ID`、`MeetingId`、`Sequence`、`AuthorParticipantId` nullable、`AuthorKind`、`AuthorDisplayName`、`Content`、`ClientSubmissionId`、`CreatedAtUtc`。
+浏览器Cookie身份与Agent受信身份共用应用服务；以下为Web路由，Agent映射见006。
 
-约束：
+| 方法与路径 | 输入 | 输出 |
+| --- | --- | --- |
+| GET /api/meetings/{id}/messages | beforeSequence或afterSequence（二选一）、throughSequence?、limit=100（1—200） | items按序升序、first/lastSequence、hasMoreBefore/After、nextBefore/AfterSequence、visibleThroughSequence |
+| POST /api/meetings/{id}/messages | clientSubmissionId、content、mentionCandidates?、attachmentIds?、replyToMessageId? | 201首次/200重放：message、replayed |
+| GET /api/meetings/{id}/submissions/{clientSubmissionId} | 当前发送者身份 | 200：saved及message，或not_found；无权限会议404 |
+| GET /api/meetings/{id}/messages/{messageId} | 无 | 原消息及稳定定位；越界404 |
 
-- `ID` 为 `Guid` 主键。
-- `MeetingId` Restrict 外键指向 `Meetings`；删除协调器显式清理。
-- 参与者作者使用复合 Restrict 外键 `(AuthorParticipantId, MeetingId) -> MeetingParticipants(ID, MeetingId)`；`MeetingParticipants` 为 `(ID, MeetingId)` 建立候选键。`human | agent` 必须非空，`system` 必须为空，数据库不能接受其他会议的参与者作为作者。
-- Domain `AuthorKind` 使用 PascalCase 字符串存储并加 CHECK，只允许 `Human | Agent | System`；传输层使用独立的 `MessageAuthorKind` 枚举，经 camelCase JSON 转换输出 `human | agent | system`，Application 显式映射两种枚举。
-- `(MeetingId, Sequence)` 唯一；`Sequence` 必须在 1 至 `9,007,199,254,740,991` 之间。
-- 参与者消息对 `(MeetingId, AuthorParticipantId, ClientSubmissionId)` 建立 `AuthorParticipantId IS NOT NULL` 过滤唯一索引；系统消息使用 `(MeetingId, AuthorKind, ClientSubmissionId)` 的 `AuthorKind = System` 过滤唯一索引。System 的确定性键由消息 code 与稳定业务发生键共同派生，避免把不同参与者或不同业务事实的同类系统消息错误合并；两个过滤索引都不受复合索引 NULL 语义影响。
-- `AuthorDisplayName` 只由追加事务内解析到的参与者当前显示名称赋值，不接受调用方提交；它是历史快照，不是未来修改参与者名称时需要持续一致的数据库约束。系统消息使用固定服务端名称。
-- 内容长度由 Domain/Application 校验，SQLite CHECK 只作为额外防线。
+MessageDto含messageId、meetingId、sequence、author{participantId?,kind,displayName}、content、mentions、attachments、replyToMessageId?、createdAt。JSON序号保持JavaScript安全整数范围，分配到上限时明确失败，不溢出。
 
-本主题不提供单条删除，因此按 `MAX(Sequence) + 1` 分配不会复用旧序号。分配必须发生在现有 `IMeetingTransactionRunner` 的 `BEGIN IMMEDIATE` 事务中；Repository 提供只在该事务中调用的 `GetNextSequenceAsync`。
+无方向取最新页；before不包含边界，after不包含边界；through包含边界且不得超过服务端授权上界，实际范围取交集。无效游标400；授权空历史200空items。服务端按索引边界查询，不做全量Count。单条完整消息可由HTTP返回，CLI输出分片不改变服务器原文。
 
-### 4.2 MessageMentions
+历史访问不要求在线或会议开放。left和closed按004上界；结果查询not_found只表示该身份该提交未保存，网络错误不能伪装成not_found。客户端超时先保持pending_confirmation，核对后才重发原ID。
 
-字段固定为：`ID`、`MeetingId`、`MessageId`、`TargetParticipantId`、`TargetDisplayName`、`StartOffset`、`Length`。
+## 5. 附件传输、存储与访问
 
-- 使用复合 Restrict 外键 `(MessageId, MeetingId) -> MeetingMessages(ID, MeetingId)` 和 `(TargetParticipantId, MeetingId) -> MeetingParticipants(ID, MeetingId)`；两个 principal 都建立对应候选键。会议清理先删提及再删消息，数据库不能接受跨会议消息或目标参与者。
-- `(MessageId, StartOffset)` 唯一，并对 `(MessageId, StartOffset, Length)` 建立范围一致性约束；Application 保证同一消息内范围不重叠。相同 TargetParticipantId 可以出现多次，供客户端完整高亮。
-- `StartOffset >= 0`、`Length > 1`，范围必须落在规范化后的消息正文内。
-- Mention 只保存结构化目标，不保存 AI 任务状态或投递进度。
+| 方法与路径 | 输入 | 输出 |
+| --- | --- | --- |
+| POST /api/meetings/{id}/attachments | multipart单文件、uploadRequestId | attachmentId、name、sizeBytes、mediaType、staged |
+| GET /api/meetings/{id}/attachments | beforeSequence?、limit=100（1—200） | 授权已绑定附件，文件名/发送者/发送时间/messageId/sequence及继续位置 |
+| GET /api/meetings/{id}/attachments/{attachmentId}/content | download或preview | 授权二进制，按Range返回完整/部分内容 |
 
-### 4.3 MessageAppendedEvents
+默认100 MB明确定义为100000000字节，配置Attachment.MaxFileBytes，在服务启动时读取并校验正数；变更重启生效。Web/CLI通过能力响应取得实际bytes与展示单位，超限413 attachment_too_large并返回实际limitBytes。不能只相信Content-Length，流式累计强制上限。任意扩展名均可上传，文件名只作为显示与下载建议，存储使用随机ID键，禁止路径拼接穿越。
 
-字段固定为：`ID`、`MeetingId`、`MessageId`、`Sequence`、`OccurredAtUtc`。
+二进制保存到配置的数据目录（不置于公开wwwroot），元数据保存Attachment表：ID、MeetingId、UploaderParticipantId、UploadRequestId、OriginalName、SizeBytes、MediaType、StorageKey、State、MessageId(nullable)。唯一(MeetingId,UploaderParticipantId,UploadRequestId)；消息绑定时确认同会议、本人上传且可用。写临时文件、校验完成原子改名后才标staged；提交消息事务绑定为attached。失败重试可查询同上传ID，内容不一致409 upload_mismatch。
 
-事件与消息在同一事务创建。使用复合 Restrict 外键 `(MessageId, MeetingId, Sequence) -> MeetingMessages(ID, MeetingId, Sequence)`，消息表建立对应候选键；`MessageId` 仍唯一，确保一条消息只有一个追加事件，并防止事件的会议或序号与消息不一致。事件载荷由处理时查询消息读模型生成，不复制正文到第二份 JSON；删除会议时事件随消息清理。
+未绑定临时上传不属于会议已发送附件，设计保留24小时供重试；后台仅清理超时未绑定对象，并在同一状态条件下与绑定互斥。已绑定附件随消息长期保存，不自动过期。磁盘文件/数据库失败返回明确错误，不能创建指向未完成文件的成功消息。
 
-### 4.4 MessageEventDeliveries
+下载、预览和列表均从所属消息执行004历史权限，不以知道attachmentId或被@作为授权。禁止公开永久文件URL绕过权限。Content-Disposition安全编码；默认attachment及nosniff。安全光栅图片可内嵌，PDF采用隔离预览，HTML/SVG/可执行及无法安全预览类型一律下载。无OCR、文档解析、文件夹、版本或必读状态。CLI下载到明确本地路径，已存在文件要求显式覆盖参数。
 
-每个注册消费者对事件有独立 delivery：`ID`、`EventId`、`ConsumerName`、`State`、`AttemptCount`、`AvailableAtUtc`、`LeaseId` nullable、`LeaseExpiresAtUtc` nullable、`CompletedAtUtc` nullable。
+## 6. 实时、在线与事件
 
-- `(EventId, ConsumerName)` 唯一。
-- 状态固定为 `Pending | Leased | Completed | Suspended`；失败回到 Pending 并增加 AttemptCount，达到 `EventRetryAlertAfterAttempts` 后转为 Suspended、记录结构化告警并等待 `IMessageEventRecoveryService.ResumeAsync` 显式恢复，不进行无限热重试。Suspended 不是消息业务状态，恢复后仍从同一 delivery 继续。
-- 当前主题注册 `realtime-broadcast-v1` 消费者；后续 AI 主题注册自己的版本化消费者名。
-- 新增消费者只为注册之后的新事件创建 delivery，不回溯旧事件；移除或重命名消费者前必须先迁移、完成或清理其未完成 deliveries，不能让 Dispatcher 遇到无法解析的 ConsumerName。需要回溯或停用时必须由对应主题明确设计迁移。
-- delivery 的租约和重试只是后台分发基础，不等同于 AI 连接租约或 AI 回复任务状态。
+SignalR沿用/api/meetings/chat，同源认证。SubscribeMeeting返回授权、高水位和onlineParticipantIds；活跃订阅只允许active+joined。消息事件携带meetingId、messageId、sequence，客户端按ID去重，丢失后通过HTTP补齐。meetingChanged、meetingClosed、membershipLeft携带revision；关闭/退出终止对应活跃订阅，客户端转历史模式而非删除历史。
 
-该结构保证实时广播失败不会影响消息事务，未来 AI 任务创建也不会因为进程在消息提交后崩溃而永久漏掉提及。
+浏览器多个有效连接聚合为online，无连接为offline；Agent在线由007心跳/探测提供。不展示最后活跃时间、思考、任务状态或已读。Web连接重建先缓冲事件、订阅获高水位、补齐历史再合并；旧会议和旧generation回调丢弃。
 
-### 4.5 Migration
+持久化消息事件和消费者投递与消息同事务；Dispatcher每次独立DI scope，重试可重复，消费者幂等。消息事件用于通知，历史原文是事实。CLI后台对全部类型消息按序同步，不能只投递@。关闭后停止活跃通知但仍保留历史；不生成AI回复任务、协作链或任务派生器。
 
-Migration 命名建议为 `AddRealtimeChat`，同时更新 DbContext、Snapshot 和 SQLite 索引。Migration 不写示例消息，不为已有参与者补造系统消息，也不把 Demo 数据迁入正式表。
+## 7. 错误、安全与迁移
 
-## 5. 消息内容与提及解析
+参数错误400 validation_failed，提交内容冲突409 submission_mismatch，生命周期错误按004，未授权资源404。服务错误不暴露堆栈、路径、正文、邀请码或令牌。消息与附件原文不进入普通日志。写入沿用Origin和实际部署协议配置；HTTP可用不表示跳过身份/成员授权。
 
-### 5.1 内容规则
-
-`MeetingMessage.NormalizeContent`：
-
-1. null 按空值处理。
-2. 转为 Unicode NFC。
-3. 去除首尾空白，保留内部空格、换行和标点。
-4. 规范化后长度必须为 1 至配置 `MaxContentLength`，默认 16,384 个 UTF-16 代码单元。
-
-配置节固定为：
-
-~~~json
-{
-  "RealtimeChat": {
-    "MaxContentLength": 16384,
-    "HistoryPageSize": 100,
-    "MaxHistoryPageSize": 200,
-    "PresenceDisconnectGraceSeconds": 5,
-    "GateCloseTimeoutSeconds": 5,
-    "EventDispatcherBatchSize": 50,
-    "EventLeaseSeconds": 30,
-    "EventRetryBaseSeconds": 2,
-    "EventRetryMaxSeconds": 300,
-    "EventRetryAlertAfterAttempts": 10,
-    "SendRateLimit": {
-      "WindowSeconds": 60,
-      "PerUserLimit": 120,
-      "PerParticipantLimit": 60,
-      "PerSourceLimit": 200
-    }
-  }
-}
-~~~
-
-所有值必须为正数，默认页大小不能超过最大页大小，退避最大值不能小于基础值，Options 使用 `ValidateOnStart`。
-
-### 5.2 提及解析器
-
-`IMessageMentionParser` 接收规范化正文和当前会议全部参与者摘要，返回每一次合法提及的目标与文本范围；业务消费者再按 TargetParticipantId 去重任务目标：
-
-- 只识别 ASCII `@` 起始标记。
-- 在每个 `@` 后对正文候选片段执行 NFC 后 `ToUpperInvariant()`，再与参与者已保存的 `NormalizedDisplayName` 使用 `StringComparison.Ordinal` 做最长匹配；该函数与目录 004 的名称唯一约束完全一致，不使用当前文化或 `OrdinalIgnoreCase` 的另一套规则。
-- 相同长度且规范化结果冲突理论上已被数据库名称唯一约束阻止；若读取到异常数据，解析器不猜测目标并记录安全诊断。
-- 目标名称结束后必须是正文末尾、空白或 Unicode 标点；否则视为普通文本。
-- 同一目标多次出现时保存每个合法且不重叠的范围；多个目标分别保存。未来任务消费者按 TargetParticipantId Distinct 去重业务目标。
-- 系统消息跳过提及解析；参与者消息无论作者是 Human 还是 Agent 都执行相同解析。
-
-浏览器可提交可选候选范围，但范围必须相对请求中实际发送的 NFC+Trim 正文计算；Application 对正文执行同一规范化后重新读取目标参与者并验证范围。候选范围不得重叠。候选无效时不信任目标 ID，继续用服务端解析器处理正文；候选元数据错误本身不使普通文本消息失败。
-
-## 6. Application 与事务
-
-### 6.1 浏览器作者解析
-
-`HumanMessageAuthorResolver` 使用 `ICurrentUserContext.UserId` 查询 `MeetingId + UserId` 的 Human 参与者。找不到 Active 会议或参与关系时统一返回 `MeetingNotFound`。Controller 不能从请求接收作者参与者 ID。
-
-后续 MCP 主题实现 `AgentMessageAuthorResolver`，根据受信连接会话解析绑定的 Agent 参与者；两种 resolver 最终都生成内部 `ResolvedMessageAuthor`。Human/System 入口由公开 `IMessageAppendService` 自行取得 gate 和事务；Agent 入口由主题五的受信适配器调用事务敏感的内部 `IResolvedMessageAppendCore`（即统一 `AppendResolvedAsync` 核心），不经过会自行开启事务的公开入口。两条路径共享同一消息、提及、Sequence、幂等、事件和 delivery 算法。
-
-### 6.2 追加事务
-
-事务内固定执行：
-
-1. `FindActiveByIdAsync` 和作者参与者复查。
-2. 对非空正文执行 NFC+Trim，得到用于幂等比较的规范化正文；空值或空白立即返回 ValidationFailed。
-3. 按 `MeetingId + AuthorParticipantId + ClientSubmissionId` 查询重放，并用规范化正文执行 Ordinal 比较；相同返回 Replayed，不同返回 SubmissionMismatch。幂等未命中后才执行最大长度校验、读取参与者列表并解析提及。
-4. 获取下一个 `Sequence`。
-5. 从 `IMessageEventConsumerCatalog` 读取当前已注册的稳定消费者名，为每个名称注册独立 delivery；目录必须拒绝空名、重复名和运行期变化。
-6. 由 TransactionRunner 唯一调用一次 `IUnitOfWork.CommitAsync` 并提交事务。
-
-幂等重放返回原 `MessageDto` 和 `Replayed` 状态，不再次发布事件。相同幂等标识但正文不同返回 `SubmissionMismatch`，防止客户端误把旧标识用于新消息。
-
-### 6.3 历史查询
-
-历史读取使用 NoTracking 投影，严格按 `Sequence ASC` 返回。`throughSequence` 若提供则作为包含式上界，必须大于等于 0。查询模式：
-
-- 无方向游标：返回 `throughSequence` 或当前最后序号以内的最新一页，但响应 items 仍按升序排列。
-- `beforeSequence`：返回目标序号之前最近一页，供加载更早历史。
-- `afterSequence`：返回目标序号之后、`throughSequence` 以内最早一页，供重连补齐。
-
-请求同时带两个方向游标、`beforeSequence + throughSequence`、游标小于 0、`throughSequence < afterSequence` 或 limit 越界时返回 `validation_failed`。无方向最新页和 before 页的 `HasMoreAfter` 固定为 false；只有 after+through 追平模式计算 HasMoreAfter。响应包含继续向前或向后请求所需游标，不使用数据库 offset 分页。
-
-## 7. HTTP API
-
-`MeetingMessagesController` 使用 `[ApiController]`、`[Authorize]`、`[Route("api/meetings/{meetingId:guid}/messages")]` 和 `[NoStoreResponse]`。
-
-| 方法 | 路径 | 成功 | Origin/正文 |
-| --- | --- | --- | --- |
-| `GET` | `/api/meetings/{meetingId}/messages` | `200 MessagePageDto` | 无 |
-| `POST` | `/api/meetings/{meetingId}/messages` | 首次 `201`、重放 `200` | `RequireBrowserOrigin(true)` |
-
-POST 请求：`clientSubmissionId`、`content` 和可选 mention candidates。`clientSubmissionId` 必须为非空 Guid。成功响应固定为 `SubmitMessageResultDto { message, replayed }`，不回显未验证候选元数据；Application 的 `MessageOperationResult<MessageDto>` 只在内部表达状态，Controller 负责映射为该传输 DTO。
-
-错误契约：
-
-- `400 validation_failed`；
-- `401 unauthenticated`；
-- `404 meeting_not_found`；
-- `409 message_submission_mismatch`；
-- `409 message_append_conflict`；
-- `415 unsupported_media_type`；
-- `429 message_send_rate_limited`，含 `Retry-After`；
-- `500 internal_error`。
-
-OpenAPI 必须声明 200/201 双成功、字符串作者枚举、long sequence、mentions 数组和错误映射。Kiota 生成目录继续使用 UTF-8 无 BOM、CRLF，并由现有 staging 流程替换。
-
-## 8. SignalR
-
-### 8.1 Hub 路由与认证
-
-Hub 路由固定为 `/hubs/meeting-chat`，使用现有 Cookie Authentication 和默认授权策略，不允许匿名连接。`MapHub` 必须显式附加 `RequireBrowserOriginAttribute(allowMissingOriginForGet: true)` 与 `NoStoreResponseAttribute` endpoint metadata：negotiate 和写入请求必须提供白名单 Origin；浏览器同源 SSE/Long Polling GET 可按规范缺失 Origin，但显式外部 Origin 仍返回 403。Origin 和敏感响应头中间件同时覆盖 negotiate、WebSocket、SSE 和长轮询请求；不能只在 Hub 方法内部检查。生产同源托管；开发由 Vite 代理 `/hubs` 和 WebSocket。首版不开放跨源 credentialed CORS。
-
-### 8.2 订阅方法
-
-`MeetingChatHub.SubscribeMeeting(meetingId)`：
-
-1. 从当前用户上下文取得 UserId。
-2. 通过 Active 会议和 Human 参与关系校验。
-3. 一个连接只绑定一个会议；切换时先离开旧组并更新 presence 计数。
-4. 加入名称仅由服务端生成的 `meeting:{meetingId:N}` 组。
-5. 返回 `MeetingChatSubscriptionDto`：`onlineParticipantIds`（`IReadOnlyList<Guid>`，JSON 为 GUID 字符串数组）和 `highWatermarkSequence`（`long`）。缺席的会议参与者视为 offline，空历史高水位固定为 0。该高水位与先加入组的顺序共同建立有界补齐边界。主题五以向后兼容方式增加 `agentActivities`，不改变前两个字段的语义。
-
-`UnsubscribeMeeting` 和 `OnDisconnectedAsync` 幂等释放绑定。Subscribe 共享租约只在 Active/成员复查、加入组、登记 presence、读取高水位的单次方法调用期间持有，方法返回前释放，连接存续期不持有 gate 租约。客户端不能自选组名、参与者 ID 或作者类型。已认证但非成员或 Deleting 会议的 Hub 调用抛出只含稳定 code `meeting_not_found` 的 `HubException`，不返回会议存在性、参与者资料或内部 detail。
-
-### 8.3 实时事件
-
-事件使用小写 camelCase 方法名和结构化 DTO：
-
-- `messageAppended(MessageDto)`；
-- `participantPresenceChanged(ParticipantPresenceDto)`；
-- `meetingDeleted(MeetingDeletedDto)`。
-
-Hub 不承担消息历史、发送确认或恰好一次投递。单条事件可重复；事件顺序不能替代 `MessageDto.Sequence`。
-
-## 9. 持久化事件分发
-
-`MessageEventDispatcherService` 为 BackgroundService。`IMessageEventConsumerCatalog` 在应用启动时从消费者注册描述符建立不可变的 `ConsumerName -> ServiceType` 目录，验证名称非空、唯一且版本化；ConsumerName 只存在于描述符/delivery，不在消费者实例中重复声明。Catalog 不持有消费者实例。消息追加只依赖目录提供的名称集合，Dispatcher 每次消费在独立 DI scope 中按 ServiceType 解析具体消费者，避免把 Scoped 消费者提升为 Singleton：
-
-1. 启动和周期扫描 `(Pending AND AvailableAtUtc <= now)` 或 `(Leased AND LeaseExpiresAtUtc <= now)` 的 delivery。
-2. 每批在短事务中租取有限数量，设置新的 LeaseId/到期时间。
-3. 在事务外调用注册消费者。
-4. 成功后用 LeaseId 条件更新为 Completed；更新 0 行且事件或 delivery 已被会议删除清理时视为终态完成，LeaseId 已更换则视为当前 worker 失去所有权。失败增加 AttemptCount，使用有上限的指数退避设置 AvailableAtUtc；达到告警阈值后记录结构化告警并降低重试频率，但不进入永久死信状态，以保留恢复能力。
-5. 服务端重启后租约过期可再次投递。
-
-`RealtimeMessageBroadcastConsumer` 查询完整 `MessageDto` 后调用 `IHubContext<MeetingChatHub>`。即使事件在无人在线时被标记完成也不丢失事实，后来的客户端通过历史 API 读取。重复广播由客户端去重。
-
-消费者异常日志只记录 EventId、MessageId、MeetingId、ConsumerName、AttemptCount 和异常类型，不记录正文。
-
-## 10. Presence
-
-`MeetingPresenceRegistry` 为 Singleton 进程内注册表，键统一使用 ParticipantId；本主题注册 Human 浏览器连接，后续 MCP 主题可注册 Agent 连接而不改变 presence DTO：
-
-- 映射 connectionId -> meetingId/participantId；
-- 维护 participantId 的活动连接集合；
-- 首连接触发 online；最后连接断开后建立可取消的宽限期任务，新连接到来时取消旧任务，任务到期后在同步边界内复查仍为 0 才广播 offline；
-- 相同参与者另一标签页仍在线时不广播 offline；
-- 会议删除时按 meetingId 枚举连接并发送删除事件，随后从组移除或主动终止。
-
-服务端进程重启不恢复 presence；这是短暂连接状态，不是数据库事实。单实例首版不引入 Redis backplane，若未来扩展多实例必须同时重做 presence、SignalR groups 和删除连接终止测试。
-
-## 11. 删除协调扩展
-
-现有创建者删除用例和 `MeetingDeletionRecoveryService` 共同扩展删除流程，统一使用 `IMeetingRealtimeGate`：
-
-1. `MeetingWorkspaceService.DeleteAsync` 请求会议级独占关闭租约；请求立即进入 writer-priority Closing 并拒绝新共享租约，最多等待 `GateCloseTimeoutSeconds`。超时返回 `409 meeting_delete_busy`、释放 Closing，会议保持 Active；独占成立后才开启短写事务，确认名称、权限或事务失败时 Dispose 释放租约，成功后调用 `CommitClosed()` 并通知删除恢复器。
-2. `MeetingDeletionRecoveryService` 收到 signal 或扫描到 Deleting 后调用 `IMeetingRealtimeTermination`，向当前注册连接发送 `meetingDeleted` 并阻止/移除会议组连接；失败保持 Deleting 并在后续恢复轮次重试。服务重启后旧连接已经消失，客户端以历史/详情 404 作为兜底。
-3. 在新的 `IMeetingTransactionRunner` 事务内按外键顺序删除 `MessageEventDeliveries`、`MessageAppendedEvents`、`MessageMentions`、`MeetingMessages`。
-4. 再执行会议工作台已有的参与者、创建回执和会议清理。
-
-清理查询全部按 MeetingId，重复执行时不存在的数据视为完成。聊天事件消费者只在单次读消息 DTO + 广播期间持有共享租约；删除在等待存量共享租约时尚未开启 SQLite 写事务，独占成立后才提交短写事务，避免 gate 与数据库锁反向等待。删除租约 CommitClosed 后不再授予新共享租约。物理清理完成后调用 `Forget(meetingId)` 释放内存字典项；进程重启后 gate 默认开放，但第一次 Active 检查会拒绝数据库中仍为 Deleting 的会议。
-
-## 12. 错误、日志与安全
-
-- 消息正文不进入 Serilog 请求属性、ProblemDetails、异常消息或指标标签。
-- Hub 方法错误使用稳定 code 返回给调用方，不发送内部堆栈。
-- 消息 API 继续经过 SensitiveResponseHeadersMiddleware；SignalR 协商响应不缓存。
-- SignalR negotiate、WebSocket 和长轮询握手必须校验浏览器 Origin 是否属于 `Authentication.AllowedOrigins`；仅关闭 CORS 不足以替代带 Cookie WebSocket 的 Origin 校验。
-- POST 发送先经过 Origin、Authentication 和资源级限流，再模型绑定和 Application；未认证请求不消耗参与者配额。
-- 来源地址只使用可信代理处理后的 RemoteIpAddress；未知转发头不可信。
-- 客户端正文按普通文本输出；服务端不接受 HTML 渲染模式。
-
-## 13. 服务端非目标
-
-本主题服务端不实现 MCP 工具、Agent 连接、AI 回复任务、上下文游标、任务租约、循环保护、未读状态、消息编辑删除、全文检索和附件。`MessageEventDeliveries` 是通用持久化后处理基础，不提前包含任何 AI 状态机字段。
+迁移保留既有消息ID、顺序、作者与提及事实，新增附件和可选回复关联；旧已存规范化正文无法还原成未保存原文，不能宣称恢复。停用物理删除协调和AI任务消费者，既有消息事件保留处理事实。真实SQLite约束、文件故障和旧库副本迁移在后续实施验证；不以文档说明替代执行。

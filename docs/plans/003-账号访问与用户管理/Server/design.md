@@ -93,7 +93,7 @@ Cookie 至少使用以下约束：
 
 - `HttpOnly = true`；
 - `SameSite = Lax`；
-- 生产环境 `SecurePolicy = Always`；
+- Cookie `SecurePolicy = SameAsRequest`，依据实际公开请求协议决定 Secure；使用可信代理终止 TLS 时须在认证前处理受信转发协议，不能仅按 Production 环境强制 Secure；
 - 明确的认证 Cookie 名称和根路径；
 - 本主题采用会话级 Cookie，不设置长期持久化登录作为产品承诺。
 

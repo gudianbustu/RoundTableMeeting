@@ -1,17 +1,9 @@
-# 会议导航组件实现方案
+# 会议导航实现计划
 
-## 1. 文件和输入
+按[组件设计](design.md)更新现有features/meetingWorkspace/components/MeetingNavigation.tsx及其模块调用方；复用既有Ant Design组件、受控输入和错误适配。
 
-文件为 `features/meetingWorkspace/components/MeetingNavigation.tsx`。组件接收 `meetings`、`selectedMeetingId`、`listState`、`onSelectMeeting`、`onCreate` 和 `onJoin`，不调用 API。
+1. 先更新视图类型与props，再修改渲染及操作回调，不让组件直接访问Kiota生成Client。
+2. 实现设计中的权限、加载/失败/取消与成功状态；切会时旧回调不得影响新会议。
+3. 覆盖实际用户操作、拒绝边界和键盘可访问性，接入[主题测试计划](../../../testPlan.md)；不把静态字符串断言当作完整验收。
 
-## 2. 渲染
-
-列表项显示会议名称、当前用户显示名称、首次加入时间和创建者文字标记。当前项使用 `aria-current="page"`。不显示会议码、未读、消息摘要、参与者数量或在线状态。
-
-## 3. 响应式和操作
-
-桌面固定侧栏宽度，移动端折叠为可展开选择区。创建和加入使用明确文字按钮；列表选择使用链接/按钮语义。长名称换行，不改变列宽。
-
-## 4. 测试
-
-覆盖空列表、loading、error、选中项、创建/加入回调、移动断点和长名称，对应 `MW-V001`、`MW-V002`、`MW-V025`。
+当前仅计划，未修改组件代码。

@@ -1,0 +1,183 @@
+@startuml RoundTableCollaboration
+!include ddd_lib.puml
+
+' 目标模型，非数据库表清单；004拥有Meeting及参与关系，005拥有消息与已绑定附件，007拥有连接。
+' 需求覆盖：基础5.1/5.10/5.12/5.13；FR-001/003/005/009/011/013/015/016。
+' 会议与成员状态必须同事务判断；消息独立追加，通过短事务协调，不加载无限历史聚合图。
+' 附件暂存是005技术资源，图中Attachment仅表示已绑定消息的附件。
+' CLI原文副本/向量索引是006技术读模型，不形成第二套业务事实或回复任务。
+
+Person('human','人类参与者')
+Service('agent','外部 Agent')
+Aggregate('MeetingAggregate','会议聚合')
+Entity('Meeting')[
+    会议
+    --属性--
+    标识(Id Guid)
+    名称(Name String(128))
+    背景(Description String(2000)?)
+    创建者(CreatorUserId Guid)
+    状态(State MeetingState)
+    关闭历史上界(ClosedThroughSequence Long?)
+    --规则--
+    # 仅创建者编辑或关闭；关闭不删除历史
+]
+Entity('Participant')[
+    会议参与者
+    --属性--
+    标识(Id Guid)
+    类型(Type ParticipantType)
+    显示名(DisplayName String(64))
+    参与状态(State MembershipState)
+    退出历史上界(LeftThroughSequence Long?)
+    --规则--
+    # 断线不退出；创建者不能退出；明确重入才扩大历史范围
+]
+Meeting .. MeetingAggregate
+Participant .. MeetingAggregate
+Meeting .. Participant : owns
+Enum('MeetingState')[
+    会议状态
+    --属性--
+    开放(Active)
+    关闭(Closed)
+]
+Enum('MembershipState')[
+    参与状态
+    --属性--
+    已加入(Joined)
+    已退出(Left)
+]
+Enum('ParticipantType')[
+    参与者类型
+    --属性--
+    人类(Human)
+    Agent(Agent)
+]
+Command('CreateMeeting','创建会议')
+Command('JoinMeeting')[
+    明确加入或重新加入
+    --规则--
+    # 有效会议码与开放会议；复用既有身份；重入恢复完整历史
+]
+Command('EditMeeting','创建者修改会议信息')
+Command('CloseMeeting')[
+    创建者移除会议
+    --规则--
+    # 关闭全部交流，保留消息与附件；此前退出者范围不扩大
+]
+Command('LeaveMeeting')[
+    非创建者退出
+    --规则--
+    # 固定退出上界；其他人继续交流；创建者请求拒绝
+]
+human --> CreateMeeting
+human --> JoinMeeting
+agent --> JoinMeeting
+human --> EditMeeting
+human --> CloseMeeting
+human --> LeaveMeeting
+agent --> LeaveMeeting
+CreateMeeting .. Meeting
+JoinMeeting .. Participant
+EditMeeting .. Meeting
+CloseMeeting .. Meeting
+LeaveMeeting .. Participant
+DomainEvent('ParticipationChanged','会议或参与范围已改变')
+CloseMeeting ..> ParticipationChanged : send
+LeaveMeeting ..> ParticipationChanged : send
+' 该事实用于让活动连接停止收发并刷新列表/历史范围，不宣称外部模型停止。
+
+Aggregate('MessageAggregate','消息聚合')
+Entity('Message')[
+    消息
+    --属性--
+    标识(Id Guid)
+    会议(MeetingId Guid)
+    顺序(Sequence Long)
+    发送者(ParticipantId Guid?)
+    原文(Content String)
+    回复引用(ReplyToMessageId Guid?)
+    提交标识(ClientSubmissionId Guid)
+    --规则--
+    # Human/Agent/System统一顺序；不产生强制回复任务
+]
+Entity('Attachment')[
+    已绑定附件
+    --属性--
+    标识(Id Guid)
+    文件名(Name String)
+    字节数(SizeBytes Long)
+    --规则--
+    # 长期随消息保留；访问范围与消息一致
+]
+Message .. MessageAggregate
+Attachment .. MessageAggregate
+Message .. Attachment : owns
+Message ..> Meeting : references
+Message ..> Participant : author
+Command('SendMessage')[
+    发送正文或附件
+    --规则--
+    # 开放且已加入；稳定提交标识去重；与关闭退出按提交先后判定
+]
+human --> SendMessage
+agent --> SendMessage
+SendMessage .. Message
+DomainEvent('MessageSaved','消息已保存')
+SendMessage ..> MessageSaved : send
+' 消息已保存用于传播与补读，不等于对方已读或工作完成。
+Query('ReadHistory')[
+    读取历史与附件
+    --规则--
+    # 退出止于退出上界，关闭不扩大此前退出者范围
+]
+Query('SearchHistory')[
+    CLI关键词与本机向量混合检索
+    --规则--
+    # 授权原文可重复查；向量与摘要不能替代原文
+]
+human --> ReadHistory
+agent --> ReadHistory
+agent --> SearchHistory
+ReadHistory .. Message
+SearchHistory .. Message
+
+Aggregate('ConnectionAggregate','Agent连接聚合')
+Entity('Connection')[
+    连接
+    --属性--
+    参与者(ParticipantId Guid)
+    代次(Generation Long)
+    状态(State String)
+    连续接收位置(ReceivedThroughSequence Long)
+    --规则--
+    # 单一有效连接；接收位置不是已读；迟到旧代次无权覆盖
+]
+Connection .. ConnectionAggregate
+Connection ..> Participant : references
+Command('Reconnect')[
+    恢复连接
+    --规则--
+    # 重启后显式调用；有效占用先探测，不自动抢占；不恢复退出关系
+]
+Command('Takeover')[
+    显式接管Agent
+    --规则--
+    # 新代次替换旧连接，不扩大成员历史权限
+]
+Command('Disconnect')[
+    主动断开
+    --规则--
+    # 停止本会话心跳接收与自动重连，保留参与关系
+]
+Query('ProbeConnection','主动探测CLI连接')
+agent --> Reconnect
+agent --> Takeover
+agent --> Disconnect
+agent --> ProbeConnection
+Reconnect .. Connection
+Takeover .. Connection
+Disconnect .. Connection
+ProbeConnection .. Connection
+@enduml

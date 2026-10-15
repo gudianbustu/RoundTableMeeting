@@ -228,7 +228,7 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 3. 将 `dist/` 复制到 ASP.NET Core 发布输出的 `wwwroot/`，前端安装或构建失败时终止 publish。
 4. 配置静态文件、Controller、OpenAPI、Scalar 和 SPA fallback 的路由顺序。
 5. fallback 只处理页面导航请求，明确排除 `/api`、`/openapi`、`/scalar` 和其他服务端端点。未知 `/api/*` 返回 ProblemDetails 404。
-6. 在发布目录用生产配置启动服务，确认 React Router 子路径刷新、同源 API 和 HTTPS 行为。
+6. 在发布目录按实际 HTTP 或 HTTPS 配置启动服务，确认 React Router 子路径刷新、同源 API、Origin 与 Cookie 行为。
 
 输出：可以由 ASP.NET Core 单独运行的发布目录。
 
@@ -291,4 +291,4 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 10. 独立 Chrome CDP 冒烟检查能够读取目标页面的 DOM、控制台、网络结果和截图。
 11. Cookie 写请求 Origin 元数据、中间件顺序、方法不匹配旁路、403/415 错误契约和统一 ProblemDetails 写入已通过 I-018 至 I-026；首个 Cookie 消费方直接复用该冻结形态，并在自身主题中完成业务 operation 的 OpenAPI 与认证回归。
 
-账号、会议、群聊、MCP Agent 和 AI 回复必须留给总体设计中后续业务主题实现，不能为了让框架页面显得完整而提前加入模拟实现。
+账号、会议、群聊、官方 CLI Agent 和通信恢复必须留给总体设计中后续业务主题实现，不能为了让框架页面显得完整而提前加入模拟实现。

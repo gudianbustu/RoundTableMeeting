@@ -4,7 +4,7 @@
 
 本文定义 002 系统框架主题如何被自动化测试、契约测试、构建验证和浏览器手工验收。实现步骤见[总体实现方案](impl.md)，服务端细节见[Server/impl.md](Server/impl.md)，客户端细节见[Client/impl.md](Client/impl.md)。
 
-测试方案只验证框架能力和系统状态页面，不验证账号、会议、群聊、MCP Agent 或 AI 回复。后续主题必须复用本方案中的构建、路由、错误和数据库回归基础，并为新增业务增加自己的测试文档。
+测试方案只验证框架能力和系统状态页面，不验证账号、会议、群聊、官方 CLI Agent 或通信恢复。后续主题必须复用本方案中的构建、路由、错误和数据库回归基础，并为新增业务增加自己的测试文档。
 
 ## 2. 测试目标
 
@@ -389,7 +389,7 @@ pnpm build
 dotnet publish Server/RoundTableMeeting/RoundTableMeeting.csproj --configuration Release --output artifacts/publish
 ~~~
 
-启动 publish 输出，执行 P-002 至 P-011 和发布环境 CDP 冒烟。发布 HTTPS 验收使用测试证书和独立 HTTPS 端口；生产由反向代理终止 TLS 时，另行验证 HTTPS-only 和转发协议头配置。
+启动 publish 输出，执行 P-002 至 P-011 和发布环境 CDP 冒烟。发布验收覆盖无证书 HTTP 与显式 HTTPS 配置：HTTP 不被强制跳转，HTTPS 使用测试证书或可信代理并核对转发协议；不把反向代理作为必需前置。
 
 ### 16.3 002 完成门
 

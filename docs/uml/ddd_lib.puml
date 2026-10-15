@@ -1,0 +1,50 @@
+' ============================================================
+' ddd_lib.puml - DDD 事件风暴建模库入口文件
+' ============================================================
+'
+' 【文件说明】
+' 此文件是 PlantUML DDD 建模的库入口文件，定义了：
+' - 事件风暴元素宏（Command, Event, Aggregate, Policy 等）
+' - 渲染主题和样式配置
+'
+' 【依赖说明】
+' 此文件依赖 plantuml-libs 库，部署在远程渲染服务器中。
+'
+' 【使用方式】
+' 在 .wsd 文件头部引用：
+'   !include ddd_lib.puml
+'
+' 【部署位置】
+' 此文件部署在远程 PlantUML 渲染服务器的 include 路径中。
+' ============================================================
+
+!global $INCLUSION_MODE="remote"
+!global $LIB_BASE_LOCATION="plantuml-libs/distribution"
+!include $LIB_BASE_LOCATION/bootstrap.puml
+include('eventstorming/bootstrap')
+
+' 事件风暴元素
+include('eventstorming/Element/FacadeCommand')
+include('eventstorming/Element/Command')
+include('eventstorming/Element/Comment')
+include('eventstorming/Element/Enum')
+include('eventstorming/Element/DomainEvent')
+include('eventstorming/Element/Aggregate')
+include('eventstorming/Element/Entity')
+include('eventstorming/Element/Saga')
+include('eventstorming/Element/Service')
+include('eventstorming/Element/Query')
+include('eventstorming/Element/Person')
+include('eventstorming/Element/Policy')
+include('eventstorming/Element/ReadModel')
+include('eventstorming/Element/UserInterface')
+
+' 自定义数据元宏
+!define DataElement(code, name) <i><b><color:DarkMagenta>name </color></b></i>
+!define DataElement(name) <i><b><color:DarkMagenta>name </color></b></i>
+
+' 渲染配置
+!pragma svginteractive true
+!theme sunlust
+skinparam wrapWidth 500
+skinparam maxMessageSize 150
