@@ -2,11 +2,11 @@
 
 ## 1. 职责与行为
 
-展示会议名称、主题/背景及可用操作；创建者可编辑和移除，非创建者可退出，已加入人类可邀请。历史模式说明只读原因。移除确认解释关闭全体交流且保留历史，输入会议名；退出确认说明仅影响本人。创建者退出错误不能转换为移除。
+展示会议名称、主题/背景及可用操作；创建者可编辑和移除，非创建者可退出，已加入人类可邀请。历史模式说明只读原因。移除提示删除全部公开记录、私聊与附件，所有人不可再查看；沿用输入会议名确认，不加确认步骤；退出确认说明仅影响本人。创建者退出错误不能转换为移除。
 
 ## 2. 输入与协作
 
-name、description、permissions、lifecycleState、membershipState及onEdit/onClose/onLeave/onInvite。仅消费权限不推断管理员额外能力；编辑表单由模块带expectedRevision提交。
+name、description、permissions、lifecycleState、membershipState及onEdit/onDelete/onLeave/onInvite。仅消费权限不推断管理员额外能力；编辑表单由模块带expectedRevision提交。
 
 ## 3. 边界
 

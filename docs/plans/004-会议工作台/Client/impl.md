@@ -10,7 +10,7 @@ C01：扩展feature API适配和模块视图模型，分离活跃/历史列表�
 
 C02：按[页面计划](Pages/MeetingWorkspace/impl.md)接入现有AuthenticatedLayout与/meetings/:meetingId路由。history模式读取同会议授权历史，不另建平行会议。
 
-C03：更新MeetingNavigation、MeetingHeader、ParticipantList、CreateMeetingDialog、JoinMeetingDialog及InviteMeetingDialog的既有组件文档。优先保留桌面/移动布局及可访问交互，增加编辑、关闭/退出、分组和统一CLI邀请。
+C03：更新MeetingNavigation、MeetingHeader、ParticipantList、CreateMeetingDialog、JoinMeetingDialog及InviteMeetingDialog的既有组件文档。优先保留桌面/移动布局及可访问交互，增加编辑、删除/退出、分组和统一CLI邀请。
 
 C04：接入005消息/附件区域及007连接状态，统一document.title更新位置；加入/离开/更名和切会均测试，新消息不触发标题提醒。
 

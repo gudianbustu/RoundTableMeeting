@@ -21,3 +21,7 @@ publish/RoundTableMeeting作为ContentRoot，发布聚合器生成downloads/rtm-
 ## 4. 待执行验证
 
 真实发布包检查固定版本下载、latest切换、文件缺失404、清单校验及三系统安装；内部协议检查版本不匹配、取消等待、历史授权和代次隔离。这里是设计，不表示下载文件已生成或服务已部署。
+
+## 5. 私聊与删除适配
+
+005受信身份服务负责私聊收发、本人可见序号与过滤；不得在HTTP适配处广播后客户端过滤。004定义lifecycle-status与删除proof登记，仅返回删除状态；007控制信封分deleting/deleted，最终删除确认交006受管副本清理。无权404不能翻译成可信meeting_deleted。

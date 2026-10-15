@@ -8,22 +8,24 @@
 
 IMessageAppendService处理Human与受信System，Agent由007验证连接后进入内部IResolvedMessageAppendCore。公共入口负责外层gate/短事务，内部核心只在已有事务执行，不嵌套Runner。任何客户端传入的participantId都不能直接成为作者。
 
-IMessageHistoryService从受信访问上下文获取004历史上界，查询消息、发送结果、引用与附件；不要求active或在线。IMessageMentionParser纯算法处理原文与同会议参与者目录，比较名称时规范化，输出原文UTF-16范围。
+IMessageHistoryService从受信访问上下文获取004历史上界，查询消息、发送结果、引用与附件；不要求在线，但必须active并符合消息public/private范围。IMessageMentionParser纯算法处理原文与同会议参与者目录，比较名称时规范化，输出原文UTF-16范围。
 
 附件服务分暂存上传、消息绑定和授权读取。先完成二进制写入，再登记可绑定状态；消息事务验证同会议/上传者/可用性并关联。文件IO不在长时间数据库锁内执行，绑定状态转换与清理条件互斥。
 
 ## 3. 追加流程
 
-验证身份和输入 → 开启004事务 → 复查canSend → 以clientSubmissionId核对原载荷 → 校验可见replyTo及附件 → 分配序号 → 原子保存消息、提及、绑定与事件 → 提交 → 唤醒分发器。
+验证身份和输入 → 开启004事务 → 复查canSend及私聊双方joined → 以clientSubmissionId核对原载荷 → 校验可见replyTo及附件 → 分配内部顺序和本人可见投影序号 → 原子保存消息、提及、绑定、可见投影与定向事件 → 提交 → 唤醒分发器。
 
-同ID同载荷返回原消息，不再次分配序号或事件；冲突回滚后新作用域核对，不重用污染跟踪状态。仅附件消息允许；原文保存不trim/NFC改写。System同样进入历史但不解析提及。
+同ID同载荷返回原消息，不再次分配内部顺序和本人可见投影序号或事件；冲突回滚后新作用域核对，不重用污染跟踪状态。仅附件消息允许；原文保存不trim/NFC改写。System同样进入历史但不解析提及。
 
 ## 4. 分发与历史
 
-IMessageEventConsumer及注册目录保留稳定consumerName和独立scope，消费可重复；事件只包含稳定消息引用。通知失败不撤销消息，后续补读收敛。Agent同步读取全部消息，不注册只对@创建任务的消费者。
+IMessageEventConsumer及注册目录保留稳定consumerName和独立scope，消费可重复；事件只包含稳定消息引用。通知失败不撤销消息，后续补读收敛。Agent同步读取全部有权消息，不注册只对@创建任务的消费者。
 
-历史按NoTracking和序号边界投影，权限上界与through取交集；before/after排他且页内升序。查询不推进已读或CLI前台位置。关闭/退出后可查授权历史和原发送结果，但不可新发。
+历史按NoTracking和序号边界投影，权限上界与through取交集；before/after排他且页内升序。查询不推进已读或CLI前台位置。退出后可查有权历史和原发送结果但不可新发；删除中/已删除不返回内容。
 
 ## 5. 验证
 
 [模块计划](impl.md)实现规则，[主题测试计划](../../../testPlan.md)覆盖C01—C10。领域/应用不能引用SignalR或EF类型，不建立平行Agent消息表。
+
+私聊成员与引用范围、可见投影、定向分发按Server第2—6节执行。每个读取入口先身份过滤后分页，不以原全局sequence直接生成客户端游标。删除由004协调调用本模块清理正文、附件、投影、事件与回执；取消上传/下载租约并防止迟到落盘。

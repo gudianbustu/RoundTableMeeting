@@ -2,9 +2,10 @@
 !include ddd_lib.puml
 
 ' 目标模型，非数据库表清单；004拥有Meeting及参与关系，005拥有消息与已绑定附件，007拥有连接。
-' 需求覆盖：基础5.1/5.10/5.12/5.13；FR-001/003/005/009/011/013/015/016。
+' 需求覆盖：基础5.1/5.10/5.12/5.13；FR-001/003/005/009/011/013/015/016/017。
 ' 会议与成员状态必须同事务判断；消息独立追加，通过短事务协调，不加载无限历史聚合图。
 ' 附件暂存是005技术资源，图中Attachment仅表示已绑定消息的附件。
+' ParticipantMessageViews及删除墓碑/proof是技术投影与恢复记录，不作为新业务聚合。
 ' CLI原文副本/向量索引是006技术读模型，不形成第二套业务事实或回复任务。
 
 Person('human','人类参与者')
@@ -18,9 +19,8 @@ Entity('Meeting')[
     背景(Description String(2000)?)
     创建者(CreatorUserId Guid)
     状态(State MeetingState)
-    关闭历史上界(ClosedThroughSequence Long?)
     --规则--
-    # 仅创建者编辑或关闭；关闭不删除历史
+    # 仅创建者编辑或删除；删除全部公开私聊及附件
 ]
 Entity('Participant')[
     会议参与者
@@ -40,7 +40,7 @@ Enum('MeetingState')[
     会议状态
     --属性--
     开放(Active)
-    关闭(Closed)
+    删除处理中(Deleting)
 ]
 Enum('MembershipState')[
     参与状态
@@ -61,10 +61,10 @@ Command('JoinMeeting')[
     # 有效会议码与开放会议；复用既有身份；重入恢复完整历史
 ]
 Command('EditMeeting','创建者修改会议信息')
-Command('CloseMeeting')[
+Command('DeleteMeeting')[
     创建者移除会议
     --规则--
-    # 关闭全部交流，保留消息与附件；此前退出者范围不扩大
+    # 输入会议名称确认；先阻止全部访问，清理完成后删除业务数据
 ]
 Command('LeaveMeeting')[
     非创建者退出
@@ -75,18 +75,18 @@ human --> CreateMeeting
 human --> JoinMeeting
 agent --> JoinMeeting
 human --> EditMeeting
-human --> CloseMeeting
+human --> DeleteMeeting
 human --> LeaveMeeting
 agent --> LeaveMeeting
 CreateMeeting .. Meeting
 JoinMeeting .. Participant
 EditMeeting .. Meeting
-CloseMeeting .. Meeting
+DeleteMeeting .. Meeting
 LeaveMeeting .. Participant
 DomainEvent('ParticipationChanged','会议或参与范围已改变')
-CloseMeeting ..> ParticipationChanged : send
+DeleteMeeting ..> ParticipationChanged : send
 LeaveMeeting ..> ParticipationChanged : send
-' 该事实用于让活动连接停止收发并刷新列表/历史范围，不宣称外部模型停止。
+' 该事实用于让活动连接停止收发并刷新权限；删除移出所有入口，不宣称外部模型停止。
 
 Aggregate('MessageAggregate','消息聚合')
 Entity('Message')[
@@ -94,13 +94,21 @@ Entity('Message')[
     --属性--
     标识(Id Guid)
     会议(MeetingId Guid)
-    顺序(Sequence Long)
+    内部顺序(InternalOrdinal Long)
     发送者(ParticipantId Guid?)
     原文(Content String)
+    可见范围(Visibility MessageVisibility)
+    私聊接收者(RecipientParticipantId Guid?)
     回复引用(ReplyToMessageId Guid?)
     提交标识(ClientSubmissionId Guid)
     --规则--
-    # Human/Agent/System统一顺序；不产生强制回复任务
+    # 私聊仅双方身份可见，含发生情况；System公开；不产生回复任务
+]
+Enum('MessageVisibility')[
+    消息可见范围
+    --属性--
+    公开(Public)
+    私聊(Private)
 ]
 Entity('Attachment')[
     已绑定附件
@@ -109,17 +117,18 @@ Entity('Attachment')[
     文件名(Name String)
     字节数(SizeBytes Long)
     --规则--
-    # 长期随消息保留；访问范围与消息一致
+    # 会议存续时随消息保留；私聊附件仅双方；整会删除一并清理
 ]
 Message .. MessageAggregate
 Attachment .. MessageAggregate
 Message .. Attachment : owns
 Message ..> Meeting : references
 Message ..> Participant : author
+Message ..> Participant : private recipient
 Command('SendMessage')[
     发送正文或附件
     --规则--
-    # 开放且已加入；稳定提交标识去重；与关闭退出按提交先后判定
+    # 开放且已加入；私聊双方均加入；稳定标识去重；与删除退出事务协调
 ]
 human --> SendMessage
 agent --> SendMessage
@@ -130,7 +139,13 @@ SendMessage ..> MessageSaved : send
 Query('ReadHistory')[
     读取历史与附件
     --规则--
-    # 退出止于退出上界，关闭不扩大此前退出者范围
+    # 本人有权范围；退出保留既有历史，删除后任何人不可读
+]
+Command('PurgeLocalMeetingCopy')[
+    清理CLI受管会议副本
+    --规则--
+    # 联网可信确认整会删除后清理原文、索引、受管附件缓存
+    # 用户另存文件和Agent已有上下文不保证收回
 ]
 Query('SearchHistory')[
     CLI关键词与本机向量混合检索
@@ -140,6 +155,7 @@ Query('SearchHistory')[
 human --> ReadHistory
 agent --> ReadHistory
 agent --> SearchHistory
+agent --> PurgeLocalMeetingCopy
 ReadHistory .. Message
 SearchHistory .. Message
 
@@ -150,7 +166,7 @@ Entity('Connection')[
     参与者(ParticipantId Guid)
     代次(Generation Long)
     状态(State String)
-    连续接收位置(ReceivedThroughSequence Long)
+    本人连续接收位置(ReceivedThroughSequence Long)
     --规则--
     # 单一有效连接；接收位置不是已读；迟到旧代次无权覆盖
 ]
@@ -164,7 +180,7 @@ Command('Reconnect')[
 Command('Takeover')[
     显式接管Agent
     --规则--
-    # 新代次替换旧连接，不扩大成员历史权限
+    # 凭会议码和显示名替换旧连接；继承原身份有权私聊；不绕过退出或删除
 ]
 Command('Disconnect')[
     主动断开
