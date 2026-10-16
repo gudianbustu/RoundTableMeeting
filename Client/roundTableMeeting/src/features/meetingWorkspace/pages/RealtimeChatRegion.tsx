@@ -1,4 +1,5 @@
 import type { ReactNode, Ref } from 'react'
+import { useMessageNotifications } from '../hooks/useMessageNotifications'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Alert, Button, Select, Tag } from 'antd'
 import { createUuid } from '@/shared/utils/createUuid'
@@ -26,21 +27,26 @@ export function RealtimeChatRegion(props: ChatProps) {
   const editor = useRef<MessageComposerHandle>(null)
   const peerId = selection[props.meetingId]
   const peer = props.participants.find(p => p.participantId === peerId)
+  const notices = useMessageNotifications(props.meetingId, props.participants.find(p => p.isCurrentUser)?.participantId, peerId ?? 'public', !props.readOnly)
   const key = `${props.meetingId}:${peerId ?? 'public'}`
   const selectPeer = useCallback((id?: string) => setSelection(previous => { const next = { ...previous, [props.meetingId]: id }; if (props.sessionCache) props.sessionCache.selection = next; return next }), [props.meetingId, props.sessionCache])
   useImperativeHandle(props.composerRef, () => ({ mention: name => editor.current?.mention(name), privateChat: id => selectPeer(id) }), [selectPeer])
   const retain = useCallback((state: ChatState) => { cache.current.set(key, state) }, [key])
   const unavailable = useCallback(() => {
+    notices.remove()
     for (const savedKey of cache.current.keys()) if (savedKey.startsWith(props.meetingId + ':')) cache.current.delete(savedKey)
     if (props.sessionCache) delete props.sessionCache.selection[props.meetingId]
     props.onMeetingUnavailable?.()
-  }, [props.meetingId, props.onMeetingUnavailable, props.sessionCache])
+  }, [props.meetingId, props.onMeetingUnavailable, props.sessionCache, notices.remove])
   return <div className="scoped-chat">
-    <ScopedChat key={`${key}:${props.readOnly ? 'history' : 'active'}`}  {...props} composerRef={editor} peerId={peerId} scopeControl={<Select aria-label="交流范围" className={peerId ? 'chat-scope-select chat-scope-private' : 'chat-scope-select'} value={peerId ?? 'public'} onChange={value => selectPeer(value === 'public' ? undefined : value)} options={[{ value: 'public', label: '公开讨论' }, ...props.participants.filter(p => !p.isCurrentUser).map(p => ({ value: p.participantId, label: `私聊 · ${p.displayName}` }))]} placeholder={peer ? `私聊 · ${peer.displayName}` : '公开讨论'} />} initialState={cache.current.get(key)} onStateChanged={retain} onPrivateChat={selectPeer} onMeetingUnavailable={unavailable} />
+    <ScopedChat key={`${key}:${props.readOnly ? 'history' : 'active'}`}  {...props} notificationControl={<div aria-live="polite" className="chat-message-notifications">
+      {Object.keys(notices.pending).map(id => <Button key={id} size="small" onClick={() => selectPeer(id === 'public' ? undefined : id)}>{id === 'public' ? '公开讨论有新消息' : `${props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}发来新私聊`}</Button>)}
+      {notices.failed && <Button size="small" onClick={notices.retry}>新消息提醒同步失败，重试</Button>}
+    </div>} onNotificationMessage={notices.receive} onNotificationSnapshot={notices.synchronize} composerRef={editor} peerId={peerId} scopeControl={<Select aria-label="交流范围" className={peerId ? 'chat-scope-select chat-scope-private' : 'chat-scope-select'} value={peerId ?? 'public'} onChange={value => selectPeer(value === 'public' ? undefined : value)} options={[{ value: 'public', label: `公开讨论${notices.pending.public ? ' · 有新消息' : ''}` }, ...props.participants.filter(p => !p.isCurrentUser).map(p => ({ value: p.participantId, label: `私聊 · ${p.displayName}${notices.pending[p.participantId] ? ' · 有新消息' : ''}` }))]} placeholder={peer ? `私聊 · ${peer.displayName}` : '公开讨论'} />} initialState={cache.current.get(key)} onStateChanged={retain} onPrivateChat={selectPeer} onMeetingUnavailable={unavailable} />
   </div>
 }
 
-function ScopedChat({ scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
+function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { notificationControl: ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
   const savedInitial = useRef(initialState)
   const generation = useRef(initialState?.generation ?? 1)
   const controller = useRef<AbortController | undefined>(undefined)
@@ -97,9 +103,10 @@ function ScopedChat({ scopeControl, composerRef, composerTools, meetingId, parti
     if (expected !== generation.current) return
     dispatch({ meetingId, generation: expected, type: 'presenceSnapshot', participantIds: snapshot.onlineParticipantIds, highWatermarkSequence: snapshot.highWatermarkSequence })
     dispatch({ meetingId, generation: expected, type: 'agentActivitySnapshot', activities: snapshot.agentActivities })
+    void onNotificationSnapshot(snapshot.highWatermarkSequence)
     if (initial) await load({ throughSequence: snapshot.highWatermarkSequence, limit: 100 }, true)
     else await catchUp(snapshot.highWatermarkSequence, expected)
-  }, [meetingId, load, catchUp])
+  }, [meetingId, load, catchUp, onNotificationSnapshot])
   const connect = useCallback(async () => {
     if (readOnly) { await load({ limit: 100 }, true); return }
     const expected = ++generation.current
@@ -108,7 +115,7 @@ function ScopedChat({ scopeControl, composerRef, composerTools, meetingId, parti
     const scoped = () => ({ meetingId, generation: expected })
     const hub = new MeetingChatConnection({
       onState: value => dispatch({ ...scoped(), type: 'connectionStateChanged', state: value }),
-      onMessage: message => { if (matches(message)) dispatch({ ...scoped(), type: 'messageEventReceived', message }) },
+      onMessage: message => { if (expected !== generation.current) return; onNotificationMessage(message); if (matches(message)) dispatch({ ...scoped(), type: 'messageEventReceived', message }) },
       onPresence: (participantId, value) => dispatch({ ...scoped(), type: 'presenceChanged', participantId, state: value }),
       onAgentActivity: activity => dispatch({ ...scoped(), type: 'agentActivityChanged', activity }),
       onMembershipLeft: () => { if (expected === generation.current) onMembershipChanged?.() },
@@ -126,7 +133,7 @@ function ScopedChat({ scopeControl, composerRef, composerTools, meetingId, parti
       if ((error as { message?: string }).message?.includes('meeting_not_found')) { dispatch({ ...scoped(), type: 'connectionStateChanged', state: 'rejected' }); onMembershipChanged?.() }
       else dispatch({ ...scoped(), type: 'connectionStateChanged', state: 'disconnected' })
     }
-  }, [readOnly, load, meetingId, matches, synchronize, reportUnavailable, onMembershipChanged, handleError])
+  }, [readOnly, load, meetingId, matches, synchronize, reportUnavailable, onMembershipChanged, handleError, onNotificationMessage])
   useEffect(() => {
     generation.current += 1; dispatch({ type: 'reset', meetingId, generation: generation.current, initialState: savedInitial.current }); void connect()
     return () => { generation.current += 1; controller.current?.abort(); void connection.current?.stop(); connection.current = undefined }
@@ -237,6 +244,7 @@ function ScopedChat({ scopeControl, composerRef, composerTools, meetingId, parti
     {readOnly ? <Alert type={state.history === 'error' ? 'error' : 'info'} title={state.history === 'error' ? '历史消息加载失败' : '已退出会议，只能查看退出前有权访问的历史。'} action={state.history === 'error' ? <Button onClick={() => void connect()}>重试</Button> : undefined} /> : <ChatConnectionStatus connection={state.connection} history={state.history} error={state.history === 'error' ? '消息历史加载失败。' : undefined} onRetry={() => void connect()} />}
     <MessageTimeline pendingMessage={state.failedSubmission && state.send !== 'idle' ? <PendingMessage key={state.failedSubmission.clientSubmissionId} submission={state.failedSubmission} status={state.send} attachments={state.attachments} readOnly={readOnly} onRetry={retry} /> : undefined} messages={messages} hasEarlierMessages={state.hasEarlierMessages} loading={state.history === 'loading' || state.history === 'appending'} onLoadEarlier={() => { if (state.earliestLoadedSequence) void load({ beforeSequence: state.earliestLoadedSequence, limit: 100 }) }} newMessageCount={0} onNewMessageClick={() => {}} onReply={message => dispatch({ ...scope(), type: 'replyChanged', message })} onPrivateChat={onPrivateChat} currentParticipantId={participants.find(p => p.isCurrentUser)?.participantId} focusMessageId={focusMessageId} focusRevision={focusRevision} canReply={!locked} scrollPosition={state.scrollPosition} onScrollPositionChanged={retainScroll} />
     {state.replyTo && <div className="message-reply-context"><Tag>回复 {state.replyTo.author.displayName}</Tag><span>{state.replyTo.content.slice(0, 120) || '附件消息'}</span><Button size="small" disabled={locked} onClick={() => dispatch({ ...scope(), type: 'replyChanged', message: undefined })}>取消回复</Button></div>}
+    {notificationControl}
     <div className="composer-context-toolbar">{scopeControl}<MeetingAttachmentList meetingId={meetingId} {...requestScope} onLocate={locate} /></div>
     <MessageComposer composerRef={composerRef} onFiles={files => uploader.current?.addFiles(files)} attachments={<DraftAttachments attachments={state.attachments} disabled={locked} onChange={attachments => dispatch({ ...scope(), type: 'attachmentsChanged', attachments })} />} tools={<>{!readOnly && <AttachmentUpload uploadRef={uploader} attachments={state.attachments} disabled={locked} onChange={attachments => dispatch({ ...scope(), type: 'attachmentsChanged', attachments })} />}{composerTools}</>} value={state.draft} send={state.send} participants={participants} hasAttachments={state.attachments.length > 0} disabled={locked} onChange={draft => dispatch({ ...scope(), type: 'draftChanged', draft })} onSend={submit} />
   </section>

@@ -18,6 +18,8 @@ internal sealed record AgentActivityPayload(string State, Guid? ActiveTaskId, st
             return new("disconnected", null, null, connection?.DisconnectReason ?? "connection_disconnected", null, null, disposition);
         if (connection.State == AgentConnectionState.Activating)
             return new("blocked", null, null, "activating", null, null, disposition);
+        if (connection.Transport == AgentConnectionSession.ParticipantSequenceTransport)
+            return new("waiting", null, null, "waiting", null, null, disposition);
         var reliable = connection.ReliabilityMode == "explicit_ack_v1";
         if (reliable && initial?.State != InitialContextState.Confirmed)
             return new("blocked", null, null, "initial_context_unconfirmed", null, null, disposition);

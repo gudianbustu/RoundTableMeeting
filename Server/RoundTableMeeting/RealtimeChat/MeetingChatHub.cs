@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using RoundTableMeeting.AgentCollaboration;
 using Microsoft.AspNetCore.SignalR;
 using RoundTableMeeting.Abstraction.Contracts.RealtimeChat;
 using RoundTableMeeting.Abstraction.Services;
@@ -7,7 +8,7 @@ using RoundTableMeeting.Authentication;
 namespace RoundTableMeeting.RealtimeChat;
 
 [Authorize]
-public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions, MeetingPresenceRegistry presence, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider, ILogger<MeetingChatHub> logger) : Hub
+public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions, MeetingPresenceRegistry presence, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider, ILogger<MeetingChatHub> logger, CurrentMcpSessionService? mcp = null) : Hub
 {
     public async Task<MeetingChatSubscriptionDto> SubscribeMeeting(Guid meetingId)
     {
@@ -34,7 +35,7 @@ public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions
         }
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(meetingId), cancellationToken);
         var becameOnline = presence.Register(Context.ConnectionId, meetingId, result.Data.ParticipantId, Context.Abort);
-        var online = presence.GetOnline(meetingId);
+        var online = presence.GetOnline(meetingId).Concat(mcp is null ? [] : await mcp.GetOnlineAsync(meetingId, cancellationToken)).Distinct().ToArray();
         if (becameOnline)
             await Clients.Group(Group(meetingId)).SendAsync("participantPresenceChanged", new ParticipantPresenceDto(result.Data.ParticipantId, "online", timeProvider.GetUtcNow()), cancellationToken);
         return new MeetingChatSubscriptionDto(online, result.Data.HighWatermarkSequence, []);

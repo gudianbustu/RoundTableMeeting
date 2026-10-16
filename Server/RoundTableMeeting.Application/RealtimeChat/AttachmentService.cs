@@ -11,18 +11,18 @@ public sealed class AttachmentService(ICurrentUserContext currentUser, IMeetingR
     IMeetingParticipantRepository participants, IMeetingAttachmentRepository attachments,
     IMessageVisibilityRepository visibility, IUnitOfWork unitOfWork, IMeetingTransactionRunner runner,
     IMeetingRealtimeGate gate, IMeetingFileTransferGate transfers, IAttachmentStore store,
-    IMeetingLifecycleService lifecycle, VisibleMessageMapper mapper, TimeProvider time)
+    IMeetingLifecycleService lifecycle, VisibleMessageMapper mapper, TimeProvider time, MeetingAgentContext? agentContext = null)
     : IAttachmentService, IScopedDependency<IAttachmentService>
 {
     private async Task<MeetingParticipant> Authorize(Guid meetingId, bool writing, CancellationToken ct)
     {
-        if (currentUser.UserId is not Guid userId || userId == Guid.Empty) throw new AttachmentOperationException("unauthenticated", 401);
+        var userId = currentUser.UserId.GetValueOrDefault(); if (userId == Guid.Empty && agentContext?.ParticipantFor(meetingId) is null) throw new AttachmentOperationException("unauthenticated", 401);
         if (await meetings.FindActiveByIdAsync(meetingId, ct) is null)
         {
             var state = await lifecycle.GetMemberStateAsync(meetingId, userId, ct);
             throw new AttachmentOperationException(state is "deleting" or "deleted" ? "meeting_" + state : "meeting_not_found", state is "deleting" or "deleted" ? 410 : 404);
         }
-        var participant = await participants.FindByUserAsync(meetingId, userId, ct) ?? throw new AttachmentOperationException("meeting_not_found", 404);
+        var participant = (agentContext?.ParticipantFor(meetingId) is Guid agentId ? (await participants.ListAsync(meetingId, ct)).SingleOrDefault(p => p.ID == agentId && p.ParticipantType == ParticipantType.Agent) : await participants.FindByUserAsync(meetingId, userId, ct)) ?? throw new AttachmentOperationException("meeting_not_found", 404);
         if (writing && participant.MembershipState == MeetingMembershipState.Left) throw new AttachmentOperationException("membership_left", 409);
         return participant;
     }
@@ -34,7 +34,7 @@ public sealed class AttachmentService(ICurrentUserContext currentUser, IMeetingR
         name = name.Replace('\\', '/').Split('/').Last();
         if (string.IsNullOrWhiteSpace(name)) throw new AttachmentOperationException("validation_failed", 400);
         IMeetingFileTransferLease transfer;
-        using (var lease = await gate.AcquireSharedAsync(meetingId, ct))
+        using (var lease = await (agentContext?.AcquireSharedAsync(gate, meetingId, ct) ?? gate.AcquireSharedAsync(meetingId, ct)))
         {
             await Authorize(meetingId, true, ct);
             if (lease is null) throw new AttachmentOperationException("meeting_deleting", 410);
@@ -47,7 +47,7 @@ public sealed class AttachmentService(ICurrentUserContext currentUser, IMeetingR
             try
             {
                 file = await store.WriteAsync(meetingId, content, linked.Token);
-                using var lease = await gate.AcquireSharedAsync(meetingId, linked.Token);
+                using var lease = await (agentContext?.AcquireSharedAsync(gate, meetingId, linked.Token) ?? gate.AcquireSharedAsync(meetingId, linked.Token));
                 if (lease is null) throw new AttachmentOperationException("meeting_deleting", 410);
                 var item = await runner.RunAsync(async token =>
                 {
@@ -84,7 +84,7 @@ public sealed class AttachmentService(ICurrentUserContext currentUser, IMeetingR
     }
     public async Task<AttachmentPageDto> ListAsync(Guid meetingId, MessagePageRequest request, CancellationToken ct = default)
     {
-        using var lease = await gate.AcquireSharedAsync(meetingId, ct);
+        using var lease = await (agentContext?.AcquireSharedAsync(gate, meetingId, ct) ?? gate.AcquireSharedAsync(meetingId, ct));
         var p = await Authorize(meetingId, false, ct);
         if (lease is null) throw new AttachmentOperationException("meeting_deleting", 410);
         var limit = request.Limit ?? 100;
@@ -106,7 +106,7 @@ public sealed class AttachmentService(ICurrentUserContext currentUser, IMeetingR
     }
     public async Task<AttachmentDownload> OpenAsync(Guid meetingId, Guid attachmentId, CancellationToken ct = default)
     {
-        using var lease = await gate.AcquireSharedAsync(meetingId, ct);
+        using var lease = await (agentContext?.AcquireSharedAsync(gate, meetingId, ct) ?? gate.AcquireSharedAsync(meetingId, ct));
         var p = await Authorize(meetingId, false, ct);
         if (lease is null) throw new AttachmentOperationException("meeting_deleting", 410);
         var file = await attachments.FindAsync(meetingId, attachmentId, ct);

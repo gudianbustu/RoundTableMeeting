@@ -93,9 +93,7 @@ try
     app.UseAuthorization();
     app.MapOpenApi().AllowAnonymous();
     app.MapControllers();
-    app.Map("/mcp/{**path}", async (HttpContext context) =>
-        await RoundTableMeeting.Errors.ApiProblemDetailsWriter.WriteAsync(context, StatusCodes.Status426UpgradeRequired, "protocol_upgrade_required"))
-        .AllowAnonymous();
+    app.MapMcp("/mcp").AllowAnonymous();
     app.MapHub<MeetingChatHub>("/hubs/meeting-chat")
         .RequireAuthorization()
         .WithMetadata(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true), new NoStoreResponseAttribute());

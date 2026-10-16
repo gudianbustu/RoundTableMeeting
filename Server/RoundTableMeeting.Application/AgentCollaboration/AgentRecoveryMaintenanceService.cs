@@ -43,12 +43,13 @@ public sealed partial class AgentCollaborationService
             if (reason is not null)
             {
                 if (!await recoveryRepository.DisconnectAsync(Fence(connection), Domain.AgentCollaboration.AgentTaskFailurePolicy.ToStoredCode(reason.Value), now, token)) return false;
-                await InvalidateUnfinishedTasksAsync(connection, reason.Value, now, token);
+                if (connection.Transport != Domain.Entities.AgentConnectionSession.ParticipantSequenceTransport)
+                    await InvalidateUnfinishedTasksAsync(connection, reason.Value, now, token);
                 RecordVisibleChange(cursor, now);
                 disconnected = true;
                 return true;
             }
-            if (connection.ReliabilityMode != AgentReliabilityProtocol.ExplicitAck) return false;
+            if (connection.Transport == Domain.Entities.AgentConnectionSession.ParticipantSequenceTransport || connection.ReliabilityMode != AgentReliabilityProtocol.ExplicitAck) return false;
             var head = (await agentRepository.ListTasksAsync(expected.MeetingId, expected.ParticipantId, token))
                 .FirstOrDefault(task => task.State is not (AgentReplyTaskState.Replied or AgentReplyTaskState.Cancelled));
             if (head?.State != AgentReplyTaskState.Delivered || head.CurrentAttemptId is not Guid attemptId) return false;

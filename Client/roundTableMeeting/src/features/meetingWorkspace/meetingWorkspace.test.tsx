@@ -82,8 +82,8 @@ describe('meeting workspace contracts', () => {
     expect(prompt).toContain('地址：http://test.local/mcp')
     expect(prompt).toContain('你的会议显示名称是：\n助手一号')
     expect(prompt).toContain('会议代码是：\n0e04091b')
-    expect(prompt).toContain('wait_for_mention')
-    expect(prompt).toContain('reply_to_mention')
+    expect(prompt).toContain('wait_messages')
+    expect(prompt).toContain('send_message')
   })
 
   it('detects an online participant missing from the current detail snapshot', () => {

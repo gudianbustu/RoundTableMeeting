@@ -57,7 +57,7 @@ public sealed class PrivateMessageTests
         await Body(await Post(b, $"/api/meetings/{id}/leave", new { operationId = Guid.NewGuid() }), HttpStatusCode.OK);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(a, url, new { clientSubmissionId = Guid.NewGuid(), content = "left", visibility = "private", recipientParticipantId = peer })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Post(a, url, body)).StatusCode);
-        Assert.Equal(HttpStatusCode.UpgradeRequired, (await a.GetAsync("/mcp")).StatusCode);
+        await CurrentMcpTests.Initialize(a);
     }
     [Fact]
     public async Task LongOriginalTextAndFilteredPaginationRespectLeaveBoundary()
@@ -121,8 +121,8 @@ public sealed class PrivateMessageTests
         var data = final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
         Assert.Equal(MessageEventDeliveryState.Pending, (await data.MessageEventDeliveries.SingleAsync(x => x.ID == historicalId)).State);
         Assert.Empty(await data.AgentReplyTasks.ToListAsync());
-        var rejected = await Body(await a.GetAsync("/mcp"), HttpStatusCode.UpgradeRequired);
-        Assert.Equal("protocol_upgrade_required", rejected.GetProperty("code").GetString());
+        var current = await CurrentMcpTests.Initialize(a);
+        Assert.Equal("mcp-preview-v2", current.Result.GetProperty("serverInfo").GetProperty("version").GetString());
     }
     private static HttpClient Client(TestApplicationFactory f) => f.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true, AllowAutoRedirect = false });
     private static async Task Login(HttpClient c, string name) => await Body(await Post(c, "/api/auth/login", new { username = name, password = "test-password-" + name }), HttpStatusCode.OK);

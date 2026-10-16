@@ -61,7 +61,7 @@ visibility默认public仅兼容无replyTo的旧发送；存在replyTo且省略vi
 
 ## 6. 实时、在线与事件
 
-SignalR沿用/hubs/meeting-chat，同源认证。SubscribeMeeting返回该参与者授权、高水位和onlineParticipantIds；活跃订阅仅active+joined。连接与参与者绑定由服务器身份确定，消息分发通过注册表选择该参与者的有效连接ID；客户端不能自行选择他人连接。公开消息通知所有有权活跃参与者；私聊只通知双方，各自携带meetingId、messageId、本人sequence及visibility，不向会议公共组先发再由前端过滤。私聊不产生公共“正在私聊”、数量、时间或对象事件；会议revision及presence不因私聊更新。
+SignalR沿用/hubs/meeting-chat，同源认证。SubscribeMeeting返回该参与者授权、高水位和onlineParticipantIds（网页连接与有效租约的MCP连接合并）；活跃订阅仅active+joined。连接与参与者绑定由服务器身份确定，消息分发通过注册表选择该参与者的有效连接ID；客户端不能自行选择他人连接。公开消息通知所有有权活跃参与者；私聊只通知双方，各自携带meetingId、messageId、本人sequence及visibility，不向会议公共组先发再由前端过滤。私聊不产生公共“正在私聊”、数量、时间或对象事件；会议revision及presence不因私聊更新。
 
 浏览器多个有效连接聚合为online，无连接为offline；Agent在线由007提供。不展示最后活跃、任务或已读。重连先缓冲、取得本人高水位，再补齐合并；按messageId去重，旧meeting/generation回调丢弃。membershipLeft终止本人活跃订阅但保留授权历史，并使其私聊对方的发送资格重新核对；该双方暂停状态只通知有关双方，不广播私聊关系。meetingDeleting阻止全部读取并移出入口，meetingDeleted清空本会议页面缓存、草稿、待发内容和附件ObjectURL；普通断线不触发删除。
 
@@ -77,7 +77,7 @@ SignalR沿用/hubs/meeting-chat，同源认证。SubscribeMeeting返回该参与
 
 私聊对象不可用、非同会议或发送资格不足返回统一 recipient_unavailable，不泄露对方的私聊活动；第三人访问私聊、引用、附件或猜测ID均404。正文、私聊关系及查询内容不得写入普通日志、指标标签或公共诊断。
 
-序号语义变更必须提升协议能力版本：旧全局序号/ACK不得直接当作本人投影位置。服务端迁移保留消息ID并重建投影；006在握手识别旧游标版本后重建同步范围，按messageId核对已有原文后回补，不以较大的旧游标跳过新投影。当前能力接口GET /api/system/capabilities返回protocol=participant-sequence-v2。旧宿主/mcp及子路径统一返回426 protocol_upgrade_required；旧任务消费者、启动恢复服务停用，Dispatcher不领取旧任务消费者的历史待处理项，保留旧事实供整会清理。官方CLI内部通信入口归第3批，在其完成前不提供Agent产品通信链路，不向旧客户端降级广播私聊。
+序号语义变更必须提升协议能力版本：旧全局序号/ACK不得直接当作本人投影位置。服务端迁移保留消息ID并重建投影；006在握手识别旧游标版本后重建同步范围，按messageId核对已有原文后回补，不以较大的旧游标跳过新投影。当前能力接口GET /api/system/capabilities返回protocol=participant-sequence-v2。/mcp试用入口按006提供participant-sequence-v2工具，旧任务工具不再公开；旧任务消费者、启动恢复服务停用，Dispatcher不领取旧任务消费者的历史待处理项，保留旧事实供整会清理。官方CLI内部通信入口仍归后续批次；MCP试用只读本人投影，不向旧客户端降级广播私聊。
 
 纯文本预览仅在存储类型为application/octet-stream且扩展名属于txt/md/log/csv/tsv/json/xml/yaml/yml/ini/conf时返回inline与text/plain，保留nosniff、sandbox、no-store及同一消息可见性检查；不按上传者声明的MIME启用HTML/SVG。前端按Range读取最多前1 MiB。
 

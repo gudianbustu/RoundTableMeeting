@@ -10,7 +10,7 @@ using RoundTableMeeting.Domain.UnitOfWork;
 using DomainAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
 using TransportAuthorKind = RoundTableMeeting.Abstraction.Contracts.RealtimeChat.MessageAuthorKind;
 namespace RoundTableMeeting.Application.RealtimeChat;
-public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetingRepository meetings, IMeetingParticipantRepository participants, IMessageRepository messages, IMeetingTransactionRunner runner, IResolvedMessageAppendCore appendCore, RealtimeChatOptions options, IMeetingRealtimeGate realtimeGate, IMeetingLifecycleService lifecycleService, IMessageVisibilityRepository visibility, VisibleMessageMapper mapper) : IMessageLookupService, IScopedDependency<IMessageLookupService>, IMessageAppendService, IMessageHistoryService, IMeetingChatSubscriptionService, IScopedDependency<IMessageAppendService>, IScopedDependency<IMessageHistoryService>, IScopedDependency<IMeetingChatSubscriptionService>
+public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetingRepository meetings, IMeetingParticipantRepository participants, IMessageRepository messages, IMeetingTransactionRunner runner, IResolvedMessageAppendCore appendCore, RealtimeChatOptions options, IMeetingRealtimeGate realtimeGate, IMeetingLifecycleService lifecycleService, IMessageVisibilityRepository visibility, VisibleMessageMapper mapper, MeetingAgentContext? agentContext = null) : IMessageLookupService, IScopedDependency<IMessageLookupService>, IMessageAppendService, IMessageHistoryService, IMeetingChatSubscriptionService, IScopedDependency<IMessageAppendService>, IScopedDependency<IMessageHistoryService>, IScopedDependency<IMeetingChatSubscriptionService>
 {
     public Task<MessageOperationResult<MessageDto>> AppendHumanAsync(Guid meetingId, SubmitMessageRequest request, CancellationToken ct = default) => AppendAsync(meetingId, request, DomainAuthorKind.Human, ct);
     public async Task<MessageOperationResult<MessageDto>> AppendSystemAsync(Guid meetingId, SystemMessageSubmission submission, CancellationToken ct = default)
@@ -21,19 +21,19 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
     }
     private async Task<MessageOperationResult<MessageDto>> AppendAsync(Guid meetingId, SubmitMessageRequest request, DomainAuthorKind kind, CancellationToken ct, string? systemName = null)
     {
-        if (kind != DomainAuthorKind.System && (currentUser.UserId is not Guid userId || userId == Guid.Empty)) return new(MessageOperationStatus.Unauthenticated);
-        using var sharedLease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        if (kind != DomainAuthorKind.System && agentContext?.ParticipantFor(meetingId) is null && (currentUser.UserId is not Guid userId || userId == Guid.Empty)) return new(MessageOperationStatus.Unauthenticated);
+        using var sharedLease = await (agentContext?.AcquireSharedAsync(realtimeGate, meetingId, ct) ?? realtimeGate.AcquireSharedAsync(meetingId, ct));
         if (sharedLease is null) return new(await UnavailableStatus(meetingId, currentUser.UserId.GetValueOrDefault(), ct));
         var effectiveUserId = currentUser.UserId.GetValueOrDefault();
         if (request.ClientSubmissionId == Guid.Empty) return Invalid<MessageDto>("clientSubmissionId");
         var meeting = await meetings.FindActiveByIdAsync(meetingId, ct); if (meeting is null) return new(await UnavailableStatus(meetingId, effectiveUserId, ct));
-        var participant = kind == DomainAuthorKind.System ? null : await participants.FindByUserAsync(meetingId, effectiveUserId, ct); if (kind != DomainAuthorKind.System && participant is null) return new(MessageOperationStatus.MeetingNotFound);
+        var participant = kind == DomainAuthorKind.System ? null : await ResolveParticipant(meetingId, effectiveUserId, ct); if (kind != DomainAuthorKind.System && participant is null) return new(MessageOperationStatus.MeetingNotFound);
         if (participant?.MembershipState == Domain.Enums.MeetingMembershipState.Left) return new(MessageOperationStatus.MembershipLeft);
         try
         {
             var result = await runner.RunAsync(token => appendCore.AppendScopedAsync(meetingId,
                 kind == DomainAuthorKind.System ? new(null, systemName ?? "System", TransportAuthorKind.System)
-                    : new(participant!.ID, participant.DisplayName, TransportAuthorKind.Human), request, token), ct);
+                    : new(participant!.ID, participant.DisplayName, participant.ParticipantType == ParticipantType.Agent ? TransportAuthorKind.Agent : TransportAuthorKind.Human), request, token), ct);
             var persisted = await messages.FindByIdAsync(meetingId, result.MessageId, ct)
                 ?? throw new InvalidOperationException("The committed message could not be read.");
             // System append is internal and has no viewer; its position must never be presented as a user's cursor.
@@ -66,12 +66,12 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
 
     public async Task<MessageOperationResult<MessagePageDto>> GetPageAsync(Guid meetingId, MessagePageRequest request, CancellationToken ct = default)
     {
-        if (currentUser.UserId is not Guid userId || userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
+        var userId = currentUser.UserId.GetValueOrDefault(); if (userId == Guid.Empty && agentContext?.ParticipantFor(meetingId) is null) return new(MessageOperationStatus.Unauthenticated);
         if (request.BeforeSequence.HasValue && request.AfterSequence.HasValue || request.BeforeSequence.HasValue && request.ThroughSequence.HasValue || request.BeforeSequence < 0 || request.AfterSequence < 0 || request.ThroughSequence < 0 || request.ThroughSequence < request.AfterSequence) return Invalid<MessagePageDto>("cursor");
-        using var sharedLease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        using var sharedLease = await (agentContext?.AcquireSharedAsync(realtimeGate, meetingId, ct) ?? realtimeGate.AcquireSharedAsync(meetingId, ct));
         if (sharedLease is null) return new(await UnavailableStatus(meetingId, currentUser.UserId.GetValueOrDefault(), ct));
         var meeting = await meetings.FindActiveByIdAsync(meetingId, ct);
-        var participant = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, ct);
+        var participant = meeting is null ? null : await ResolveParticipant(meetingId, userId, ct);
         if (meeting is null) return new(await UnavailableStatus(meetingId, userId, ct));
         if (participant is null) return new(MessageOperationStatus.MeetingNotFound);
         var through = request.ThroughSequence;
@@ -98,32 +98,36 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
     {
         if (userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
         var meeting = await meetings.FindActiveByIdAsync(meetingId, ct);
-        var p = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, ct);
+        var p = meeting is null ? null : await ResolveParticipant(meetingId, userId, ct);
         if (meeting is null || p is null) return new(MessageOperationStatus.MeetingNotFound);
         if (p.MembershipState == MeetingMembershipState.Left) return new(MessageOperationStatus.MembershipLeft);
         return new(MessageOperationStatus.Success, new(p.ID, await visibility.HighWatermarkAsync(meetingId, p.ID, ct)));
     }
     public async Task<MessageOperationResult<MessageDto>> GetMessageAsync(Guid meetingId, Guid messageId, CancellationToken ct = default)
     {
-        if (currentUser.UserId is not Guid userId || userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
-        using var lease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        var userId = currentUser.UserId.GetValueOrDefault(); if (userId == Guid.Empty && agentContext?.ParticipantFor(meetingId) is null) return new(MessageOperationStatus.Unauthenticated);
+        using var lease = await (agentContext?.AcquireSharedAsync(realtimeGate, meetingId, ct) ?? realtimeGate.AcquireSharedAsync(meetingId, ct));
         if (lease is null || await meetings.FindActiveByIdAsync(meetingId, ct) is null) return new(await UnavailableStatus(meetingId, userId, ct));
-        var p = await participants.FindByUserAsync(meetingId, userId, ct);
+        var p = await ResolveParticipant(meetingId, userId, ct);
         if (p is null) return new(MessageOperationStatus.MeetingNotFound);
         var row = await visibility.FindAsync(meetingId, p.ID, messageId, p.LeftThroughSequence, ct);
         return row is null ? new(MessageOperationStatus.MessageNotFound) : new(MessageOperationStatus.Success, await mapper.MapAsync(row, ct));
     }
     public async Task<MessageOperationResult<SubmissionStatusDto>> GetSubmissionAsync(Guid meetingId, Guid submissionId, CancellationToken ct = default)
     {
-        if (currentUser.UserId is not Guid userId || userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
-        using var lease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        var userId = currentUser.UserId.GetValueOrDefault(); if (userId == Guid.Empty && agentContext?.ParticipantFor(meetingId) is null) return new(MessageOperationStatus.Unauthenticated);
+        using var lease = await (agentContext?.AcquireSharedAsync(realtimeGate, meetingId, ct) ?? realtimeGate.AcquireSharedAsync(meetingId, ct));
         if (lease is null || await meetings.FindActiveByIdAsync(meetingId, ct) is null) return new(await UnavailableStatus(meetingId, userId, ct));
-        var p = await participants.FindByUserAsync(meetingId, userId, ct);
+        var p = await ResolveParticipant(meetingId, userId, ct);
         if (p is null) return new(MessageOperationStatus.MeetingNotFound);
         var message = await messages.FindBySubmissionAsync(meetingId, p.ID, submissionId, ct);
         var row = message is null ? null : await visibility.FindAsync(meetingId, p.ID, message.ID, p.LeftThroughSequence, ct);
         return new(MessageOperationStatus.Success, row is null ? new("not_found", null) : new("saved", await mapper.MapAsync(row, ct)));
     }
+    private async Task<MeetingParticipant?> ResolveParticipant(Guid meetingId, Guid userId, CancellationToken ct)
+        => agentContext?.ParticipantFor(meetingId) is Guid agentId
+            ? (await participants.ListAsync(meetingId, ct)).SingleOrDefault(p => p.ID == agentId && p.ParticipantType == ParticipantType.Agent)
+            : await participants.FindByUserAsync(meetingId, userId, ct);
     private async Task<MessageOperationStatus> UnavailableStatus(Guid meetingId, Guid userId, CancellationToken cancellationToken)
         => await lifecycleService.GetMemberStateAsync(meetingId, userId, cancellationToken) switch
         {

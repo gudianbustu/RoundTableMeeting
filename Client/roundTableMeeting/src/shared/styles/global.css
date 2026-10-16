@@ -214,3 +214,6 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid #1677ff; outline-
 .participant-list-item-actions { display: flex; align-items: center; flex-shrink: 0; gap: 2px; margin-left: auto; }
 .participant-list-item-actions:empty { display: none; }
 .participant-mention-icon { font-size: 17px; line-height: 1; }
+
+.chat-message-notifications { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 12px; max-height: 96px; overflow-y: auto; }
+.chat-message-notifications:empty { display: none; }

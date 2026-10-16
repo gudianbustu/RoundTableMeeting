@@ -76,7 +76,8 @@ public sealed class AgentActivityService(IMeetingRepository meetings, IMeetingPa
         var fence = new AgentConnectionFence(meetingId, participantId, id, connection.ConnectionGeneration, connection.BindingVersion, connection.McpTransportBinding);
         if (!await recovery.DisconnectAsync(fence, AgentTaskFailurePolicy.ToStoredCode(reason.Value), now, token)) return;
         var policy = new AgentTaskFailurePolicy(options.MaximumAutomaticRetries, options.RetryBackoffSeconds);
-        foreach (var task in await agents.ListTasksAsync(meetingId, participantId, token))
+        foreach (var task in connection.Transport == Domain.Entities.AgentConnectionSession.ParticipantSequenceTransport
+            ? [] : await agents.ListTasksAsync(meetingId, participantId, token))
         {
             if (connection.ReliabilityMode == "legacy_v1" && task.InitializeLegacyFailureDecision()) unitOfWork.RegisterEdit(task);
             if (task.State is not (AgentReplyTaskState.Delivered or AgentReplyTaskState.Processing)) continue;

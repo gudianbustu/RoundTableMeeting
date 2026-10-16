@@ -56,7 +56,10 @@ public static class ServiceCollectionExtensions
 		builder.Services.AddSingleton<IAgentConnectionCompensator, AgentConnectionCompensator>();
 		builder.Services.AddSingleton<IAgentActivityNotifier, AgentActivityNotifier>();
 		builder.Services.AddSingleton<IAgentTaskSignalRegistry, AgentTaskSignalRegistry>();
-		builder.Services.AddScoped<McpTransportSessionAccessor>();
+		builder.Services.AddScoped<MeetingAgentContext>();
+        builder.Services.AddScoped<CurrentMcpSessionService>();
+        builder.Services.AddSingleton<McpTransferTickets>();
+        builder.Services.AddScoped<McpTransportSessionAccessor>();
 		builder.Services.AddScoped((Func<IServiceProvider, IMcpTransportSessionAccessor>)((IServiceProvider sp) => sp.GetRequiredService<McpTransportSessionAccessor>()));
 		JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);
 		jsonSerializerOptions.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
@@ -66,7 +69,7 @@ public static class ServiceCollectionExtensions
 			options.ServerInfo = new Implementation
 			{
 				Name = "round-table-meeting-agent-messaging",
-				Version = "agent-messaging-v1"
+				Version = "mcp-preview-v2"
 			};
 		})
 #pragma warning disable MCPEXP002
@@ -101,7 +104,7 @@ public static class ServiceCollectionExtensions
 			};
 		})
 #pragma warning restore MCPEXP002
-		.WithTools(AgentToolSchemas.CreateTools(jsonSerializerOptions));
+		.WithTools<CurrentMcpTools>(jsonSerializerOptions);
 		builder.Services.AddOptions<SqliteDatabaseOptions>().Bind(builder.Configuration.GetSection("Database")).ValidateDataAnnotations()
 			.Validate((SqliteDatabaseOptions options) => SqliteDatabaseOptions.TryValidate(options.ConnectionString, out string _), "Database connection settings are invalid.")
 			.ValidateOnStart();
