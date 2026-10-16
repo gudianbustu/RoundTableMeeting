@@ -120,12 +120,19 @@ public static class ServiceCollectionExtensions
 			}, "Message send rate limits are invalid.")
 			.ValidateOnStart();
 		builder.Services.AddSingleton((IServiceProvider sp) => sp.GetRequiredService<IOptions<RealtimeChatOptions>>().Value);
+        builder.Services.AddOptions<AttachmentOptions>().Bind(builder.Configuration.GetSection(AttachmentOptions.SectionName))
+            .ValidateDataAnnotations().Validate(o => !string.IsNullOrWhiteSpace(o.RootPath), "Attachment root is required.").ValidateOnStart();
+        builder.Services.AddSingleton<IAttachmentStore, LocalAttachmentStore>();
+        builder.Services.AddSingleton<IMeetingDeletionResourceCleanup, AttachmentMeetingCleanup>();
+        builder.Services.AddHostedService<AttachmentMaintenanceService>();
 		builder.Services.AddSignalR();
 		builder.Services.AddSingleton<MeetingPresenceRegistry>();
 		builder.Services.AddSingleton<IMeetingRealtimeTermination, MeetingRealtimeTermination>();
 		builder.Services.AddSingleton<MessageSendRateLimiter>();
 		builder.Services.AddScoped<MessageSendRateLimitFilter>();
-		builder.Services.AddSingleton<IMeetingRealtimeGate, MeetingRealtimeGate>();
+		builder.Services.AddSingleton<MeetingRealtimeGate>();
+        builder.Services.AddSingleton<IMeetingRealtimeGate>(sp => sp.GetRequiredService<MeetingRealtimeGate>());
+        builder.Services.AddSingleton<IMeetingFileTransferGate>(sp => sp.GetRequiredService<MeetingRealtimeGate>());
 		builder.Services.AddSingleton<IMessageMentionParser, MessageMentionParser>();
 		builder.Services.AddScoped<RealtimeChatService>();
 		builder.Services.AddScoped((Func<IServiceProvider, IMessageAppendService>)((IServiceProvider sp) => sp.GetRequiredService<RealtimeChatService>()));
@@ -134,8 +141,7 @@ public static class ServiceCollectionExtensions
 		builder.Services.AddSingleton<IMessageEventConsumerCatalog, MessageEventConsumerCatalog>();
 		builder.Services.AddScoped<RealtimeMessageBroadcastConsumer>();
 		builder.Services.AddSingleton(new MessageEventConsumerDescriptor("realtime-broadcast-v1", typeof(RealtimeMessageBroadcastConsumer)));
-		builder.Services.AddScoped<AgentMentionTaskConsumer>();
-		builder.Services.AddSingleton(new MessageEventConsumerDescriptor("agent-mention-task-v1", typeof(AgentMentionTaskConsumer)));
+
 		builder.Services.AddSingleton<IPasswordHasher<UserAccount>, PasswordHasher<UserAccount>>();
 		builder.Services.AddSingleton<PasswordVerificationService>();
 		builder.Services.AddHttpContextAccessor();
@@ -177,7 +183,7 @@ public static class ServiceCollectionExtensions
 		builder.Services.AddSingleton<MeetingDeletionSignal>();
 		builder.Services.AddSingleton((Func<IServiceProvider, IMeetingDeletionSignal>)((IServiceProvider services) => services.GetRequiredService<MeetingDeletionSignal>()));
 		builder.Services.AddHostedService<MeetingDeletionRecoveryService>();
-		builder.Services.AddHostedService<AgentConnectionStartupReconciler>();
+
 		builder.Services.AddHostedService<MessageEventDispatcherService>();
 		builder.Services.AddSingleton<MeetingJoinRateLimiter>();
 		builder.Services.AddScoped<MeetingJoinRateLimitFilter>();

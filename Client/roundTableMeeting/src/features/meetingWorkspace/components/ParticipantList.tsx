@@ -1,41 +1,26 @@
-import { Avatar, Empty, Tag, Typography } from 'antd'
+import { Avatar, Button, Collapse, Empty, Tag, Tooltip, Typography } from 'antd'
+import { MessageOutlined, UserAddOutlined } from '@ant-design/icons'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 
-function agentStatus(activity: AgentActivity | undefined) {
-  if (!activity || activity.state === 'unknown') return { online: false, label: '实时状态未知', color: 'default' as const }
-  if (activity.reason === 'activating') return { online: false, label: '连接建立中', color: 'default' as const }
-  if (activity.state === 'disconnected') return { online: false, label: '连接中断', color: 'default' as const }
-  if (activity.reason === 'initial_context_unconfirmed' || activity.reason === 'awaiting_context_confirmation') return { online: true, label: '等待接收确认', color: 'orange' as const }
-  if (activity.reason === 'retry_pending') return { online: true, label: '重试等待', color: 'orange' as const }
-  if (activity.reason === 'retry_exhausted') return { online: true, label: '任务失败，等待重试', color: 'red' as const }
-  if (activity.state === 'waiting') return { online: true, label: '等待中', color: 'green' as const }
-  if (activity.state === 'processing') return { online: true, label: '处理中', color: 'blue' as const }
-  if (activity.state === 'blocked') return { online: true, label: '已阻塞', color: 'orange' as const }
-  return { online: false, label: undefined, color: 'default' as const }
-}
-
-export function ParticipantList({ onMention, participants, presence = {}, agentActivities = {} }: { onMention?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
-  return <section className="participant-list">
-    <Typography.Title level={4}>参与者</Typography.Title>
-    {participants.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无参与者" /> :
-      <div className="participant-list-items">{participants.map(participant => {
-        const agent = participant.type === 'agent'
-        const activity = agentActivities[participant.participantId]
-        const status = agentStatus(activity)
-        const humanOnline = presence[participant.participantId] === 'online'
-        return <button type="button" key={participant.participantId} className="participant-list-item" disabled={!onMention} aria-label={`提及 ${participant.displayName}`} title={`点击 @${participant.displayName}`} onClick={() => onMention?.(participant)}>
-          <Avatar>{participant.displayName.slice(0, 1)}</Avatar>
-          <div className="participant-list-item-content"><Typography.Text strong>{participant.displayName}</Typography.Text><div>
-            {participant.isCurrentUser && <Tag>我</Tag>}{participant.isCreator && <Tag color="gold">创建者</Tag>}
-            <Tag color={agent ? status.online ? 'green' : 'default' : humanOnline ? 'green' : 'default'}>
-              {agent ? status.online ? '在线' : status.label ?? '离线' : humanOnline ? '在线' : '离线'}
-            </Tag>
-            {agent && status.online && status.label && <Tag color={status.color}>{status.label}</Tag>}
-            {agent && activity?.state !== 'unknown' && activity?.connectionDisposition === 'taken_over' && <Tag color="blue">已由新连接接管</Tag>}
-            <Typography.Text type="secondary">{agent ? 'AI Agent' : '人类参与者'}</Typography.Text>
-          </div></div>
-        </button>
-      })}</div>}
+export function ParticipantList({ onInvite, onMention, onPrivateChat, participants, presence = {} }: { onInvite?: () => void; onMention?: (participant: Participant) => void; onPrivateChat?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
+  const online = participants.filter(p => presence[p.participantId] === 'online')
+  const offline = participants.filter(p => presence[p.participantId] !== 'online')
+  const rows = (items: Participant[]) => <div className="participant-list-items">{items.map(participant => <div key={participant.participantId} className="participant-list-item">
+    <Avatar>{participant.displayName.slice(0, 1)}</Avatar>
+    <div className="participant-list-item-content"><Typography.Text strong>{participant.displayName}</Typography.Text><div>
+      {participant.isCurrentUser && <Tag>我</Tag>}{participant.isCreator && <Tag color="gold">创建者</Tag>}
+      <Typography.Text type="secondary">{participant.type === 'agent' ? 'AI Agent' : '人类参与者'}</Typography.Text>
+    </div></div>
+    <div className="participant-list-item-actions">
+      {onMention && <Tooltip title={`提及 ${participant.displayName}`}><Button type="text" size="small" aria-label={`提及 ${participant.displayName}`} icon={<span className="participant-mention-icon" aria-hidden="true">@</span>} onClick={() => onMention(participant)} /></Tooltip>}
+      {!participant.isCurrentUser && onPrivateChat && <Tooltip title={`私聊 ${participant.displayName}`}><Button type="text" size="small" aria-label={`私聊 ${participant.displayName}`} icon={<MessageOutlined />} onClick={() => onPrivateChat(participant)} /></Tooltip>}
+    </div>
+  </div>)}</div>
+  return <section className="participant-list"><div className="participant-list-heading"><Typography.Title level={4}>参与者</Typography.Title>{onInvite && <Button type="text" aria-label="邀请入会" title="邀请入会" icon={<UserAddOutlined />} onClick={onInvite} />}</div>
+    {participants.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无参与者" /> : <>
+      <Typography.Text type="secondary">在线 · {online.length}</Typography.Text>{rows(online)}
+      {offline.length > 0 && <Collapse ghost items={[{ key: 'offline', label: `离线 · ${offline.length}`, children: rows(offline) }]} />}
+    </>}
   </section>
 }

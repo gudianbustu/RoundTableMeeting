@@ -45,7 +45,7 @@ public sealed class RealtimeChatContractTests
         var submissionId = Guid.NewGuid();
         using var first = JsonPost($"/api/meetings/{meetingId}/messages", new { clientSubmissionId = submissionId, content = "@Alice hello", mentionCandidates = new[] { new { participantId = participant.GetProperty("participantId").GetGuid(), startOffset = 0, length = 6 } } });
         var firstResponse = await client.SendAsync(first);
-        using var replay = JsonPost($"/api/meetings/{meetingId}/messages", new { clientSubmissionId = submissionId, content = "@Alice hello" });
+        using var replay = JsonPost($"/api/meetings/{meetingId}/messages", new { clientSubmissionId = submissionId, content = "@Alice hello", mentionCandidates = new[] { new { participantId = participant.GetProperty("participantId").GetGuid(), startOffset = 0, length = 6 } } });
         var replayResponse = await client.SendAsync(replay);
         using var mismatch = JsonPost($"/api/meetings/{meetingId}/messages", new { clientSubmissionId = submissionId, content = "different" });
         var mismatchResponse = await client.SendAsync(mismatch);

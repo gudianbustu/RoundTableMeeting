@@ -20,8 +20,8 @@ a { color: #176b87; }
 .meeting-workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: 260px minmax(0, 1fr) 300px; grid-template-rows: minmax(0, 1fr); gap: 24px; padding-top: 24px; align-items: stretch; }
 .meeting-navigation { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 18px; background: #fff; border: 1px solid #dbe5e8; border-radius: 6px; align-self: stretch; overflow: hidden; }
 .meeting-navigation-list { display: grid; gap: 4px; }
-.meeting-navigation-item { width: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; cursor: pointer; padding: 10px 8px; border: 0; border-radius: 4px; background: transparent; color: inherit; text-align: left; }
-.meeting-navigation-item span { min-width: 0; display: grid; gap: 2px; }
+.meeting-navigation-item { position: relative; width: 100%; border-radius: 4px; }
+.meeting-navigation-select > span { min-width: 0; display: grid; gap: 2px; }
 .meeting-navigation-item strong, .meeting-navigation-item small { overflow-wrap: anywhere; }
 .meeting-navigation-item:hover, .meeting-navigation-item.selected { background: #eaf4f7; }
 .meeting-main { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
@@ -35,12 +35,12 @@ a { color: #176b87; }
 .participant-list-items { display: grid; gap: 8px; }
 .participant-list-item { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; padding: 10px 4px; border: 0; border-bottom: 1px solid #edf2f3; background: transparent; color: inherit; font: inherit; text-align: left; border-radius: 4px; cursor: pointer; }
 .participant-list-item > .ant-avatar { flex-shrink: 0; }
-.participant-list-item-content { min-width: 0; overflow-wrap: anywhere; }
+.participant-list-item-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .conversation-placeholder { min-height: 140px; }
 .realtime-chat-region { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; }
 .message-timeline { flex: 1; min-width: 0; min-height: 0; border: 1px solid #dbe5e8; border-radius: 6px; background: #fff; display: flex; flex-direction: column; overflow: hidden; }
 .message-timeline-toolbar { min-height: 36px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid #edf2f3; }
-.message-timeline-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px; scroll-behavior: smooth; }
+.message-timeline-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px; scroll-behavior: auto; }
 .message-item { min-width: 0; padding: 18px 4px; border-bottom: 1px solid #edf2f3; }
 .message-item:last-child { border-bottom: 0; }
 .message-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-bottom: 10px; min-width: 0; }
@@ -60,7 +60,7 @@ a { color: #176b87; }
 .meeting-empty > .ant-typography { margin: 0; }
 /* Only the meeting workspace owns the viewport; other pages keep natural scrolling. */
 .app-shell:has(> .meeting-workspace) { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
-.app-shell > .app-header, .meeting-main > :not(.realtime-chat-region), .realtime-chat-region > :not(.message-timeline), .message-timeline-toolbar { flex-shrink: 0; }
+.app-shell > .app-header, .meeting-main > :not(.realtime-chat-region):not(.scoped-chat), .realtime-chat-region > :not(.message-timeline), .message-timeline-toolbar { flex-shrink: 0; }
 .meeting-navigation, .meeting-sidebar { overscroll-behavior: contain; }
 @media (min-width: 721px) and (max-width: 1100px) {
   .meeting-workspace { grid-template-columns: 180px minmax(0, 1fr) 220px; gap: 12px; }
@@ -118,3 +118,99 @@ a { color: #176b87; }
 .mention-option { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .mention-option .ant-tag { margin-inline-end: 0; }
 .message-composer .composer-mentions:focus-within, .message-composer .composer-mentions textarea:focus, .message-composer .composer-mentions textarea:focus-visible { outline: none; border-color: transparent; box-shadow: none; }
+
+.scoped-chat { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; gap: 10px; }
+.chat-scope-bar, .chat-resource-tools, .message-reply-context, .attachment-upload { flex-shrink: 0; }
+.chat-scope-bar, .chat-resource-tools, .message-reply-context { padding: 0 16px; }
+.message-reply-context { display: flex; align-items: center; gap: 8px; }
+.message-reply-context > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.attachment-links { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.attachment-image-preview { display: block; max-width: 100%; max-height: 70vh; object-fit: contain; margin: auto; }
+.attachment-pdf-preview { width: 100%; height: 70vh; border: 0; }
+.message-attachments { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: 12px; overflow-wrap: anywhere; width: 100%; }
+.attachment-ready { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; }
+.meeting-attachment-row { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 0; border-bottom: 1px solid #eee; }
+
+.attachment-card { min-width: 0; width: 320px; max-width: 100%; border: 1px solid #dce3eb; border-radius: 10px; overflow: hidden; background: #fff; }
+.attachment-thumbnail { position: relative; display: flex; align-items: center; justify-content: center; width: 100%; height: 140px; padding: 0; overflow: hidden; border: 0; border-bottom: 1px solid #edf0f4; background: #f5f7fa; color: #667085; text-align: left; }
+button.attachment-thumbnail { cursor: pointer; }
+button.attachment-thumbnail:focus-visible { outline: 2px solid #1677ff; outline-offset: -3px; }
+.attachment-thumbnail canvas { display: block; width: 100%; height: auto; flex: none; align-self: flex-start; }
+.attachment-thumbnail pre { margin: 0; padding: 12px; align-self: flex-start; width: 100%; font: 12px/20px ui-monospace, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere; color: #344054; }
+.attachment-thumbnail-status { position: absolute; inset: 0; display: grid; place-items: center; font-size: 12px; }
+.attachment-file-symbol { display: grid; gap: 8px; justify-items: center; font-size: 12px; }
+.attachment-file-symbol .anticon { font-size: 36px; color: #98a2b3; }
+.attachment-page-count { position: absolute; right: 8px; bottom: 8px; padding: 2px 7px; border-radius: 5px; background: #344054dd; color: white; font-size: 11px; }
+.attachment-card-info { padding: 10px 12px 6px; }
+.attachment-card-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.attachment-card-size { display: block; margin-top: 3px; font-size: 12px; color: #667085; }
+.attachment-card-actions { display: flex; gap: 6px; padding: 0 8px 8px; }
+.meeting-attachment-row { width: 100%; }
+
+.message-image { grid-column: 1 / -1; width: min(320px, 100%); min-width: 0; height: 240px; }
+.message-image-button { position: relative; display: flex; align-items: center; justify-content: flex-start; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #667085; cursor: pointer; }
+.message-image-button img { display: block; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; }
+.message-image-button:focus-visible { outline: 2px solid #1677ff; outline-offset: 2px; }
+.pending-message-row { display: flex; align-items: center; gap: 8px; }
+.pending-message-status { flex: none; color: #8c8c8c; }
+.pending-message-body { min-width: 0; max-width: 100%; padding: 8px 12px; border-radius: 10px; background: #f0f4f7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.pending-message-file { font-size: 13px; color: #667085; }
+.pending-message-details { max-width: min(320px, 75vw); overflow-wrap: anywhere; }
+.message-own > .message-meta, .message-pending > .message-meta { justify-content: flex-end; }
+.message-own > .message-body { width: fit-content; max-width: 80%; margin-left: auto; padding: 8px 12px; border-radius: 12px; background: #f0f4f7; text-align: left; }
+.message-own > .message-attachments { max-width: 80%; margin-left: auto; grid-template-columns: minmax(0, 320px); justify-content: end; justify-items: end; }
+.message-own > .message-body + .message-attachments { margin-top: 10px; }
+.message-own .message-image-button { justify-content: flex-end; }
+.message-pending .pending-message-row { justify-content: flex-end; max-width: 80%; margin-left: auto; }
+.message-pending .pending-message-body { flex: 0 1 auto; }
+.composer-context-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 0 4px; }
+.chat-scope-select { width: 220px; max-width: calc(100% - 48px); }
+.chat-scope-private { --ant-color-primary: #722ed1; }
+.chat-scope-private .ant-select-content { color: #722ed1; font-weight: 600; }
+.message-composer-tools { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; }
+.message-composer-tools .attachment-upload { min-width: 0; max-width: 100%; }
+.message-composer-tools > .meeting-actions { width: auto; flex: 1; }
+
+.realtime-chat-region > .message-timeline { margin: 12px 12px 0; }
+.realtime-chat-region > .composer-context-toolbar { margin: 4px 12px; padding: 0; }
+.realtime-chat-region > .message-composer { margin: 0 12px 12px; }
+.chat-private > .message-composer { border-color: #b37feb; background: #fdfaff; box-shadow: 0 0 0 2px rgb(114 46 209 / 9%), 0 0 12px 3px rgb(114 46 209 / 18%); }
+.chat-private > .message-composer:focus-within { border-color: #722ed1; box-shadow: 0 0 0 2px rgb(114 46 209 / 16%), 0 0 12px 3px rgb(114 46 209 / 24%); }
+
+.chat-private > .message-timeline, .chat-private .chat-scope-select.ant-select { border-color: #b37feb; box-shadow: 0 0 0 2px rgb(114 46 209 / 9%), 0 0 12px 3px rgb(114 46 209 / 18%); }
+.chat-private .chat-scope-select.ant-select { background: #fdfaff; }
+.chat-private .chat-scope-select.ant-select:hover, .chat-private .chat-scope-select.ant-select:focus-within { border-color: #722ed1; box-shadow: 0 0 0 2px rgb(114 46 209 / 16%), 0 0 12px 3px rgb(114 46 209 / 24%); }
+.chat-private .message-composer-actions .ant-btn-primary { background: #722ed1; border-color: #722ed1; color: #fff; }
+.chat-private .message-composer-actions .ant-btn-primary:not(:disabled):hover { background: #9254de; border-color: #9254de; }
+.chat-private .message-composer-actions .ant-btn-primary:not(:disabled):active { background: #531dab; border-color: #531dab; }
+.chat-private .message-composer-actions .ant-btn-primary:disabled { background: #f0e5fc; border-color: #e0cef3; color: #ad8dc9; }
+
+.draft-attachments { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 8px; max-height: 100px; overflow-y: auto; min-width: 0; padding: 2px; }
+.draft-attachment { position: relative; flex: 0 0 40px; width: 40px; max-width: 100%; height: 40px; box-sizing: border-box; border: 1px solid #dbe5e8; border-radius: 8px; background: #f7f9fb; overflow: hidden; }
+.draft-attachment-image img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.draft-attachment-file { display: flex; align-items: center; justify-content: center; }
+.draft-file-icon { flex: none; font-size: 22px; color: #667085; }
+.draft-file-info { display: none; flex-direction: column; gap: 4px; min-width: 0; }
+.draft-file-name { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 12px; }
+.draft-file-size { font-size: 11px; color: #667085; }
+.draft-attachment .draft-attachment-remove { position: absolute; top: 0; right: 0; width: 14px; height: 14px; min-width: 14px; background: rgb(255 255 255 / 90%); border-radius: 50%; font-size: 9px; }
+.draft-image-fallback { display: flex; height: 100%; align-items: center; justify-content: center; color: #667085; font-size: 12px; }
+
+.attachment-upload .ant-space { max-width: 100%; }
+.attachment-upload .ant-space-item { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.attachment-upload .ant-space-item .ant-btn:not(.ant-btn-icon-only) { max-width: 100%; height: auto; white-space: normal; }
+
+.draft-attachment-preview { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; border: 0; padding: 0; background: transparent; cursor: pointer; }
+.draft-attachment-preview:focus-visible { outline: 2px solid #722ed1; outline-offset: -2px; }
+
+.meeting-navigation-select { width: 100%; display: grid; grid-template-columns: 20px minmax(0, 1fr); align-items: center; gap: 8px; cursor: pointer; padding: 10px 56px 10px 8px; border: 0; border-radius: 4px; background: transparent; color: inherit; text-align: left; }
+.meeting-navigation-actions { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; gap: 0; opacity: 0; pointer-events: none; }
+.meeting-navigation-item:hover .meeting-navigation-actions, .meeting-navigation-item:focus-within .meeting-navigation-actions, .meeting-navigation-actions.is-open { opacity: 1; pointer-events: auto; }
+.participant-list-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 16px; }
+.participant-list-heading > h4.ant-typography { margin: 0; }
+@media (hover: none) { .meeting-navigation-actions { opacity: 1; pointer-events: auto; } }
+
+.participant-list-item-actions { display: flex; align-items: center; flex-shrink: 0; gap: 2px; margin-left: auto; }
+.participant-list-item-actions:empty { display: none; }
+.participant-mention-icon { font-size: 17px; line-height: 1; }

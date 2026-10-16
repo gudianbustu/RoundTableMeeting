@@ -100,6 +100,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
         {
             var values = new Dictionary<string, string?>
             {
+                ["Attachment:RootPath"] = Path.Combine(databaseDirectory, "attachments"),
                 ["Database:ConnectionString"] = $"Data Source={DatabasePath};Mode=ReadWriteCreate;Default Timeout=5;Foreign Keys=True;Pooling=False"
                 , ["Authentication:InitialAdminUsername"] = "alice"
                 , ["Authentication:AllowedOrigins:0"] = "http://localhost:5173"

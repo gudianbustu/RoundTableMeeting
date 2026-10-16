@@ -8,6 +8,13 @@ public interface IMessageAppendService
 
 public interface IResolvedMessageAppendCore
 {
+    Task<ResolvedMessageAppendResult> AppendScopedAsync(Guid meetingId, ResolvedMessageAuthor author, SubmitMessageRequest request, CancellationToken ct = default)
+    {
+        if (request.Visibility is not (null or "public") || request.RecipientParticipantId.HasValue
+            || request.ReplyToMessageId.HasValue || request.AttachmentIds?.Count > 0)
+            throw new NotSupportedException("This implementation does not support scoped messages.");
+        return AppendAsync(meetingId, author, request.Content, request.ClientSubmissionId, request.MentionCandidates, ct);
+    }
     Task<ResolvedMessageAppendResult> AppendAsync(
         Guid meetingId, ResolvedMessageAuthor author, string content, Guid clientSubmissionId,
         IReadOnlyList<MentionCandidateDto>? mentionCandidates = null, CancellationToken cancellationToken = default);
@@ -30,7 +37,7 @@ public sealed record ResolvedMessageAppendResult(
     Guid? ParticipantId,
     string AuthorDisplayName,
     string Content,
-    DateTimeOffset CreatedAtUtc);
+    DateTimeOffset CreatedAtUtc) { public bool Replayed { get; init; } }
 public interface IMessageHistoryService { Task<MessageOperationResult<MessagePageDto>> GetPageAsync(Guid meetingId, MessagePageRequest request, CancellationToken cancellationToken = default); }
 public interface IMeetingChatSubscriptionService { Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default); }
 public interface IAgentActivityService
@@ -68,4 +75,10 @@ public interface IMessageEventConsumerCatalog
 public interface IMessageEventConsumer
 {
     Task ConsumeAsync(MessageAppendedEnvelope envelope, CancellationToken cancellationToken = default);
+}
+
+public interface IMessageLookupService
+{
+    Task<MessageOperationResult<MessageDto>> GetMessageAsync(Guid meetingId, Guid messageId, CancellationToken ct = default);
+    Task<MessageOperationResult<SubmissionStatusDto>> GetSubmissionAsync(Guid meetingId, Guid submissionId, CancellationToken ct = default);
 }

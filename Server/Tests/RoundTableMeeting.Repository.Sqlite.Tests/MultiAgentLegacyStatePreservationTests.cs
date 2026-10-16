@@ -24,8 +24,7 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
         {
             var reply = MeetingMessage.CreateParticipant(seed.Meeting.ID, 2, seed.Agent.ID, MessageAuthorKind.Agent,
                 "A", "historical reply", Guid.NewGuid(), Now.AddSeconds(1));
-            db.Add(reply);
-            await db.SaveChangesAsync();
+            await LegacyMessageSeed.InsertAsync(db, reply);
             replyId = reply.ID;
         }
         DateTimeOffset? delivered = state is "Delivered" or "Processing" or "Replied" ? Now : null;

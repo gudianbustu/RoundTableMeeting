@@ -62,12 +62,12 @@ public sealed class MessageEventDispatcherService(IServiceScopeFactory scopeFact
         await using var scope = scopeFactory.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
         var now = timeProvider.GetUtcNow();
-        var pendingRows = await db.MessageEventDeliveries.AsNoTracking().Where(item => item.State == MessageEventDeliveryState.Pending)
+        var pendingRows = await db.MessageEventDeliveries.AsNoTracking().Where(item => item.State == MessageEventDeliveryState.Pending && item.ConsumerName != "agent-mention-task-v1")
             .OrderBy(item => item.ID).Take(options.EventDispatcherBatchSize * 4)
             .Select(item => new DeliveryCandidate(item.ID, item.EventId, item.ConsumerName, item.State, item.AttemptCount, item.AvailableAtUtc, item.LeaseId, item.LeaseExpiresAtUtc)).ToListAsync(cancellationToken);
         var due = pendingRows.Where(item => item.AvailableAtUtc <= now).Take(options.EventDispatcherBatchSize).ToList();
         if (due.Count == options.EventDispatcherBatchSize) return due;
-        var leasedRows = await db.MessageEventDeliveries.AsNoTracking().Where(item => item.State == MessageEventDeliveryState.Leased)
+        var leasedRows = await db.MessageEventDeliveries.AsNoTracking().Where(item => item.State == MessageEventDeliveryState.Leased && item.ConsumerName != "agent-mention-task-v1")
             .OrderBy(item => item.ID).Take(options.EventDispatcherBatchSize * 4)
             .Select(item => new DeliveryCandidate(item.ID, item.EventId, item.ConsumerName, item.State, item.AttemptCount, item.AvailableAtUtc, item.LeaseId, item.LeaseExpiresAtUtc)).ToListAsync(cancellationToken);
         due.AddRange(leasedRows.Where(item => item.LeaseExpiresAtUtc <= now).Take(options.EventDispatcherBatchSize - due.Count));

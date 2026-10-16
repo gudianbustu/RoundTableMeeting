@@ -18,7 +18,11 @@ public sealed class MeetingMessageConfiguration : IEntityTypeConfiguration<Meeti
         builder.HasKey(x => x.ID);
         builder.Property(x => x.AuthorKind).HasConversion<string>().HasMaxLength(16).IsRequired();
         builder.Property(x => x.AuthorDisplayName).HasMaxLength(128).IsRequired();
-        builder.Property(x => x.Content).HasMaxLength(16384).IsRequired();
+        builder.Property(x => x.Content).IsRequired();
+        builder.Property(x => x.Visibility).HasMaxLength(16).HasDefaultValue("public").IsRequired();
+        builder.Property(x => x.PayloadFingerprint).HasMaxLength(64).HasDefaultValue("").IsRequired();
+        builder.HasIndex(x => new { x.RecipientParticipantId, x.MeetingId });
+        builder.HasIndex(x => new { x.ReplyToMessageId, x.MeetingId });
         builder.Property(x => x.Sequence).IsRequired();
         builder.Property(x => x.ClientSubmissionId).IsRequired();
         builder.Property(x => x.CreatedAtUtc).IsRequired();

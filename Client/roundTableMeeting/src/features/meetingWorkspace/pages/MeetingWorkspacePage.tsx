@@ -10,7 +10,7 @@ import { JoinMeetingDialog } from '../components/JoinMeetingDialog'
 import { useMeetingWorkspace } from '../hooks/useMeetingWorkspace'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
-import { RealtimeChatRegion } from './RealtimeChatRegion'
+import { RealtimeChatRegion, type ChatSessionCache } from './RealtimeChatRegion'
 
 export function hasUnknownOnlineParticipant(participants: Participant[], presence: Record<string, 'online' | 'offline'>) {
   const participantIds = new Set(participants.map(participant => participant.participantId))
@@ -24,10 +24,12 @@ export function hasUnknownAgentActivity(participants: Participant[], activities:
 
 export function MeetingWorkspacePage() {
   const workspace = useMeetingWorkspace()
+  const chatCache = useRef<ChatSessionCache>({ states: new Map(), selection: {} })
   const composerRef = useRef<MessageComposerHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [leaveOpen, setLeaveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [confirmName, setConfirmName] = useState('')
   const [presence, setPresence] = useState<Record<string, 'online' | 'offline'>>({})
@@ -38,7 +40,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => {
     setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
-    setInviteOpen(false); setDeleteOpen(false); setConfirmName('')
+    setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
   }, [workspace.selectedId])
   useEffect(() => {
     if (workspace.details && hasUnknownOnlineParticipant(workspace.details.participants, presence)) workspace.refreshDetails()
@@ -58,19 +60,22 @@ export function MeetingWorkspacePage() {
   const closeDelete = () => { setDeleteOpen(false); setConfirmName('') }
   return <section className="meeting-workspace">
     {contextHolder}
-    <MeetingNavigation meetings={workspace.meetings} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={workspace.select} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
+    <MeetingNavigation details={workspace.details} detailLoading={workspace.detailLoading} onLeave={() => setLeaveOpen(true)} onDelete={() => setDeleteOpen(true)} view={workspace.view} onViewChange={workspace.setView} meetings={workspace.meetings} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={workspace.select} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
     <main className="meeting-main">
       {workspace.error && <Alert closable type="error" showIcon title={workspace.error.code === 'meeting_not_found' ? '会议已不可访问' : '操作未能完成'} description={workspace.error.message} onClose={workspace.clearError} />}
       {workspace.detailLoading ? <Typography.Text>正在加载会议...</Typography.Text> : workspace.details ? <>
-        <RealtimeChatRegion composerRef={composerRef} composerTools={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onInvite={openInvite} onRefresh={workspace.refresh} onDelete={() => setDeleteOpen(true)} />} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={workspace.details.membershipState === 'left' || workspace.details.canSend === false} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} composerTools={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onRefresh={workspace.refresh} />} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
-    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList onMention={participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
+    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList onInvite={workspace.details.canManageInvitation ? openInvite : undefined} onPrivateChat={participant => composerRef.current?.privateChat?.(participant.participantId)} onMention={workspace.details.membershipState === 'left' ? undefined : participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />
     <InviteMeetingDialog open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />
     <JoinMeetingDialog open={joinOpen} loading={workspace.operationLoading} succeeded={workspace.joinSucceeded} previewLoading={workspace.previewLoading} preview={workspace.preview} error={workspace.error?.message} retryAfterSeconds={workspace.error?.retryAfterSeconds} onCancel={() => { workspace.clearJoin(); setJoinOpen(false) }} onPreview={workspace.previewCode} onSubmit={value => void workspace.join(value.code, value.displayName)} />
-    <Modal open={deleteOpen} title="删除会议" okText="确认删除" cancelText="取消" okButtonProps={{ danger: true, disabled: confirmName.normalize().trim() !== workspace.details?.name }} confirmLoading={workspace.operationLoading} onCancel={closeDelete} onOk={() => { if (workspace.selectedId) void workspace.remove(workspace.selectedId, confirmName).then(success => { if (success) closeDelete() }) }}>
-      <Typography.Paragraph>请输入完整会议名称“<strong>{workspace.details?.name}</strong>”确认删除。参与者记录和会议码将永久失效，此操作不可恢复。</Typography.Paragraph><Input aria-label="确认会议名称" value={confirmName} onChange={event => setConfirmName(event.target.value)} />
+    <Modal open={leaveOpen} title="退出会议" okText="确认退出" cancelText="取消" confirmLoading={workspace.operationLoading} onCancel={() => setLeaveOpen(false)} onOk={() => void workspace.leave().then(success => { if (success) setLeaveOpen(false) })}>
+      <Typography.Paragraph>退出后不再接收新消息，可以在历史会议中查看退出前有权访问的消息。之后可通过邀请码重新加入。</Typography.Paragraph>
+    </Modal>
+    <Modal open={deleteOpen} title="删除会议" okText="确认删除" cancelText="取消" okButtonProps={{ danger: true, disabled: confirmName.normalize().trim() !== workspace.details?.name }} confirmLoading={workspace.operationLoading} onCancel={closeDelete} onOk={() => { if (workspace.selectedId) void workspace.remove(workspace.selectedId, confirmName).then(success => { if (success) { const id = workspace.selectedId!; for (const key of chatCache.current.states.keys()) if (key.startsWith(id + ':')) chatCache.current.states.delete(key); delete chatCache.current.selection[id]; closeDelete() } }) }}>
+      <Typography.Paragraph>请输入完整会议名称“<strong>{workspace.details?.name}</strong>”确认删除。公开消息、私聊、全部附件和参与者记录将永久删除，会议码失效，此操作不可恢复。</Typography.Paragraph><Input aria-label="确认会议名称" value={confirmName} onChange={event => setConfirmName(event.target.value)} />
     </Modal>
   </section>
 }

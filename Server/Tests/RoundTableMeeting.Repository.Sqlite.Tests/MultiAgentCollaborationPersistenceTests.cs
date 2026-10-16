@@ -67,8 +67,7 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
             var reply = MeetingMessage.CreateParticipant(seed.Meeting.ID, 2, other.ID, MessageAuthorKind.Agent,
                 "Other", "private fixture reply", Guid.NewGuid(), Now);
             await LegacyMeetingParticipantSeed.InsertAsync(db, other);
-            db.Add(reply);
-            await db.SaveChangesAsync();
+            await LegacyMessageSeed.InsertAsync(db, reply);
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ReplyMessageId = {reply.ID}, State = 'Replied', RepliedAtUtc = {Now}");
         }
         else if (defect == "reply-missing")
@@ -83,8 +82,7 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         {
             var other = MeetingMessage.CreateParticipant(seed.Meeting.ID, 2, seed.Human.ID, MessageAuthorKind.Human,
                 "Owner", "@A", Guid.NewGuid(), Now);
-            db.Add(other);
-            await db.SaveChangesAsync();
+            await LegacyMessageSeed.InsertAsync(db, other);
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MessageMentions SET MessageId = {other.ID}");
         }
         else
@@ -191,7 +189,8 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         await db.SaveChangesAsync();
         await LegacyMeetingParticipantSeed.InsertAsync(db, human);
         await LegacyMeetingParticipantSeed.InsertAsync(db, agent);
-        db.AddRange(message, mention);
+        await LegacyMessageSeed.InsertAsync(db, message);
+        db.Add(mention);
         await db.SaveChangesAsync();
         var taskId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""

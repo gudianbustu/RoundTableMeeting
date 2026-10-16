@@ -39,8 +39,7 @@ public sealed class AgentCollaborationPersistenceTests
             context.Add(meeting);
             await context.SaveChangesAsync();
             await LegacyMeetingParticipantSeed.InsertAsync(context, participant);
-            context.Add(message);
-			await context.SaveChangesAsync();
+            await LegacyMessageSeed.InsertAsync(context, message);
 			await context.Database.MigrateAsync();
 			Assert.Equal(1, await context.MeetingMessages.CountAsync());
 			string[] array = new string[4] { "AgentConnectionSessions", "AgentContextCursors", "AgentReplyTasks", "AgentTaskDeliveryAttempts" };

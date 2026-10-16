@@ -43,3 +43,9 @@ describe('Agent collaboration history', () => {
     await expect(listMessages(meetingId)).rejects.toBeInstanceOf(RealtimeChatApiError)
   })
 })
+
+it('accepts Kiota null-object decoding for public recipients but rejects missing private recipients', () => {
+  const payload = { ...wire('public', []), visibility: 'public', recipient: {} }
+  expect(mapMessage(payload).recipient).toBeUndefined()
+  expect(() => mapMessage({ ...payload, visibility: 'private' })).toThrow(RealtimeChatApiError)
+})

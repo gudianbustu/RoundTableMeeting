@@ -23,8 +23,11 @@ export function mapMeetingDetails(value: Partial<MeetingDetailsDto>): MeetingDet
     description: value.description ?? undefined,
     createdAt: value.createdAt ?? undefined,
     currentParticipant: value.currentParticipant ? mapParticipant(value.currentParticipant) : undefined,
-    canDelete: Boolean(value.canDelete),
-    canManageInvitation: Boolean(value.canManageInvitation),
+    membershipState: value.membershipState === 'left' ? 'left' : 'joined',
+    canLeave: Boolean(value.permissions?.canLeave),
+    canSend: Boolean(value.permissions?.canSend),
+    canDelete: Boolean(value.permissions?.canDelete ?? value.canDelete),
+    canManageInvitation: Boolean(value.permissions?.canInvite ?? value.canManageInvitation),
     participants: (value.participants ?? []).map(mapParticipant),
   }
 }

@@ -39,24 +39,23 @@ describe('meeting workspace contracts', () => {
   })
 
   it('exposes invitation controls to ordinary human members', () => {
-    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
-    expect(screen.getByRole('button', { name: '邀请入会' })).toBeInTheDocument()
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: false, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCopy={vi.fn()} onRefresh={vi.fn()} /></ConfigProvider>)
+    expect(screen.queryByRole('button', { name: '邀请入会' })).not.toBeInTheDocument()
     expect(screen.getByText('0e04091b-4287-4b4c-8c99-70217a3aeea0')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '复制邀请码' })).toBeEnabled()
     expect(screen.queryByRole('button', { name: '删除会议' })).not.toBeInTheDocument()
   })
 
   it('renders icon-only header actions with accessible labels for creators', async () => {
-    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: true, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCopy={vi.fn()} onInvite={vi.fn()} onRefresh={vi.fn()} onDelete={vi.fn()} /></ConfigProvider>)
-    for (const label of ['邀请入会', '刷新会议', '复制邀请码', '更多会议操作']) {
+    render(<ConfigProvider><MeetingHeader meeting={{ meetingId: 'm', name: 'Meeting', canDelete: true, canManageInvitation: true, participants: [] }} invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCopy={vi.fn()} onRefresh={vi.fn()} /></ConfigProvider>)
+    for (const label of ['刷新会议', '复制邀请码']) {
       expect(screen.getByRole('button', { name: label })).toBeInTheDocument()
     }
     expect(screen.queryByRole('button', { name: '隐藏邀请码' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '显示邀请码' })).not.toBeInTheDocument()
     expect(screen.getByText('0e04091b-4287-4b4c-8c99-70217a3aeea0').closest('.meeting-code-row')).toContainElement(screen.getByRole('button', { name: '复制邀请码' }))
     expect(screen.queryByText('删除会议')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: '更多会议操作' }))
-    expect(await screen.findByRole('menuitem', { name: /删除会议/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '更多会议操作' })).not.toBeInTheDocument()
   })
 
   it('shows site address and meeting code when inviting a human', async () => {
@@ -106,11 +105,11 @@ describe('meeting workspace contracts', () => {
     })).toBe(true)
   })
 
-  it('renders Agent online and activity state independently from human presence', () => {
+  it('does not let retired Agent activity override current presence', () => {
     const participant = { participantId: '22222222-2222-4222-8222-222222222222', displayName: 'Assistant', type: 'agent' as const, isCreator: false, isCurrentUser: false }
     render(<ConfigProvider><ParticipantList participants={[participant]} presence={{ [participant.participantId]: 'offline' }} agentActivities={{ [participant.participantId]: { meetingId: '11111111-1111-4111-8111-111111111111', participantId: participant.participantId, state: 'waiting', changedAt: new Date() } }} /></ConfigProvider>)
-    expect(screen.getByText('在线')).toBeInTheDocument()
-    expect(screen.getByText('等待中')).toBeInTheDocument()
-    expect(screen.queryByText('离线')).not.toBeInTheDocument()
+    expect(screen.getByText('在线 · 0')).toBeInTheDocument()
+    expect(screen.queryByText('等待中')).not.toBeInTheDocument()
+    expect(screen.getByText('离线 · 1')).toBeInTheDocument()
   })
 })

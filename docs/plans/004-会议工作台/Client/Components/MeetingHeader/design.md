@@ -13,3 +13,5 @@ name、description、permissions、lifecycleState、membershipState及onEdit/onD
 名称长文本换行；操作均有aria-label，确认取消保留当前状态。更名成功通过模块同步标题，不在组件直接修改document.title。
 
 状态与权限以[客户端设计](../../design.md)及[服务端契约](../../../Server/design.md)为准；组件不建立第二套生命周期规则。
+
+输入区底部操作仅保留刷新会议、邀请码和复制。邀请入口由ParticipantList标题提供；会议信息与更多操作由MeetingNavigation列表项提供，沿用原权限与确认回调。

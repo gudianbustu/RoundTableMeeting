@@ -17,7 +17,9 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
         var mention = MessageMention.Create(seed.Meeting.ID, second.ID, seed.Agent.ID, "A", 0, 2);
         var reply = MeetingMessage.CreateParticipant(seed.Meeting.ID, 3, seed.Agent.ID, MessageAuthorKind.Agent,
             "A", "private fixture reply", Guid.NewGuid(), Now);
-        db.AddRange(second, mention, reply);
+        await LegacyMessageSeed.InsertAsync(db, second);
+        await LegacyMessageSeed.InsertAsync(db, reply);
+        db.Add(mention);
         await db.SaveChangesAsync();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO AgentReplyTasks (ID, MeetingId, AgentParticipantId, TriggerMessageId, TriggerSequence, TriggerMentionId,

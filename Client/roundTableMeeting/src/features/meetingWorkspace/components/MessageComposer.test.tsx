@@ -6,34 +6,28 @@ import { MessageComposer } from './MessageComposer'
 
 afterEach(cleanup)
 
-describe('Message sending feedback', () => {
-  it.each([
-    [undefined, undefined, '消息发送失败，请重试。'],
-    ['message_send_rate_limited', 12, '发送过于频繁，请在 12 秒后重试。'],
-  ] as const)('shows %s only after failure, and hides it during retry', (errorCode, retryAfterSeconds, message) => {
-    const props = {
-      value: 'A pending message', participants: [], onChange: vi.fn(), onSend: vi.fn(), onRetry: vi.fn(),
-      failedSubmission: { clientSubmissionId: 'submission', content: 'A pending message', candidates: [], errorCode, retryAfterSeconds },
-    }
-    const { rerender } = render(<MessageComposer {...props} send="sending" />)
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '重试发送' })).not.toBeInTheDocument()
-    expect(screen.getByPlaceholderText('输入消息')).toBeDisabled()
-    rerender(<MessageComposer {...props} send="failed" />)
-    expect(screen.getByRole('alert')).toHaveTextContent(message)
-    fireEvent.click(screen.getByRole('button', { name: '重试发送' }))
-    expect(props.onRetry).toHaveBeenCalledOnce()
-    rerender(<MessageComposer {...props} send="sending" />)
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: '重试发送' })).not.toBeInTheDocument()
-    rerender(<MessageComposer {...props} send="idle" failedSubmission={undefined} value="" />)
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    expect(screen.getByPlaceholderText('输入消息')).not.toBeDisabled()
-  })
+it('accepts pasted images and dropped files but preserves ordinary text paste and blocks locked intake', () => {
+  const onFiles = vi.fn()
+  const view = (disabled = false) => <MessageComposer value="原文" send="idle" participants={[]} onChange={vi.fn()} onSend={vi.fn()} onFiles={onFiles} disabled={disabled} />
+  const { rerender } = render(view())
+  const input = screen.getByPlaceholderText('输入消息')
+  expect(fireEvent.paste(input, { clipboardData: { files: [], getData: () => '文字' } })).toBe(true)
+  const picture = new File(['a'], 'paste.png', { type: 'image/png' })
+  expect(fireEvent.paste(input, { clipboardData: { files: [picture] } })).toBe(false)
+  expect(onFiles).toHaveBeenLastCalledWith([picture])
+  const files = [new File(['b'], 'b.txt'), picture]
+  expect(fireEvent.drop(input, { dataTransfer: { types: ['Files'], files } })).toBe(false)
+  expect(onFiles).toHaveBeenLastCalledWith(files)
+  rerender(view(true))
+  fireEvent.paste(input, { clipboardData: { files: [picture] } })
+  expect(fireEvent.drop(input, { dataTransfer: { types: ['Files'], files } })).toBe(false)
+  expect(onFiles).toHaveBeenCalledTimes(2)
+})
 
+describe('Message sending feedback', () => {
   it('does not submit while the IME is composing', () => {
     const onSend = vi.fn()
-    render(<MessageComposer value="中文输入" send="idle" failedSubmission={undefined} participants={[]} onChange={vi.fn()} onSend={onSend} onRetry={vi.fn()} />)
+    render(<MessageComposer value="中文输入" send="idle" participants={[]} onChange={vi.fn()} onSend={onSend} />)
     fireEvent.keyDown(screen.getByPlaceholderText('输入消息'), { key: 'Enter', isComposing: true })
     expect(onSend).not.toHaveBeenCalled()
   })
@@ -42,7 +36,7 @@ it('appends repeated mentions without losing the draft and focuses the end', () 
   const ref = createRef<MessageComposerHandle>()
   function Harness() {
     const [value, setValue] = useState('现有草稿')
-    return <><button onClick={() => ref.current?.mention('助手一号')}>快捷提及</button><MessageComposer composerRef={ref} value={value} send="idle" participants={[]} onChange={setValue} onSend={vi.fn()} onRetry={vi.fn()} /></>
+    return <><button onClick={() => ref.current?.mention('助手一号')}>快捷提及</button><MessageComposer composerRef={ref} value={value} send="idle" participants={[]} onChange={setValue} onSend={vi.fn()} /></>
   }
   render(<Harness />)
   fireEvent.click(screen.getByText('快捷提及'))
@@ -57,7 +51,7 @@ it('appends repeated mentions without losing the draft and focuses the end', () 
 it('does not change a draft while sending', () => {
   const ref = createRef<MessageComposerHandle>()
   const onChange = vi.fn()
-  render(<MessageComposer composerRef={ref} value="提交中" send="sending" participants={[]} onChange={onChange} onSend={vi.fn()} onRetry={vi.fn()} />)
+  render(<MessageComposer composerRef={ref} value="提交中" send="sending" participants={[]} onChange={onChange} onSend={vi.fn()} />)
   ref.current?.mention('Alice')
   expect(onChange).not.toHaveBeenCalled()
 })
@@ -68,7 +62,7 @@ it('filters mentions and selects with Enter without sending, preserving trailing
     return <MessageComposer value={value} send="idle" participants={[
       { participantId: 'alice', displayName: 'Alice', type: 'human', isCreator: false, isCurrentUser: false },
       { participantId: 'agent', displayName: '助手', type: 'agent', isCreator: false, isCurrentUser: false },
-    ]} onChange={setValue} onSend={onSend} onRetry={vi.fn()} />
+    ]} onChange={setValue} onSend={onSend} />
   }
   render(<Harness />)
   const input = screen.getByPlaceholderText('输入消息') as HTMLTextAreaElement
@@ -91,7 +85,7 @@ it('selects the highlighted mention with Tab and leaves ordinary Tab navigation 
     return <MessageComposer value={value} send="idle" participants={[
       { participantId: 'alice', displayName: 'Alice', type: 'human', isCreator: false, isCurrentUser: false },
       { participantId: 'bob', displayName: 'Bob', type: 'human', isCreator: false, isCurrentUser: false },
-    ]} onChange={setValue} onSend={onSend} onRetry={vi.fn()} />
+    ]} onChange={setValue} onSend={onSend} />
   }
   render(<Harness />)
   const input = screen.getByPlaceholderText('输入消息') as HTMLTextAreaElement

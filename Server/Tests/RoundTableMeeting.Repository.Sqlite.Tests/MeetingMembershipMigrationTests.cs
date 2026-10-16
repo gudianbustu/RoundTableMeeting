@@ -49,7 +49,8 @@ public sealed class MeetingMembershipMigrationTests
             var message = MeetingMessage.CreateParticipant(meeting.ID, 1, participant.ID, MessageAuthorKind.Human, participant.DisplayName, "Exact old history", Guid.NewGuid(), now);
             var receipt = MeetingCreationReceipt.Create(user.ID, Guid.NewGuid(), Guid.NewGuid(), now);
             receipt.MarkDeleted(now);
-            db.AddRange(message, receipt); await db.SaveChangesAsync();
+            await LegacyMessageSeed.InsertAsync(db, message);
+            db.Add(receipt); await db.SaveChangesAsync();
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MeetingCreationReceipts SET ExpiresAtUtc = {now.AddDays(-1)} WHERE ID = {receipt.ID}");
             db.ChangeTracker.Clear();
             await db.Database.MigrateAsync();

@@ -3,7 +3,7 @@ namespace RoundTableMeeting.Application.RealtimeChat;
 public sealed class RealtimeChatOptions
 {
     public const string SectionName = "RealtimeChat";
-    [Range(1, 1_000_000)] public int MaxContentLength { get; set; } = 16384;
+    [Range(1, 1_000_000)] public int MaxContentLength { get; set; } = 1000000;
     [Range(1, 200)] public int HistoryPageSize { get; set; } = 100;
     [Range(1, 200)] public int MaxHistoryPageSize { get; set; } = 200;
     [Range(1, 60)] public int GateCloseTimeoutSeconds { get; set; } = 5;

@@ -12,6 +12,10 @@ public sealed class MeetingMessage : BaseEntity
     public string AuthorDisplayName { get; private set; } = string.Empty;
     public string Content { get; private set; } = string.Empty;
     public Guid ClientSubmissionId { get; private set; }
+    public string Visibility { get; private set; } = "public";
+    public Guid? RecipientParticipantId { get; private set; }
+    public Guid? ReplyToMessageId { get; private set; }
+    public string PayloadFingerprint { get; private set; } = "";
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public MeetingMessage() { }
@@ -38,9 +42,15 @@ public sealed class MeetingMessage : BaseEntity
 
     public static string NormalizeContent(string? value)
     {
-        var normalized = (value ?? string.Empty).Normalize(NormalizationForm.FormC).Trim();
-        if (normalized.Length == 0) throw new ArgumentException("Message content is required.", nameof(value));
-        return normalized;
+        return value ?? string.Empty;
+    }
+
+    public void SetScope(string visibility, Guid? recipient, Guid? replyTo, string fingerprint)
+    {
+        if (visibility is not ("public" or "private") || visibility == "public" && recipient is not null
+            || visibility == "private" && (AuthorKind == MessageAuthorKind.System || recipient is null || recipient == Guid.Empty || recipient == AuthorParticipantId))
+            throw new ArgumentException("Invalid message scope.");
+        Visibility = visibility; RecipientParticipantId = recipient; ReplyToMessageId = replyTo; PayloadFingerprint = fingerprint;
     }
 
     public static void ValidateContentLength(string content, int maxLength)

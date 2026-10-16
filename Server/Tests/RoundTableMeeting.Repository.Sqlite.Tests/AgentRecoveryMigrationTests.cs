@@ -368,7 +368,7 @@ public sealed partial class AgentRecoveryMigrationTests
         using var fixture = new Fixture();
         await using var db = fixture.Open();
         var seed = await SeedOldAsync(db);
-        var message = await db.MeetingMessages.SingleAsync(item => item.Sequence == 2);
+        var message = await LegacyMessageSeed.Query(db).SingleAsync(item => item.Sequence == 2);
         var mention = MessageMention.Create(message.MeetingId, message.ID, seed.AgentId, "Worker", 0, 7);
         db.Add(mention);
         await db.SaveChangesAsync();
@@ -415,8 +415,8 @@ public sealed partial class AgentRecoveryMigrationTests
         await db.SaveChangesAsync();
         await LegacyMeetingParticipantSeed.InsertAsync(db, human);
         await LegacyMeetingParticipantSeed.InsertAsync(db, agent);
-        db.AddRange(first, last);
-        await db.SaveChangesAsync();
+        await LegacyMessageSeed.InsertAsync(db, first);
+        await LegacyMessageSeed.InsertAsync(db, last);
         var connectionId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO AgentConnectionSessions

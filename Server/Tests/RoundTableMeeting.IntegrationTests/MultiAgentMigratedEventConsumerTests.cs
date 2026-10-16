@@ -49,7 +49,8 @@ public sealed class MultiAgentMigratedEventConsumerTests
             old.AddRange(user, meeting);
             await old.SaveChangesAsync();
             foreach (var participant in new[] { human, alpha, beta }) await LegacyMeetingParticipantSeed.InsertAsync(old, participant);
-            old.AddRange(root, pending, reply, rootMention, oldEvent, delivery,
+            foreach (var message in new[] { root, pending, reply }) await LegacyMessageSeed.InsertAsync(old, message);
+            old.AddRange(rootMention, oldEvent, delivery,
                 MessageMention.Create(meeting.ID, pending.ID, beta.ID, "Beta", 0, 5),
                 MessageMention.Create(meeting.ID, reply.ID, beta.ID, "Beta", 0, 5),
                 AgentContextCursor.Create(meeting.ID, beta.ID, 0, now));
@@ -64,6 +65,8 @@ public sealed class MultiAgentMigratedEventConsumerTests
         }
         using var factory = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
+            // Historical consumer is test-only; production never registers or dispatches it.
+            services.AddScoped<AgentMentionTaskConsumer>();
             // Keep the production startup migration; explicitly drive delivery order in this test.
             foreach (var descriptor in services.Where(item => item.ServiceType == typeof(IHostedService)
                 && item.ImplementationType == typeof(MessageEventDispatcherService)).ToArray()) services.Remove(descriptor);

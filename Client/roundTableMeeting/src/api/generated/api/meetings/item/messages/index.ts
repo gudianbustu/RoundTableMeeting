@@ -4,12 +4,20 @@
 // @ts-ignore
 import { createApiProblemDetailsFromDiscriminatorValue, createMessagePageDtoFromDiscriminatorValue, createSubmitMessageResultDtoFromDiscriminatorValue, serializeSubmitMessageRequest, serializeSubmitMessageResultDto, type ApiProblemDetails, type MessagePageDto, type SubmitMessageRequest, type SubmitMessageResultDto } from '../../../../models/index.js';
 // @ts-ignore
-import { type BaseRequestBuilder, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
+import { type WithMessageItemRequestBuilder, WithMessageItemRequestBuilderRequestsMetadata } from './item/index.js';
+// @ts-ignore
+import { type BaseRequestBuilder, type Guid, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
 /**
  * Builds and executes requests for operations under /api/meetings/{meetingId}/messages
  */
 export interface MessagesRequestBuilder extends BaseRequestBuilder<MessagesRequestBuilder> {
+    /**
+     * Gets an item from the ApiSdk.api.meetings.item.messages.item collection
+     * @param messageId Unique identifier of the item
+     * @returns {WithMessageItemRequestBuilder}
+     */
+     byMessageId(messageId: Guid) : WithMessageItemRequestBuilder;
     /**
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<MessagePageDto>}
@@ -50,12 +58,14 @@ export interface MessagesRequestBuilderGetQueryParameters {
     afterSequence?: number;
     beforeSequence?: number;
     limit?: number;
+    peerParticipantId?: Guid;
+    scope?: string;
     throughSequence?: number;
 }
 /**
  * Uri template for the request builder.
  */
-export const MessagesRequestBuilderUriTemplate = "{+baseurl}/api/meetings/{meetingId}/messages{?AfterSequence*,BeforeSequence*,Limit*,ThroughSequence*}";
+export const MessagesRequestBuilderUriTemplate = "{+baseurl}/api/meetings/{meetingId}/messages{?AfterSequence*,BeforeSequence*,Limit*,PeerParticipantId*,Scope*,ThroughSequence*}";
 /**
  * Mapper for query parameters from symbol name to serialization name represented as a constant.
  */
@@ -63,7 +73,18 @@ const MessagesRequestBuilderGetQueryParametersMapper: Record<string, string> = {
     "afterSequence": "AfterSequence",
     "beforeSequence": "BeforeSequence",
     "limit": "Limit",
+    "peerParticipantId": "PeerParticipantId",
+    "scope": "Scope",
     "throughSequence": "ThroughSequence",
+};
+/**
+ * Metadata for all the navigation properties in the request builder.
+ */
+export const MessagesRequestBuilderNavigationMetadata: Record<Exclude<keyof MessagesRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    byMessageId: {
+        requestsMetadata: WithMessageItemRequestBuilderRequestsMetadata,
+        pathParametersMappings: ["messageId"],
+    },
 };
 /**
  * Metadata for all the requests in the request builder.

@@ -10,7 +10,7 @@ using RoundTableMeeting.Domain.UnitOfWork;
 namespace RoundTableMeeting.Application.Meetings;
 
 public sealed class MeetingMembershipService(IMeetingRepository meetings, IMeetingParticipantRepository participants,
-    IMessageRepository messages, IMeetingLifecycleRepository lifecycle, IMeetingTransactionRunner runner,
+    IMessageVisibilityRepository visibility, IMeetingLifecycleRepository lifecycle, IMeetingTransactionRunner runner,
     IUnitOfWork unitOfWork, IMeetingRealtimeGate gate, IMeetingRealtimeTermination termination, RealtimeChatOptions options)
     : IMeetingMembershipService, IScopedDependency<IMeetingMembershipService>
 {
@@ -29,9 +29,8 @@ public sealed class MeetingMembershipService(IMeetingRepository meetings, IMeeti
             var previous = await lifecycle.FindLeaveAsync(meetingId, participantId, operationId, token);
             if (previous is not null) return (new MeetingOperationResult<MeetingMembershipDto>(MeetingOperationStatus.Success,
                 new(participantId, "left", previous.VisibleThroughSequence, previous.MembershipRevision)), participant.MembershipState == MeetingMembershipState.Left);
-            // All messages are public in batch 1. Batch 2 replaces this with the participant projection watermark.
-            var sequence = await messages.GetSequenceSummaryAsync(meetingId, token);
-            participant.Leave(sequence.HighWatermarkSequence);
+            var sequence = await visibility.HighWatermarkAsync(meetingId, participantId, token);
+            participant.Leave(sequence);
             unitOfWork.RegisterEdit(participant);
             unitOfWork.RegisterAdd(MeetingLeaveOperation.Create(participant, operationId));
             return (new MeetingOperationResult<MeetingMembershipDto>(MeetingOperationStatus.Success,

@@ -17,7 +17,7 @@ public sealed partial class McpAgentContractTests
     public async Task SubscriptionDependencyFailureDoesNotLogPrivateException()
     {
         var logger = new SharedPrivacyLogger<MeetingChatHub>();
-        using var hub = new MeetingChatHub(null!, null!, null!, new SharedPrivacyGate(), TimeProvider.System, logger);
+        using var hub = new MeetingChatHub(null!, null!, new SharedPrivacyGate(), TimeProvider.System, logger);
         hub.Context = new SubscriptionCaller(Guid.NewGuid());
         await Assert.ThrowsAsync<InvalidOperationException>(() => hub.SubscribeMeeting(Guid.NewGuid()));
         AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(5)));

@@ -1,97 +1,96 @@
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using RoundTableMeeting.Abstraction.Contracts.RealtimeChat;
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.Entities;
-using DomainAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
+using RoundTableMeeting.Domain.Enums;
+using RoundTableMeeting.Domain.Exceptions;
 using RoundTableMeeting.Domain.Repositories;
 using RoundTableMeeting.Domain.UnitOfWork;
-
+using DomainAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
+using TransportAuthorKind = RoundTableMeeting.Abstraction.Contracts.RealtimeChat.MessageAuthorKind;
 namespace RoundTableMeeting.Application.RealtimeChat;
 
-public sealed class ResolvedMessageAppendCore(
-    IMeetingRepository meetings,
-	IMeetingParticipantRepository participants,
-	IMessageRepository messages,
-	IUnitOfWork unitOfWork,
-	IMessageMentionParser parser,
-	IMessageEventConsumerCatalog consumerCatalog,
-	RealtimeChatOptions options,
-	TimeProvider timeProvider) : IResolvedMessageAppendCore
+public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeetingParticipantRepository participants,
+    IMessageRepository messages, IMessageVisibilityRepository visibility, IMeetingAttachmentRepository attachments,
+    IUnitOfWork unitOfWork, IMessageMentionParser parser, IMessageEventConsumerCatalog consumerCatalog,
+    RealtimeChatOptions options, TimeProvider timeProvider) : IResolvedMessageAppendCore
 {
-	public Task<ResolvedMessageAppendResult> AppendAgentAsync(
-		Guid meetingId,
-		Guid participantId,
-		string authorDisplayName,
-		string content,
-		Guid clientSubmissionId,
-		CancellationToken cancellationToken = default)
-	    => AppendAsync(meetingId, new(participantId, authorDisplayName, MessageAuthorKind.Agent),
-            content, clientSubmissionId, cancellationToken: cancellationToken);
+    public Task<ResolvedMessageAppendResult> AppendAgentAsync(Guid meetingId, Guid participantId, string authorDisplayName,
+        string content, Guid clientSubmissionId, CancellationToken cancellationToken = default)
+        => AppendAsync(meetingId, new(participantId, authorDisplayName, TransportAuthorKind.Agent), content, clientSubmissionId, cancellationToken: cancellationToken);
+    public Task<ResolvedMessageAppendResult> AppendAsync(Guid meetingId, ResolvedMessageAuthor author, string content,
+        Guid clientSubmissionId, IReadOnlyList<MentionCandidateDto>? mentionCandidates = null, CancellationToken cancellationToken = default)
+        => AppendScopedAsync(meetingId, author, new(clientSubmissionId, content, mentionCandidates), cancellationToken);
 
-    public async Task<ResolvedMessageAppendResult> AppendAsync(Guid meetingId, ResolvedMessageAuthor author,
-        string content, Guid clientSubmissionId, IReadOnlyList<MentionCandidateDto>? mentionCandidates = null,
-        CancellationToken cancellationToken = default)
+    public async Task<ResolvedMessageAppendResult> AppendScopedAsync(Guid meetingId, ResolvedMessageAuthor author, SubmitMessageRequest request, CancellationToken ct = default)
     {
-		if (meetingId == Guid.Empty || clientSubmissionId == Guid.Empty
-            || !Enum.IsDefined(author.Kind)
-            || (author.Kind == MessageAuthorKind.System ? author.ParticipantId is not null : author.ParticipantId is null || author.ParticipantId == Guid.Empty))
-			throw new ArgumentException("Message identity is invalid.");
-
-        if (await meetings.FindActiveByIdAsync(meetingId, cancellationToken) is null)
-            throw new RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException("meeting_not_found");
-        var roster = await participants.ListAsync(meetingId, cancellationToken);
-        if (author.Kind != MessageAuthorKind.System)
+        if (meetingId == Guid.Empty || request.ClientSubmissionId == Guid.Empty || !Enum.IsDefined(author.Kind)
+            || (author.Kind == TransportAuthorKind.System ? author.ParticipantId is not null : author.ParticipantId is null || author.ParticipantId == Guid.Empty))
+            throw new ArgumentException("Message identity is invalid.");
+        if (await meetings.FindActiveByIdAsync(meetingId, ct) is null) throw new MeetingMessageAccessException("meeting_not_found");
+        var roster = await participants.ListAsync(meetingId, ct);
+        var sender = roster.SingleOrDefault(p => p.ID == author.ParticipantId);
+        if (author.Kind != TransportAuthorKind.System && sender is null) throw new MeetingMessageAccessException("meeting_not_found");
+        if (sender?.MembershipState == MeetingMembershipState.Left) throw new MeetingMessageAccessException("membership_left");
+        var scope = request.Visibility;
+        var recipient = request.RecipientParticipantId;
+        if (request.ReplyToMessageId is Guid replyId)
         {
-            var participant = roster.SingleOrDefault(p => p.ID == author.ParticipantId);
-            if (participant is null) throw new RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException("meeting_not_found");
-            if (participant.MembershipState == RoundTableMeeting.Domain.Enums.MeetingMembershipState.Left)
-                throw new RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException("membership_left");
+            var original = sender is null ? null : await visibility.FindAsync(meetingId, sender.ID, replyId, ct: ct);
+            if (original is null) throw new MeetingMessageAccessException("message_not_found");
+            var replyPeer = original.Message.Visibility == "private"
+                ? original.Message.AuthorParticipantId == sender!.ID ? original.Message.RecipientParticipantId : original.Message.AuthorParticipantId : null;
+            if (scope is not null && scope != original.Message.Visibility || recipient is not null && recipient != replyPeer)
+                throw new MeetingMessageAccessException("reply_scope_mismatch");
+            scope = original.Message.Visibility; recipient = replyPeer;
         }
-
-		var normalizedContent = MeetingMessage.NormalizeContent(content);
-		MeetingMessage.ValidateContentLength(normalizedContent, options.MaxContentLength);
-		var sequence = await messages.GetNextSequenceAsync(meetingId, cancellationToken);
-		var message = author.Kind == MessageAuthorKind.System
-            ? MeetingMessage.CreateSystem(meetingId, sequence, author.DisplayName, normalizedContent, clientSubmissionId, timeProvider.GetUtcNow())
-            : MeetingMessage.CreateParticipant(
-			meetingId,
-			sequence,
-			author.ParticipantId!.Value,
-			author.Kind == MessageAuthorKind.Agent ? DomainAuthorKind.Agent : DomainAuthorKind.Human,
-			author.DisplayName,
-			normalizedContent,
-			clientSubmissionId,
-			timeProvider.GetUtcNow());
-		unitOfWork.RegisterAdd(message);
-
-        if (author.Kind != MessageAuthorKind.System)
+        scope ??= "public";
+        if (scope is not ("public" or "private") || scope == "public" && recipient is not null) throw new ArgumentException("Invalid scope.");
+        var ids = request.AttachmentIds?.ToArray() ?? [];
+        if (ids.Length > 20 || ids.Distinct().Count() != ids.Length || ids.Any(id => id == Guid.Empty)) throw new ArgumentException("Invalid attachments.");
+        var content = request.Content ?? "";
+        if (string.IsNullOrWhiteSpace(content) && ids.Length == 0) throw new ArgumentException("Content or attachment is required.");
+        MeetingMessage.ValidateContentLength(content, options.MaxContentLength);
+        var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new {
+            content, scope, recipient, attachments = ids.Order().ToArray(), replyTo = request.ReplyToMessageId,
+            mentions = request.MentionCandidates ?? [] }))));
+        var existing = sender is null ? await messages.FindSystemBySubmissionAsync(meetingId, request.ClientSubmissionId, ct)
+            : await messages.FindBySubmissionAsync(meetingId, sender.ID, request.ClientSubmissionId, ct);
+        if (existing is not null)
         {
-		var people = roster.Where(participant => participant.MembershipState == RoundTableMeeting.Domain.Enums.MeetingMembershipState.Joined)
-			.Select(participant => new MentionParticipant(participant.ID, participant.DisplayName, participant.NormalizedDisplayName))
-			.ToArray();
-		foreach (var mention in parser.Parse(normalizedContent, people, mentionCandidates))
-		{
-			unitOfWork.RegisterAdd(MessageMention.Create(
-				meetingId,
-				message.ID,
-				mention.ParticipantId,
-				mention.DisplayName,
-				mention.StartOffset,
-				mention.Length));
-		}
+            if (existing.PayloadFingerprint != hash && !(existing.PayloadFingerprint == "" && scope == "public" && ids.Length == 0
+                && request.ReplyToMessageId is null && existing.Content == content)) throw new MeetingMessageAccessException("submission_mismatch");
+            return Result(existing) with { Replayed = true };
         }
-
-		var appendedEvent = MessageAppendedEvent.Create(meetingId, message.ID, sequence, message.CreatedAtUtc);
-		unitOfWork.RegisterAdd(appendedEvent);
-		foreach (var consumerName in consumerCatalog.ConsumerNames)
-			unitOfWork.RegisterAdd(MessageEventDelivery.Create(appendedEvent.ID, consumerName, message.CreatedAtUtc));
-		return new(
-			message.ID,
-			message.MeetingId,
-			message.Sequence,
-			message.AuthorParticipantId,
-			message.AuthorDisplayName,
-			message.Content,
-			message.CreatedAtUtc);
-	}
+        if (scope == "private" && (sender is null || recipient == sender.ID
+            || !roster.Any(p => p.ID == recipient && p.MembershipState == MeetingMembershipState.Joined)))
+            throw new MeetingMessageAccessException("recipient_unavailable");
+        var sequence = await messages.GetNextSequenceAsync(meetingId, ct);
+        var message = sender is null ? MeetingMessage.CreateSystem(meetingId, sequence, author.DisplayName, content, request.ClientSubmissionId, timeProvider.GetUtcNow())
+            : MeetingMessage.CreateParticipant(meetingId, sequence, sender.ID,
+                author.Kind == TransportAuthorKind.Agent ? DomainAuthorKind.Agent : DomainAuthorKind.Human,
+                sender.DisplayName, content, request.ClientSubmissionId, timeProvider.GetUtcNow());
+        message.SetScope(scope, recipient, request.ReplyToMessageId, hash);
+        unitOfWork.RegisterAdd(message);
+        foreach (var id in ids)
+        {
+            var file = await attachments.FindAsync(meetingId, id, ct);
+            if (file is null || file.UploaderParticipantId != sender?.ID || file.State != "staged") throw new MeetingMessageAccessException("attachment_unavailable");
+            file.Bind(message.ID); unitOfWork.RegisterEdit(file);
+        }
+        if (sender is not null)
+        {
+            var people = roster.Where(p => p.MembershipState == MeetingMembershipState.Joined && (scope == "public" || p.ID == sender.ID || p.ID == recipient))
+                .Select(p => new MentionParticipant(p.ID, p.DisplayName, p.NormalizedDisplayName)).ToArray();
+            foreach (var mention in parser.Parse(content, people, request.MentionCandidates))
+                unitOfWork.RegisterAdd(MessageMention.Create(meetingId, message.ID, mention.ParticipantId, mention.DisplayName, mention.StartOffset, mention.Length));
+        }
+        var evt = MessageAppendedEvent.Create(meetingId, message.ID, sequence, message.CreatedAtUtc);
+        unitOfWork.RegisterAdd(evt);
+        foreach (var consumer in consumerCatalog.ConsumerNames) unitOfWork.RegisterAdd(MessageEventDelivery.Create(evt.ID, consumer, message.CreatedAtUtc));
+        return Result(message);
+    }
+    private static ResolvedMessageAppendResult Result(MeetingMessage m) => new(m.ID, m.MeetingId, m.Sequence, m.AuthorParticipantId, m.AuthorDisplayName, m.Content, m.CreatedAtUtc);
 }

@@ -10,7 +10,7 @@ using RoundTableMeeting.Domain.UnitOfWork;
 using DomainAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
 using TransportAuthorKind = RoundTableMeeting.Abstraction.Contracts.RealtimeChat.MessageAuthorKind;
 namespace RoundTableMeeting.Application.RealtimeChat;
-public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetingRepository meetings, IMeetingParticipantRepository participants, IMessageRepository messages, IMeetingTransactionRunner runner, IResolvedMessageAppendCore appendCore, RealtimeChatOptions options, IMeetingRealtimeGate realtimeGate, IMeetingLifecycleService lifecycleService) : IMessageAppendService, IMessageHistoryService, IMeetingChatSubscriptionService, IScopedDependency<IMessageAppendService>, IScopedDependency<IMessageHistoryService>, IScopedDependency<IMeetingChatSubscriptionService>
+public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetingRepository meetings, IMeetingParticipantRepository participants, IMessageRepository messages, IMeetingTransactionRunner runner, IResolvedMessageAppendCore appendCore, RealtimeChatOptions options, IMeetingRealtimeGate realtimeGate, IMeetingLifecycleService lifecycleService, IMessageVisibilityRepository visibility, VisibleMessageMapper mapper) : IMessageLookupService, IScopedDependency<IMessageLookupService>, IMessageAppendService, IMessageHistoryService, IMeetingChatSubscriptionService, IScopedDependency<IMessageAppendService>, IScopedDependency<IMessageHistoryService>, IScopedDependency<IMeetingChatSubscriptionService>
 {
     public Task<MessageOperationResult<MessageDto>> AppendHumanAsync(Guid meetingId, SubmitMessageRequest request, CancellationToken ct = default) => AppendAsync(meetingId, request, DomainAuthorKind.Human, ct);
     public async Task<MessageOperationResult<MessageDto>> AppendSystemAsync(Guid meetingId, SystemMessageSubmission submission, CancellationToken ct = default)
@@ -29,39 +29,41 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
         var meeting = await meetings.FindActiveByIdAsync(meetingId, ct); if (meeting is null) return new(await UnavailableStatus(meetingId, effectiveUserId, ct));
         var participant = kind == DomainAuthorKind.System ? null : await participants.FindByUserAsync(meetingId, effectiveUserId, ct); if (kind != DomainAuthorKind.System && participant is null) return new(MessageOperationStatus.MeetingNotFound);
         if (participant?.MembershipState == Domain.Enums.MeetingMembershipState.Left) return new(MessageOperationStatus.MembershipLeft);
-        var content = (request.Content ?? string.Empty).Normalize(NormalizationForm.FormC).Trim();
-        if (content.Length == 0) return Invalid<MessageDto>("content");
-        var existing = kind == DomainAuthorKind.System
-            ? await messages.FindSystemBySubmissionAsync(meetingId, request.ClientSubmissionId, ct)
-            : await messages.FindBySubmissionAsync(meetingId, participant!.ID, request.ClientSubmissionId, ct);
-        if (existing is not null) return string.Equals(existing.Content, content, StringComparison.Ordinal) ? new(MessageOperationStatus.Replayed, await ToDto(existing, ct)) : new(MessageOperationStatus.SubmissionMismatch);
         try
         {
-            var message = await runner.RunAsync(async token =>
-            {
-                var author = kind == DomainAuthorKind.System
-                    ? new ResolvedMessageAuthor(null, systemName ?? "System", TransportAuthorKind.System)
-                    : new ResolvedMessageAuthor(participant!.ID, participant.DisplayName, TransportAuthorKind.Human);
-                return await appendCore.AppendAsync(meetingId, author, content, request.ClientSubmissionId, request.MentionCandidates, token);
-            }, ct);
-            var persisted = await messages.FindByIdAsync(meetingId, message.MessageId, ct)
+            var result = await runner.RunAsync(token => appendCore.AppendScopedAsync(meetingId,
+                kind == DomainAuthorKind.System ? new(null, systemName ?? "System", TransportAuthorKind.System)
+                    : new(participant!.ID, participant.DisplayName, TransportAuthorKind.Human), request, token), ct);
+            var persisted = await messages.FindByIdAsync(meetingId, result.MessageId, ct)
                 ?? throw new InvalidOperationException("The committed message could not be read.");
-            return new(MessageOperationStatus.Created, await ToDto(persisted, ct));
+            // System append is internal and has no viewer; its position must never be presented as a user's cursor.
+            var row = participant is null ? new VisibleMessage(persisted, 0)
+                : await visibility.FindAsync(meetingId, participant.ID, result.MessageId, ct: ct)
+                    ?? throw new InvalidOperationException("The committed projection could not be read.");
+            return new(result.Replayed ? MessageOperationStatus.Replayed : MessageOperationStatus.Created, await mapper.MapAsync(row, ct));
         }
         catch (RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException exception)
-        { return new(exception.Code == "membership_left" ? MessageOperationStatus.MembershipLeft : MessageOperationStatus.MeetingNotFound); }
-        catch (ArgumentException) { return Invalid<MessageDto>("content"); }
+        {
+            return exception.Code switch
+            {
+                "membership_left" => new(MessageOperationStatus.MembershipLeft),
+                "submission_mismatch" => new(MessageOperationStatus.SubmissionMismatch),
+                "meeting_not_found" => new(MessageOperationStatus.MeetingNotFound),
+                "message_not_found" => new(MessageOperationStatus.MessageNotFound),
+                "recipient_unavailable" => new(MessageOperationStatus.RecipientUnavailable),
+                "reply_scope_mismatch" => new(MessageOperationStatus.ReplyScopeMismatch),
+                "attachment_unavailable" => new(MessageOperationStatus.AttachmentUnavailable),
+                _ => new(MessageOperationStatus.ValidationFailed, Errors: new Dictionary<string, string[]> { [exception.Code] = [exception.Code] })
+            };
+        }
+        catch (ArgumentException) { return Invalid<MessageDto>("message"); }
         catch (RoundTableMeeting.Domain.Exceptions.MessageAppendConflictException)
         {
-            var replay = kind == DomainAuthorKind.System
-                ? await messages.FindSystemBySubmissionAsync(meetingId, request.ClientSubmissionId, ct)
-                : await messages.FindBySubmissionAsync(meetingId, participant!.ID, request.ClientSubmissionId, ct);
-            if (replay is null) return new(MessageOperationStatus.Conflict);
-            return string.Equals(replay.Content, content, StringComparison.Ordinal)
-                ? new(MessageOperationStatus.Replayed, await ToDto(replay, ct))
-                : new(MessageOperationStatus.SubmissionMismatch);
+            // A concurrent winner is checked by the same complete-payload replay validation on retry.
+            return new(MessageOperationStatus.Conflict);
         }
     }
+
     public async Task<MessageOperationResult<MessagePageDto>> GetPageAsync(Guid meetingId, MessagePageRequest request, CancellationToken ct = default)
     {
         if (currentUser.UserId is not Guid userId || userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
@@ -76,13 +78,52 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
         if (participant.MembershipState == Domain.Enums.MeetingMembershipState.Left)
             through = Math.Min(through ?? long.MaxValue, participant.LeftThroughSequence!.Value);
         var limit = request.Limit ?? options.HistoryPageSize; if (limit is < 1 || limit > options.MaxHistoryPageSize) return Invalid<MessagePageDto>("limit");
-        var rows = await messages.ListAsync(meetingId, request.BeforeSequence, request.AfterSequence, through, limit, ct); var dtos = new List<MessageDto>(); foreach (var row in rows) dtos.Add(await ToDto(row, ct));
-        var first = dtos.FirstOrDefault()?.Sequence; var last = dtos.LastOrDefault()?.Sequence; var before = !request.AfterSequence.HasValue && first.HasValue && await messages.HasBeforeAsync(meetingId, first.Value, ct); var after = request.AfterSequence.HasValue && last.HasValue && await messages.HasAfterAsync(meetingId, last.Value, through, ct);
-        return new(MessageOperationStatus.Success, new(dtos, before, after, first, last, first, last));
+        if (request.Scope is not ("all" or "public" or "private") || request.Scope == "public" && request.PeerParticipantId.HasValue
+            || request.PeerParticipantId == Guid.Empty || request.PeerParticipantId == participant.ID) return Invalid<MessagePageDto>("scope");
+        if (request.PeerParticipantId is Guid peer && !(await participants.ListAsync(meetingId, ct)).Any(p => p.ID == peer))
+            return Invalid<MessagePageDto>("peerParticipantId");
+        var watermark = await visibility.HighWatermarkAsync(meetingId, participant.ID, ct);
+        through = Math.Min(through ?? watermark, watermark);
+        var rows = await visibility.PageAsync(meetingId, participant.ID, request.Scope, request.PeerParticipantId,
+            request.BeforeSequence, request.AfterSequence, through, limit + 1, ct);
+        var more = rows.Count > limit;
+        var selected = request.AfterSequence.HasValue ? rows.Take(limit) : rows.TakeLast(limit);
+        var dtos = new List<MessageDto>();
+        foreach (var row in selected) dtos.Add(await mapper.MapAsync(row, ct));
+        var first = dtos.FirstOrDefault()?.Sequence; var last = dtos.LastOrDefault()?.Sequence;
+        return new(MessageOperationStatus.Success, new(dtos, !request.AfterSequence.HasValue && more,
+            request.AfterSequence.HasValue && more, first, last, first, last) { VisibleThroughSequence = through.Value });
     }
     public async Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(Guid meetingId, Guid userId, CancellationToken ct = default)
-    { if (userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated); var meeting = await meetings.FindActiveByIdAsync(meetingId, ct); var p = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, ct); if (meeting is null || p is null) return new(MessageOperationStatus.MeetingNotFound); if (p.MembershipState == Domain.Enums.MeetingMembershipState.Left) return new(MessageOperationStatus.MembershipLeft); var rows = await messages.ListAsync(meetingId, null, null, null, 1, ct); return new(MessageOperationStatus.Success, new(p.ID, rows.LastOrDefault()?.Sequence ?? 0)); }
-    private async Task<MessageDto> ToDto(MeetingMessage message, CancellationToken ct) { var rows = await messages.ListMentionsAsync(message.MeetingId, message.ID, ct); var mentions = rows.Select(m => new MessageMentionDto(m.TargetParticipantId, m.TargetDisplayName, m.StartOffset, m.Length)).ToArray(); return new(message.ID, message.MeetingId, message.Sequence, new(message.AuthorParticipantId, message.AuthorKind switch { DomainAuthorKind.Agent => TransportAuthorKind.Agent, DomainAuthorKind.System => TransportAuthorKind.System, _ => TransportAuthorKind.Human }, message.AuthorDisplayName), message.Content, mentions, message.CreatedAtUtc); }
+    {
+        if (userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
+        var meeting = await meetings.FindActiveByIdAsync(meetingId, ct);
+        var p = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, ct);
+        if (meeting is null || p is null) return new(MessageOperationStatus.MeetingNotFound);
+        if (p.MembershipState == MeetingMembershipState.Left) return new(MessageOperationStatus.MembershipLeft);
+        return new(MessageOperationStatus.Success, new(p.ID, await visibility.HighWatermarkAsync(meetingId, p.ID, ct)));
+    }
+    public async Task<MessageOperationResult<MessageDto>> GetMessageAsync(Guid meetingId, Guid messageId, CancellationToken ct = default)
+    {
+        if (currentUser.UserId is not Guid userId || userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
+        using var lease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        if (lease is null || await meetings.FindActiveByIdAsync(meetingId, ct) is null) return new(await UnavailableStatus(meetingId, userId, ct));
+        var p = await participants.FindByUserAsync(meetingId, userId, ct);
+        if (p is null) return new(MessageOperationStatus.MeetingNotFound);
+        var row = await visibility.FindAsync(meetingId, p.ID, messageId, p.LeftThroughSequence, ct);
+        return row is null ? new(MessageOperationStatus.MessageNotFound) : new(MessageOperationStatus.Success, await mapper.MapAsync(row, ct));
+    }
+    public async Task<MessageOperationResult<SubmissionStatusDto>> GetSubmissionAsync(Guid meetingId, Guid submissionId, CancellationToken ct = default)
+    {
+        if (currentUser.UserId is not Guid userId || userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);
+        using var lease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        if (lease is null || await meetings.FindActiveByIdAsync(meetingId, ct) is null) return new(await UnavailableStatus(meetingId, userId, ct));
+        var p = await participants.FindByUserAsync(meetingId, userId, ct);
+        if (p is null) return new(MessageOperationStatus.MeetingNotFound);
+        var message = await messages.FindBySubmissionAsync(meetingId, p.ID, submissionId, ct);
+        var row = message is null ? null : await visibility.FindAsync(meetingId, p.ID, message.ID, p.LeftThroughSequence, ct);
+        return new(MessageOperationStatus.Success, row is null ? new("not_found", null) : new("saved", await mapper.MapAsync(row, ct)));
+    }
     private async Task<MessageOperationStatus> UnavailableStatus(Guid meetingId, Guid userId, CancellationToken cancellationToken)
         => await lifecycleService.GetMemberStateAsync(meetingId, userId, cancellationToken) switch
         {

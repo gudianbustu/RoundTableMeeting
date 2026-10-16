@@ -2,22 +2,22 @@ import { useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref 
 import type { MentionsRef } from 'antd/es/mentions'
 import { Button, Mentions, Tag } from 'antd'
 import { SendOutlined } from '@ant-design/icons'
-import type { FailedSubmission, MentionCandidate, SendState } from '../types/realtimeChat'
+import type { MentionCandidate, SendState } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates } from '../chat/mentionCandidates'
-export interface MessageComposerHandle { mention: (displayName: string) => void }
-export function MessageComposer({ composerRef, tools, value, send, failedSubmission, participants, onChange, onSend, onRetry }: { composerRef?: Ref<MessageComposerHandle>; tools?: ReactNode; value: string; send: SendState; failedSubmission?: FailedSubmission; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void; onRetry: () => void }) {
+export interface MessageComposerHandle { mention: (displayName: string) => void; privateChat?: (participantId: string) => void }
+export function MessageComposer({ composerRef, attachments, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
   const inputRef = useRef<MentionsRef>(null)
   const focusPending = useRef(false)
   const mentionPopupRef = useRef<HTMLDivElement>(null)
   useImperativeHandle(composerRef, () => ({
     mention(displayName) {
-      if (send === 'sending') return
+      if (disabled || send === 'sending' || send === 'pending_confirmation') return
       const separator = value && !/\s$/u.test(value) ? ' ' : ''
       focusPending.current = true
       onChange(value + separator + '@' + displayName.normalize('NFC') + ' ')
     },
-  }), [send, value, onChange])
+  }), [disabled, send, value, onChange])
   useLayoutEffect(() => {
     if (!focusPending.current) return
     focusPending.current = false
@@ -26,11 +26,24 @@ export function MessageComposer({ composerRef, tools, value, send, failedSubmiss
     textarea?.setSelectionRange(value.length, value.length)
   }, [value])
   const candidates = getMentionCandidates(value, participants)
-  const failure = send === 'failed' ? failedSubmission : undefined
-  const error = failure?.errorCode === 'message_send_rate_limited' && failure.retryAfterSeconds
-    ? `发送过于频繁，请在 ${failure.retryAfterSeconds} 秒后重试。`
-    : failure ? '消息发送失败，请重试。' : undefined
-  return <div className="message-composer">
+  return <div className="message-composer"
+    onPaste={event => {
+      const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
+      if (!images.length) return
+      event.preventDefault()
+      if (!disabled && send !== 'sending' && send !== 'pending_confirmation') onFiles?.(images)
+    }}
+    onDragOver={event => {
+      if (!Array.from(event.dataTransfer.types).includes('Files')) return
+      event.preventDefault()
+      event.dataTransfer.dropEffect = disabled || send === 'sending' || send === 'pending_confirmation' ? 'none' : 'copy'
+    }}
+    onDrop={event => {
+      if (!Array.from(event.dataTransfer.types).includes('Files')) return
+      event.preventDefault()
+      if (!disabled && send !== 'sending' && send !== 'pending_confirmation') onFiles?.(Array.from(event.dataTransfer.files))
+    }}>
+    {attachments}
     <Mentions
       placement="top"
       popupRender={menu => <div ref={mentionPopupRef}>{menu}</div>}
@@ -57,13 +70,11 @@ export function MessageComposer({ composerRef, tools, value, send, failedSubmiss
           }
         }
       }}
-      ref={inputRef} variant="borderless" value={value} disabled={send === 'sending'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder="输入消息" onChange={onChange} onPressEnter={event => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (value.trim()) onSend(candidates) } }} />
-    {error && <span role="alert">{error}</span>}
+      ref={inputRef} variant="borderless" value={value} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder="输入消息" onChange={onChange} onPressEnter={event => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!disabled && (value.trim() || hasAttachments)) onSend(candidates) } }} />
     <div className="message-composer-footer">
       {tools && <div className="message-composer-tools">{tools}</div>}
       <div className="message-composer-actions">
-      {failure && <Button danger onClick={onRetry}>重试发送</Button>}
-      <Button type="primary" aria-label="发送" title="发送" icon={<SendOutlined />} loading={send === 'sending'} disabled={!value.trim()} onClick={() => onSend(candidates)} />
+      <Button type="primary" aria-label="发送" title="发送" icon={<SendOutlined />} loading={send === 'sending'} disabled={disabled || send === 'pending_confirmation' || (!value.trim() && !hasAttachments)} onClick={() => onSend(candidates)} />
       </div>
     </div>
   </div>

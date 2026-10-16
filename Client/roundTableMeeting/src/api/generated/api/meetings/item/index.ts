@@ -4,13 +4,17 @@
 // @ts-ignore
 import { createApiProblemDetailsFromDiscriminatorValue, createMeetingDetailsDtoFromDiscriminatorValue, type ApiProblemDetails, type MeetingDetailsDto } from '../../../models/index.js';
 // @ts-ignore
+import { AttachmentsRequestBuilderNavigationMetadata, AttachmentsRequestBuilderRequestsMetadata, type AttachmentsRequestBuilder } from './attachments/index.js';
+// @ts-ignore
 import { DeletionRequestBuilderNavigationMetadata, DeletionRequestBuilderRequestsMetadata, type DeletionRequestBuilder } from './deletion/index.js';
 // @ts-ignore
 import { InvitationRequestBuilderRequestsMetadata, type InvitationRequestBuilder } from './invitation/index.js';
 // @ts-ignore
 import { LeaveRequestBuilderRequestsMetadata, type LeaveRequestBuilder } from './leave/index.js';
 // @ts-ignore
-import { MessagesRequestBuilderRequestsMetadata, type MessagesRequestBuilder } from './messages/index.js';
+import { MessagesRequestBuilderNavigationMetadata, MessagesRequestBuilderRequestsMetadata, type MessagesRequestBuilder } from './messages/index.js';
+// @ts-ignore
+import { SubmissionsRequestBuilderNavigationMetadata, type SubmissionsRequestBuilder } from './submissions/index.js';
 // @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
@@ -18,6 +22,10 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
  * Builds and executes requests for operations under /api/meetings/{meetingId}
  */
 export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMeetingItemRequestBuilder> {
+    /**
+     * The attachments property
+     */
+    get attachments(): AttachmentsRequestBuilder;
     /**
      * The deletion property
      */
@@ -34,6 +42,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The messages property
      */
     get messages(): MessagesRequestBuilder;
+    /**
+     * The submissions property
+     */
+    get submissions(): SubmissionsRequestBuilder;
     /**
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<MeetingDetailsDto>}
@@ -57,6 +69,10 @@ export const WithMeetingItemRequestBuilderUriTemplate = "{+baseurl}/api/meetings
  * Metadata for all the navigation properties in the request builder.
  */
 export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<keyof WithMeetingItemRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    attachments: {
+        requestsMetadata: AttachmentsRequestBuilderRequestsMetadata,
+        navigationMetadata: AttachmentsRequestBuilderNavigationMetadata,
+    },
     deletion: {
         requestsMetadata: DeletionRequestBuilderRequestsMetadata,
         navigationMetadata: DeletionRequestBuilderNavigationMetadata,
@@ -69,6 +85,10 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     },
     messages: {
         requestsMetadata: MessagesRequestBuilderRequestsMetadata,
+        navigationMetadata: MessagesRequestBuilderNavigationMetadata,
+    },
+    submissions: {
+        navigationMetadata: SubmissionsRequestBuilderNavigationMetadata,
     },
 };
 /**

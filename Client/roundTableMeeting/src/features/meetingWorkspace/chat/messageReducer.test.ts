@@ -11,7 +11,8 @@ describe('chatReducer', () => {
     let state = chatReducer(createInitialChatState(scope.meetingId), { ...scope, type: 'draftChanged', draft: submission.content })
     state = chatReducer(state, { ...scope, type: 'sendStarted', submission })
     state = chatReducer(state, { ...scope, generation: 2, type: 'connectionStarted' })
-    expect(state).toMatchObject({ generation: 2, draft: submission.content, send: 'failed', failedSubmission: submission })
+    expect(state).toMatchObject({ generation: 2, draft: submission.content, send: 'pending_confirmation', failedSubmission: submission })
+    expect(chatReducer(state, { ...scope, generation: 2, type: 'draftChanged', draft: 'must stay immutable' })).toBe(state)
     expect(chatReducer(state, { ...scope, type: 'sendSucceeded', message: message('accepted', 1) })).toBe(state)
     state = chatReducer(state, { ...scope, generation: 2, type: 'sendStarted', submission: state.failedSubmission! })
     state = chatReducer(state, { ...scope, generation: 2, type: 'sendSucceeded', message: message('accepted', 1) })
@@ -85,4 +86,12 @@ describe('chatReducer', () => {
     state = chatReducer(state, { ...scope, type: 'connectionStateChanged', state: 'reconnecting' })
     expect(state.agentActivities['33333333-3333-4333-8333-333333333333'].state).toBe('unknown')
   })
+})
+
+it('locks reply, attachments and text while a submission is in flight', () => {
+  const scope = { meetingId: '11111111-1111-4111-8111-111111111111', generation: 1 }
+  const state = chatReducer(createInitialChatState(scope.meetingId), { ...scope, type: 'sendStarted', submission: { clientSubmissionId: 'pending', content: 'original', candidates: [] } })
+  expect(chatReducer(state, { ...scope, type: 'replyChanged', message: message('reply', 1) })).toBe(state)
+  expect(chatReducer(state, { ...scope, type: 'attachmentsChanged', attachments: [] })).toBe(state)
+  expect(chatReducer(state, { ...scope, type: 'draftChanged', draft: 'another' })).toBe(state)
 })

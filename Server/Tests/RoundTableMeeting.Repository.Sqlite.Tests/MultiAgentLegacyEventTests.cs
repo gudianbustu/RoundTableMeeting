@@ -20,7 +20,8 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
         var mention = MessageMention.Create(seed.Meeting.ID, reply.ID, seed.Agent.ID, "A", 0, 2);
         var humanEvent = MessageAppendedEvent.Create(seed.Meeting.ID, seed.Message.ID, 1, Now);
         var agentEvent = MessageAppendedEvent.Create(seed.Meeting.ID, reply.ID, 2, Now.AddSeconds(1));
-        db.AddRange(reply, mention, humanEvent, agentEvent);
+        await LegacyMessageSeed.InsertAsync(db, reply);
+        db.AddRange(mention, humanEvent, agentEvent);
         foreach (var source in new[] { humanEvent, agentEvent })
         {
             var delivery = MessageEventDelivery.Create(source.ID, "agent-mention-task-v1", Now.AddSeconds(1));

@@ -153,7 +153,7 @@ public sealed partial class AgentRecoveryMigrationTests
 
     private static async Task<Guid> SeedLegacyTaskAsync(RoundTableMeetingDbContext db, Guid agentId, string state)
     {
-        var trigger = await db.MeetingMessages.SingleAsync(item => item.Sequence == 2);
+        var trigger = await LegacyMessageSeed.Query(db).SingleAsync(item => item.Sequence == 2);
         var mention = MessageMention.Create(trigger.MeetingId, trigger.ID, agentId, "Worker", 0, 7);
         Guid? replyId = null;
         db.Add(mention);
@@ -162,7 +162,7 @@ public sealed partial class AgentRecoveryMigrationTests
             var reply = MeetingMessage.CreateParticipant(trigger.MeetingId, 3, agentId, MessageAuthorKind.Agent,
                 "Worker", "Legacy reply", Guid.NewGuid(), Now);
             replyId = reply.ID;
-            db.Add(reply);
+            await LegacyMessageSeed.InsertAsync(db, reply);
         }
         await db.SaveChangesAsync();
         var id = Guid.NewGuid();

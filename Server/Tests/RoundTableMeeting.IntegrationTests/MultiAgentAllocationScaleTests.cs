@@ -25,6 +25,8 @@ public sealed class MultiAgentAllocationScaleTests(ITestOutputHelper output)
         using var factory = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<IHostedService>();
+            // Preserve the historical algorithm benchmark without restoring production task dispatch.
+            services.AddScoped<AgentMentionTaskConsumer>();
             services.ConfigureDbContext<RoundTableMeetingDbContext>(options => options.AddInterceptors(probe));
         }));
         using var client = factory.CreateClient();
