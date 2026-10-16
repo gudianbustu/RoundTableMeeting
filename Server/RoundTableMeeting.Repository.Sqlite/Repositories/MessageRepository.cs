@@ -45,7 +45,7 @@ public sealed class MessageRepository(RoundTableMeetingDbContext dbContext) : IM
 
     public async Task<IReadOnlyList<MeetingMessage>> ListAsync(Guid meetingId, long? before, long? after, long? through, int limit, CancellationToken cancellationToken = default)
     {
-        var query = dbContext.MeetingMessages.AsNoTracking().Where(x => x.MeetingId == meetingId);
+        var query = dbContext.MeetingMessages.AsNoTracking().Where(x => x.MeetingId == meetingId && (!through.HasValue || x.Sequence <= through.Value));
         if (before.HasValue) query = query.Where(x => x.Sequence < before.Value).OrderByDescending(x => x.Sequence).Take(limit);
         else if (after.HasValue) query = query.Where(x => x.Sequence > after.Value && (!through.HasValue || x.Sequence <= through.Value)).OrderBy(x => x.Sequence).Take(limit);
         else query = query.Where(x => !through.HasValue || x.Sequence <= through.Value).OrderByDescending(x => x.Sequence).Take(limit);

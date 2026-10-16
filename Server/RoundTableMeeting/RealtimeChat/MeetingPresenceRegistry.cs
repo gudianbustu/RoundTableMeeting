@@ -99,6 +99,22 @@ public sealed class MeetingPresenceRegistry(RealtimeChatOptions options, IHubCon
         }
     }
 
+    public IReadOnlyList<string> GetConnections(Guid meetingId, IReadOnlySet<Guid> participantIds)
+        => connections.Where(pair => pair.Value.MeetingId == meetingId && participantIds.Contains(pair.Value.ParticipantId)).Select(pair => pair.Key).ToArray();
+
+    public void AbortParticipant(Guid meetingId, Guid participantId)
+    {
+        ConnectionBinding[] bindings;
+        lock (sync)
+        {
+            var matches = connections.Where(pair => pair.Value.MeetingId == meetingId && pair.Value.ParticipantId == participantId).ToArray();
+            bindings = matches.Select(pair => pair.Value).ToArray();
+            foreach (var pair in matches) connections.TryRemove(pair.Key, out _);
+            if (pendingOffline.Remove((meetingId, participantId), out var pending)) { pending.Cancel(); pending.Dispose(); }
+        }
+        foreach (var binding in bindings) binding.Abort();
+    }
+
     public void AbortMeeting(Guid meetingId)
     {
         ConnectionBinding[] bindings;

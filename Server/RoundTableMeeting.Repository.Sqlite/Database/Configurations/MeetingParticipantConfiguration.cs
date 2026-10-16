@@ -15,6 +15,8 @@ public sealed class MeetingParticipantConfiguration : IEntityTypeConfiguration<M
         builder.Property(x => x.DisplayName).HasMaxLength(64).IsRequired();
         builder.Property(x => x.NormalizedDisplayName).HasMaxLength(128).IsRequired();
         builder.Property(x => x.JoinedAtUtc).IsRequired();
+        builder.Property(x => x.MembershipState).HasConversion<string>().HasMaxLength(16).HasDefaultValue(MeetingMembershipState.Joined).IsRequired();
+        builder.Property(x => x.MembershipRevision).HasDefaultValue(1L).IsRequired();
         builder.HasOne<Meeting>().WithMany().HasForeignKey(x => x.MeetingId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<UserAccount>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(x => new { x.MeetingId, x.UserId }).IsUnique().HasFilter("UserId IS NOT NULL");

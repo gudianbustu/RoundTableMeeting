@@ -24,4 +24,8 @@
     <ProjectReference Include="..\..\RoundTableMeeting.Abstraction\RoundTableMeeting.Abstraction.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../LegacyMeetingParticipantSeed.cs" Link="LegacyMeetingParticipantSeed.cs" />
+    <Using Include="RoundTableMeeting.Tests" />
+  </ItemGroup>
 </Project>

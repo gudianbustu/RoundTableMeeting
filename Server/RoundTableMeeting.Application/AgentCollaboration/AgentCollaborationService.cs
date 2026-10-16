@@ -31,7 +31,8 @@ public sealed partial class AgentCollaborationService(
     IAgentTaskSignalRegistry taskSignals,
     IAgentActivityService activityService,
     IAgentActivityNotifier activityNotifier,
-    TimeProvider timeProvider) : IAgentCollaborationService
+    TimeProvider timeProvider,
+    IMeetingLifecycleService lifecycleService) : IAgentCollaborationService
 {
     public async Task<AgentOperationResult> JoinAsync(
         AgentJoinRequest request,
@@ -210,7 +211,8 @@ public sealed partial class AgentCollaborationService(
             return Failure("agent_operation_unavailable", "The Agent connection could not be activated.");
         await PublishActivityAsync(registration.MeetingId, registration.ParticipantId, notifyPresence: true);
 
-        return AgentOperationResult.Success(BuildJoinResult(outcome), "The Agent joined the meeting.");
+        var proof = await lifecycleService.IssueProofAsync(registration.MeetingId, registration.ParticipantId, cancellationToken);
+        return AgentOperationResult.Success(BuildJoinResult(outcome) with { LifecycleProof = proof }, "The Agent joined the meeting.");
     }
 
     public async Task<AgentOperationResult> WaitAsync(
@@ -690,6 +692,8 @@ public sealed partial class AgentCollaborationService(
                 registration.ConnectionSessionId, registration.TransportBinding)
             && string.Equals(connection.McpTransportBinding, registration.TransportBinding, StringComparison.Ordinal);
         if (!matches) return false;
+        var participant = (await participants.ListAsync(registration.MeetingId, cancellationToken)).SingleOrDefault(p => p.ID == registration.ParticipantId);
+        if (participant?.MembershipState != MeetingMembershipState.Joined) return false;
         var cursor = await agentRepository.FindCursorAsync(registration.MeetingId, registration.ParticipantId, cancellationToken);
         return cursor is not null && cursor.CurrentConnectionId == registration.ConnectionSessionId
             && cursor.ConnectionGeneration == registration.ConnectionGeneration;

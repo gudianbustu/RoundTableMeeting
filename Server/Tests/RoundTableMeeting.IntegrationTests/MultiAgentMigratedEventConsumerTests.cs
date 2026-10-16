@@ -46,7 +46,10 @@ public sealed class MultiAgentMigratedEventConsumerTests
             .UseSqlite($"Data Source={original.DatabasePath};Foreign Keys=True;Pooling=False").Options))
         {
             await old.Database.MigrateAsync("20260911063339_AddUserAccountAdmin");
-            old.AddRange(user, meeting, human, alpha, beta, root, pending, reply, rootMention, oldEvent, delivery,
+            old.AddRange(user, meeting);
+            await old.SaveChangesAsync();
+            foreach (var participant in new[] { human, alpha, beta }) await LegacyMeetingParticipantSeed.InsertAsync(old, participant);
+            old.AddRange(root, pending, reply, rootMention, oldEvent, delivery,
                 MessageMention.Create(meeting.ID, pending.ID, beta.ID, "Beta", 0, 5),
                 MessageMention.Create(meeting.ID, reply.ID, beta.ID, "Beta", 0, 5),
                 AgentContextCursor.Create(meeting.ID, beta.ID, 0, now));

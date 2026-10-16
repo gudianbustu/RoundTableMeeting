@@ -47,7 +47,11 @@ public sealed partial class McpAgentContractTests
                 human.DisplayName, "@Worker old task", Guid.NewGuid(), now);
             var mention = MessageMention.Create(meeting.ID, trigger.ID, agent.ID, "Worker", 0, 7);
             await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({user.ID}, {user.Username}, {user.NormalizedUsername}, {user.Nickname}, {user.PasswordHash})");
-        db.AddRange(meeting, human, agent, trigger, mention);
+            db.Add(meeting);
+            await db.SaveChangesAsync();
+            await LegacyMeetingParticipantSeed.InsertAsync(db, human);
+            await LegacyMeetingParticipantSeed.InsertAsync(db, agent);
+            db.AddRange(trigger, mention);
             if (state == "Replied")
             {
                 var reply = MeetingMessage.CreateParticipant(meeting.ID, 2, agent.ID, MessageAuthorKind.Agent,

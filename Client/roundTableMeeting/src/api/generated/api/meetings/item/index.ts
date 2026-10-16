@@ -4,9 +4,11 @@
 // @ts-ignore
 import { createApiProblemDetailsFromDiscriminatorValue, createMeetingDetailsDtoFromDiscriminatorValue, type ApiProblemDetails, type MeetingDetailsDto } from '../../../models/index.js';
 // @ts-ignore
-import { DeletionRequestBuilderRequestsMetadata, type DeletionRequestBuilder } from './deletion/index.js';
+import { DeletionRequestBuilderNavigationMetadata, DeletionRequestBuilderRequestsMetadata, type DeletionRequestBuilder } from './deletion/index.js';
 // @ts-ignore
 import { InvitationRequestBuilderRequestsMetadata, type InvitationRequestBuilder } from './invitation/index.js';
+// @ts-ignore
+import { LeaveRequestBuilderRequestsMetadata, type LeaveRequestBuilder } from './leave/index.js';
 // @ts-ignore
 import { MessagesRequestBuilderRequestsMetadata, type MessagesRequestBuilder } from './messages/index.js';
 // @ts-ignore
@@ -25,6 +27,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      */
     get invitation(): InvitationRequestBuilder;
     /**
+     * The leave property
+     */
+    get leave(): LeaveRequestBuilder;
+    /**
      * The messages property
      */
     get messages(): MessagesRequestBuilder;
@@ -33,6 +39,7 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * @returns {Promise<MeetingDetailsDto>}
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
      * @throws {ApiProblemDetails} error when the service returns a 404 status code
+     * @throws {ApiProblemDetails} error when the service returns a 410 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
      */
      get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<MeetingDetailsDto | undefined>;
@@ -52,9 +59,13 @@ export const WithMeetingItemRequestBuilderUriTemplate = "{+baseurl}/api/meetings
 export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<keyof WithMeetingItemRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     deletion: {
         requestsMetadata: DeletionRequestBuilderRequestsMetadata,
+        navigationMetadata: DeletionRequestBuilderNavigationMetadata,
     },
     invitation: {
         requestsMetadata: InvitationRequestBuilderRequestsMetadata,
+    },
+    leave: {
+        requestsMetadata: LeaveRequestBuilderRequestsMetadata,
     },
     messages: {
         requestsMetadata: MessagesRequestBuilderRequestsMetadata,
@@ -70,6 +81,7 @@ export const WithMeetingItemRequestBuilderRequestsMetadata: RequestsMetadata = {
         errorMappings: {
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
         adapterMethodName: "send",

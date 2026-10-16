@@ -68,3 +68,16 @@ it('rejects late activity, messages, resubscriptions and deletion callbacks afte
   expect(activities).toHaveBeenLastCalledWith({})
   expect(screen.getByTestId('messages')).toBeEmptyDOMElement()
 })
+
+it.each(['meeting_deleting', 'meeting_deleted'])('clears the current draft when a resync confirms %s', async code => {
+  mocks.list.mockResolvedValueOnce({ items: [], hasMoreBefore: false, hasMoreAfter: false })
+    .mockRejectedValueOnce({ code, status: 410 })
+  const unavailable = vi.fn()
+  render(<RealtimeChatRegion meetingId="11111111-1111-4111-8111-111111111111" participants={[]} onMeetingUnavailable={unavailable} />)
+  await waitFor(() => expect(mocks.list).toHaveBeenCalledTimes(1))
+  fireEvent.change(screen.getByLabelText('draft'), { target: { value: 'Pending content' } })
+  fireEvent.click(screen.getByText('Reconnect'))
+  await waitFor(() => expect(unavailable).toHaveBeenCalledOnce())
+  expect(screen.getByLabelText('draft')).toHaveValue('')
+  expect(screen.getByTestId('messages')).toBeEmptyDOMElement()
+})

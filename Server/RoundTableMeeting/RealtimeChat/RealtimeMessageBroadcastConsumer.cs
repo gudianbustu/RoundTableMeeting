@@ -10,7 +10,9 @@ public sealed class RealtimeMessageBroadcastConsumer(
     IMessageRepository messages,
     IHubContext<MeetingChatHub> hub,
     IMeetingRealtimeGate realtimeGate,
-    IMeetingRepository meetings) : IMessageEventConsumer
+    IMeetingRepository meetings,
+    IMeetingParticipantRepository participants,
+    MeetingPresenceRegistry presence) : IMessageEventConsumer
 {
     public async Task ConsumeAsync(MessageAppendedEnvelope envelope, CancellationToken cancellationToken = default)
     {
@@ -34,6 +36,9 @@ public sealed class RealtimeMessageBroadcastConsumer(
             message.Content,
             mentions.Select(x => new MessageMentionDto(x.TargetParticipantId, x.TargetDisplayName, x.StartOffset, x.Length)).ToArray(),
             message.CreatedAtUtc);
-        await hub.Clients.Group(MeetingChatHub.Group(envelope.MeetingId)).SendAsync("messageAppended", dto, cancellationToken);
+        var eligible = (await participants.ListAsync(envelope.MeetingId, cancellationToken))
+            .Where(p => p.MembershipState == Domain.Enums.MeetingMembershipState.Joined).Select(p => p.ID).ToHashSet();
+        var connections = presence.GetConnections(envelope.MeetingId, eligible);
+        if (connections.Count > 0) await hub.Clients.Clients(connections).SendAsync("messageAppended", dto, cancellationToken);
     }
 }

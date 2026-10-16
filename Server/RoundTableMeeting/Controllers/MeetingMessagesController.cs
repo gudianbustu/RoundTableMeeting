@@ -19,6 +19,7 @@ public sealed class MeetingMessagesController(IMessageHistoryService history, IM
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status410Gone, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status500InternalServerError, "application/problem+json")]
     public async Task<IActionResult> Get(Guid meetingId, [FromQuery] MessagePageRequest request, CancellationToken cancellationToken)
     {
@@ -28,6 +29,8 @@ public sealed class MeetingMessagesController(IMessageHistoryService history, IM
             MessageOperationStatus.Success => Ok(result.Data),
             MessageOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
             MessageOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed", result.Errors),
+            MessageOperationStatus.MeetingDeleting => ApiProblemDetailsWriter.CreateResult(HttpContext, 410, "meeting_deleting"),
+            MessageOperationStatus.MeetingDeleted => ApiProblemDetailsWriter.CreateResult(HttpContext, 410, "meeting_deleted"),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
         };
     }
@@ -40,6 +43,7 @@ public sealed class MeetingMessagesController(IMessageHistoryService history, IM
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status404NotFound, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status410Gone, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status429TooManyRequests, "application/problem+json")]
@@ -54,7 +58,10 @@ public sealed class MeetingMessagesController(IMessageHistoryService history, IM
             MessageOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
             MessageOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed", result.Errors),
             MessageOperationStatus.SubmissionMismatch => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "message_submission_mismatch"),
+            MessageOperationStatus.MembershipLeft => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "membership_left"),
             MessageOperationStatus.Conflict => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "message_append_conflict"),
+            MessageOperationStatus.MeetingDeleting => ApiProblemDetailsWriter.CreateResult(HttpContext, 410, "meeting_deleting"),
+            MessageOperationStatus.MeetingDeleted => ApiProblemDetailsWriter.CreateResult(HttpContext, 410, "meeting_deleted"),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
         };
     }

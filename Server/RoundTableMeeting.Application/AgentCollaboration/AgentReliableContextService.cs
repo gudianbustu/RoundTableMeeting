@@ -75,6 +75,7 @@ public sealed partial class AgentCollaborationService
         if (gate is null) return ReliableFailure("meeting_not_found");
         var agent = (await participants.ListAsync(registration.MeetingId, cancellationToken)).SingleOrDefault(item => item.ID == registration.ParticipantId);
         if (agent is null) return ReliableFailure("meeting_not_found");
+        if (agent.MembershipState == MeetingMembershipState.Left) return ReliableFailure("membership_left");
         await using var lease = await joinCoordinator.AcquireAsync(registration.MeetingId, agent.NormalizedDisplayName, cancellationToken);
         AgentOperationResult result;
         try

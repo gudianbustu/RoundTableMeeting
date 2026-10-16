@@ -129,8 +129,7 @@ public sealed partial class AgentRecoveryMigrationTests
         if (corruption == "cross_agent_attempt")
         {
             var other = MeetingParticipant.CreateAgent((await db.Meetings.SingleAsync()).ID, "Other", Now);
-            db.Add(other);
-            await db.SaveChangesAsync();
+            await LegacyMeetingParticipantSeed.InsertAsync(db, other);
             var connectionId = Guid.NewGuid();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentConnectionSessions SELECT {connectionId}, MeetingId, {other.ID}, Transport,

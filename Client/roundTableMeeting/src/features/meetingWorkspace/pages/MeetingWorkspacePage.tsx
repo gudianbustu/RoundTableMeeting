@@ -70,7 +70,7 @@ export function MeetingWorkspacePage() {
     <InviteMeetingDialog open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />
     <JoinMeetingDialog open={joinOpen} loading={workspace.operationLoading} succeeded={workspace.joinSucceeded} previewLoading={workspace.previewLoading} preview={workspace.preview} error={workspace.error?.message} retryAfterSeconds={workspace.error?.retryAfterSeconds} onCancel={() => { workspace.clearJoin(); setJoinOpen(false) }} onPreview={workspace.previewCode} onSubmit={value => void workspace.join(value.code, value.displayName)} />
     <Modal open={deleteOpen} title="删除会议" okText="确认删除" cancelText="取消" okButtonProps={{ danger: true, disabled: confirmName.normalize().trim() !== workspace.details?.name }} confirmLoading={workspace.operationLoading} onCancel={closeDelete} onOk={() => { if (workspace.selectedId) void workspace.remove(workspace.selectedId, confirmName).then(success => { if (success) closeDelete() }) }}>
-      <Typography.Paragraph>请输入完整会议名称确认删除。参与者记录和会议码将永久失效，此操作不可恢复。</Typography.Paragraph><Input aria-label="确认会议名称" value={confirmName} onChange={event => setConfirmName(event.target.value)} />
+      <Typography.Paragraph>请输入完整会议名称“<strong>{workspace.details?.name}</strong>”确认删除。参与者记录和会议码将永久失效，此操作不可恢复。</Typography.Paragraph><Input aria-label="确认会议名称" value={confirmName} onChange={event => setConfirmName(event.target.value)} />
     </Modal>
   </section>
 }

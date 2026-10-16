@@ -411,7 +411,11 @@ public sealed partial class AgentRecoveryMigrationTests
         var last = MeetingMessage.CreateParticipant(meeting.ID, 2, human.ID, MessageAuthorKind.Human, human.DisplayName,
             "中文😀\\value\r\nnext", Guid.NewGuid(), Now);
         await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({user.ID}, {user.Username}, {user.NormalizedUsername}, {user.Nickname}, {user.PasswordHash})");
-        db.AddRange(meeting, human, agent, first, last);
+        db.Add(meeting);
+        await db.SaveChangesAsync();
+        await LegacyMeetingParticipantSeed.InsertAsync(db, human);
+        await LegacyMeetingParticipantSeed.InsertAsync(db, agent);
+        db.AddRange(first, last);
         await db.SaveChangesAsync();
         var connectionId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""

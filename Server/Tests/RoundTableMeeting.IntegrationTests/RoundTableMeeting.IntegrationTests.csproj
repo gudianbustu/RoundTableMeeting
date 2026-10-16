@@ -26,4 +26,8 @@
     <ProjectReference Include="..\..\RoundTableMeeting.Repository.Sqlite\RoundTableMeeting.Repository.Sqlite.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="../LegacyMeetingParticipantSeed.cs" Link="LegacyMeetingParticipantSeed.cs" />
+    <Using Include="RoundTableMeeting.Tests" />
+  </ItemGroup>
 </Project>

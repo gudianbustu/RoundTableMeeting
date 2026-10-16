@@ -19,7 +19,10 @@ public sealed class MeetingWorkspaceService(
     IMeetingDeletionSignal deletionSignal,
     IMeetingRealtimeGate realtimeGate,
     RealtimeChatOptions realtimeChatOptions,
-    TimeProvider timeProvider) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
+    TimeProvider timeProvider,
+    IMeetingLifecycleRepository lifecycle,
+    IMeetingMembershipService membership,
+    IMeetingLifecycleService lifecycleService) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
 {
     public async Task<MeetingOperationResult<CreateMeetingResultDto>> CreateAsync(CreateMeetingRequest request, CancellationToken cancellationToken = default)
     {
@@ -64,32 +67,46 @@ public sealed class MeetingWorkspaceService(
 
         if (outcome.Item1 is MeetingOperationStatus.CreationRequestMismatch or MeetingOperationStatus.CreationRequestConsumed)
             return new(outcome.Item1);
+        using var createLease = await realtimeGate.AcquireSharedAsync(outcome.Item2!.ID, cancellationToken);
+        if (createLease is null || await meetings.FindActiveByIdAsync(outcome.Item2.ID, cancellationToken) is null)
+            return new(MeetingOperationStatus.CreationRequestConsumed);
         var details = await BuildDetails(outcome.Item2!, userId, cancellationToken);
         return new(outcome.Item1, new CreateMeetingResultDto(details, new(outcome.Item2!.ID, outcome.Item2.MeetingCode.ToString("D").ToLowerInvariant())), IsCreated: outcome.Item1 == MeetingOperationStatus.Created);
     }
 
-    public async Task<IReadOnlyList<MeetingListItemDto>> ListAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<MeetingListItemDto>> ListAsync(CancellationToken cancellationToken = default, bool history = false)
     {
         if (!TryUser(out var userId)) return [];
         var result = new List<MeetingListItemDto>();
         foreach (var row in await meetings.ListForUserAsync(userId, cancellationToken))
-            result.Add(new(row.Meeting.ID, row.Meeting.Name, row.Participant.DisplayName, row.Meeting.CreatorUserId == userId, row.Participant.JoinedAtUtc));
+        {
+            if ((row.Participant.MembershipState == Domain.Enums.MeetingMembershipState.Left) != history) continue;
+            result.Add(new(row.Meeting.ID, row.Meeting.Name, row.Participant.DisplayName, row.Meeting.CreatorUserId == userId, row.Participant.JoinedAtUtc)
+            { MembershipState = MembershipName(row.Participant), Permissions = Permissions(row.Meeting, row.Participant) });
+        }
         return result;
     }
 
     public async Task<MeetingOperationResult<MeetingDetailsDto>> GetAsync(Guid meetingId, CancellationToken cancellationToken = default)
     {
         if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        using var readLease = await realtimeGate.AcquireSharedAsync(meetingId, cancellationToken);
+        if (readLease is null) return new(await UnavailableStatus(meetingId, userId, cancellationToken));
         var meeting = await meetings.FindActiveByIdAsync(meetingId, cancellationToken);
-        if (meeting is null || await participants.FindByUserAsync(meetingId, userId, cancellationToken) is null) return new(MeetingOperationStatus.MeetingNotFound);
+        if (meeting is null) return new(await UnavailableStatus(meetingId, userId, cancellationToken));
+        if (await participants.FindByUserAsync(meetingId, userId, cancellationToken) is null) return new(MeetingOperationStatus.MeetingNotFound);
         return new(MeetingOperationStatus.Success, await BuildDetails(meeting, userId, cancellationToken));
     }
 
     public async Task<MeetingOperationResult<MeetingInvitationDto>> InvitationAsync(Guid meetingId, CancellationToken cancellationToken = default)
     {
         if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        using var readLease = await realtimeGate.AcquireSharedAsync(meetingId, cancellationToken);
+        if (readLease is null) return new(await UnavailableStatus(meetingId, userId, cancellationToken));
         var meeting = await meetings.FindActiveByIdAsync(meetingId, cancellationToken);
-        if (meeting is null || await participants.FindByUserAsync(meetingId, userId, cancellationToken) is null) return new(MeetingOperationStatus.MeetingNotFound);
+        var participant = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, cancellationToken);
+        if (meeting is null || participant is null) return new(MeetingOperationStatus.MeetingNotFound);
+        if (participant.MembershipState == Domain.Enums.MeetingMembershipState.Left) return new(MeetingOperationStatus.MembershipLeft);
         return new(MeetingOperationStatus.Success, new(meeting.ID, meeting.MeetingCode.ToString("D").ToLowerInvariant()));
     }
 
@@ -105,7 +122,7 @@ public sealed class MeetingWorkspaceService(
         var member = await participants.FindByUserAsync(meeting.ID, userId, cancellationToken);
         var account = await users.FindByIdAsync(userId, cancellationToken);
         if (account is null) return new(MeetingOperationStatus.Unauthenticated);
-        return new(MeetingOperationStatus.Success, new(meeting.ID, meeting.Name, meeting.Description, account.Nickname, member is not null, member?.DisplayName));
+        return new(MeetingOperationStatus.Success, new(meeting.ID, meeting.Name, meeting.Description, account.Nickname, member?.MembershipState == Domain.Enums.MeetingMembershipState.Joined, member?.DisplayName));
     }
 
     public async Task<MeetingOperationResult<MeetingDetailsDto>> JoinAsync(JoinMeetingRequest request, CancellationToken cancellationToken = default)
@@ -115,6 +132,10 @@ public sealed class MeetingWorkspaceService(
         if (parsed.Status == MeetingOperationStatus.ValidationFailed) return Invalid<MeetingDetailsDto>("meetingCode");
         if (parsed.Status == MeetingOperationStatus.MeetingNotFound) return new(MeetingOperationStatus.MeetingNotFound);
         var code = parsed.Code;
+        var preflight = await meetings.FindActiveByCodeAsync(code, cancellationToken);
+        if (preflight is null) return new(MeetingOperationStatus.MeetingNotFound);
+        using var joinLease = await realtimeGate.AcquireSharedAsync(preflight.ID, cancellationToken);
+        if (joinLease is null) return new(MeetingOperationStatus.MeetingNotFound);
         string displayName;
         try { displayName = MeetingParticipant.NormalizeDisplayName(request.DisplayName); } catch (ArgumentException) { return Invalid<MeetingDetailsDto>("displayName"); }
         try
@@ -124,7 +145,16 @@ public sealed class MeetingWorkspaceService(
                 var meeting = await meetings.FindActiveByCodeAsync(code, token);
                 if (meeting is null) return (MeetingOperationStatus.MeetingNotFound, (Meeting?)null);
                 var current = await participants.FindByUserAsync(meeting.ID, userId, token);
-                if (current is not null) return (MeetingOperationStatus.AlreadyMember, meeting);
+                if (current is not null)
+                {
+                    if (current.MembershipState == Domain.Enums.MeetingMembershipState.Left)
+                    {
+                        current.Rejoin();
+                        unitOfWork.RegisterEdit(current);
+                        return (MeetingOperationStatus.Success, meeting);
+                    }
+                    return (MeetingOperationStatus.AlreadyMember, meeting);
+                }
                 if (await participants.IsNameTakenAsync(meeting.ID, displayName.ToUpperInvariant(), token))
                     return (MeetingOperationStatus.DisplayNameTaken, (Meeting?)null);
                 unitOfWork.RegisterAdd(MeetingParticipant.CreateHuman(meeting.ID, userId, displayName, UtcNow()));
@@ -140,9 +170,30 @@ public sealed class MeetingWorkspaceService(
         }
     }
 
-    public async Task<MeetingOperationResult<object>> DeleteAsync(Guid meetingId, string confirmationName, CancellationToken cancellationToken = default)
+    public async Task<MeetingOperationResult<MeetingMembershipDto>> LeaveAsync(Guid meetingId, LeaveMeetingRequest request, CancellationToken cancellationToken = default)
     {
         if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        var participant = await participants.FindByUserAsync(meetingId, userId, cancellationToken);
+        if (participant is null) return new(MeetingOperationStatus.MeetingNotFound);
+        return await membership.LeaveAsync(meetingId, participant.ID, request.OperationId, cancellationToken);
+    }
+
+    public async Task<MeetingOperationResult<MeetingDeletionStatusDto>> DeletionStatusAsync(Guid meetingId, Guid operationId, CancellationToken cancellationToken = default)
+    {
+        if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        var deletion = await lifecycle.FindDeletionAsync(meetingId, cancellationToken);
+        if (deletion is null || deletion.CreatorUserId != userId || deletion.OperationId != operationId) return new(MeetingOperationStatus.MeetingNotFound);
+        return new(MeetingOperationStatus.Success, DeletionDto(deletion));
+    }
+
+    public async Task<MeetingOperationResult<object>> DeleteAsync(Guid meetingId, string confirmationName, CancellationToken cancellationToken = default, Guid? operationId = null)
+    {
+        if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        if (operationId == Guid.Empty) return Invalid<object>("operationId");
+        var previous = await lifecycle.FindDeletionAsync(meetingId, cancellationToken);
+        if (previous is not null)
+            return previous.CreatorUserId != userId ? new(MeetingOperationStatus.MeetingNotFound)
+                : new(previous.Completed ? MeetingOperationStatus.Success : MeetingOperationStatus.Accepted, DeletionDto(previous));
         string normalizedConfirmationName;
         try { normalizedConfirmationName = Meeting.NormalizeName(confirmationName); }
         catch (ArgumentException) { return Invalid<object>("confirmationName"); }
@@ -154,11 +205,8 @@ public sealed class MeetingWorkspaceService(
             return Invalid<object>("confirmationName");
 
         using var closeLease = await realtimeGate.AcquireExclusiveCloseAsync(
-            meetingId,
-            TimeSpan.FromSeconds(realtimeChatOptions.GateCloseTimeoutSeconds),
-            cancellationToken);
+            meetingId, TimeSpan.FromSeconds(realtimeChatOptions.GateCloseTimeoutSeconds), cancellationToken);
         if (closeLease is null) return new(MeetingOperationStatus.DeleteBusy);
-
         var outcome = await transactionRunner.RunAsync(async token =>
         {
             var meeting = await meetings.FindActiveByIdAsync(meetingId, token);
@@ -169,26 +217,47 @@ public sealed class MeetingWorkspaceService(
                 return MeetingOperationStatus.ValidationFailed;
             meeting.BeginDeleting();
             unitOfWork.RegisterEdit(meeting);
+            unitOfWork.RegisterAdd(MeetingDeletionOperation.Create(meetingId, userId, operationId));
             return MeetingOperationStatus.Accepted;
         }, cancellationToken);
         if (outcome == MeetingOperationStatus.Accepted)
         {
             closeLease.CommitClosed();
             deletionSignal.Notify();
+            var deletion = await lifecycle.FindDeletionAsync(meetingId, cancellationToken)
+                ?? throw new InvalidOperationException("The committed deletion receipt is missing.");
+            return new(outcome, DeletionDto(deletion));
         }
-        return outcome switch
-        {
-            MeetingOperationStatus.ValidationFailed => Invalid<object>("confirmationName"),
-            MeetingOperationStatus.Accepted => new(outcome, new { meetingId }),
-            _ => new(outcome)
-        };
+        return outcome == MeetingOperationStatus.ValidationFailed ? Invalid<object>("confirmationName") : new(outcome);
     }
+
+    private static MeetingDeletionStatusDto DeletionDto(MeetingDeletionOperation deletion)
+        => new(deletion.MeetingId, deletion.OperationId, deletion.Completed ? "deleted" : "deleting",
+            $"/api/meetings/{deletion.MeetingId:D}/deletion/{deletion.OperationId:D}");
 
     private async Task<MeetingDetailsDto> BuildDetails(Meeting meeting, Guid userId, CancellationToken cancellationToken)
     {
         var all = await participants.ListAsync(meeting.ID, cancellationToken);
         var mapped = all.Select(p => new ParticipantDto(p.ID, p.DisplayName, p.ParticipantType == Domain.Enums.ParticipantType.Human ? ParticipantKind.Human : ParticipantKind.Agent, p.UserId == userId, p.UserId == meeting.CreatorUserId, p.JoinedAtUtc)).ToArray();
-        return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), meeting.CreatorUserId == userId, mapped.Any(p => p.IsCurrentUser && p.Type == ParticipantKind.Human), mapped);
+        var current = all.Single(p => p.UserId == userId);
+        var permissions = Permissions(meeting, current);
+        return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), permissions.CanDelete, permissions.CanInvite, mapped)
+        { MembershipState = MembershipName(current), Permissions = permissions };
+    }
+    private async Task<MeetingOperationStatus> UnavailableStatus(Guid meetingId, Guid userId, CancellationToken cancellationToken)
+        => await lifecycleService.GetMemberStateAsync(meetingId, userId, cancellationToken) switch
+        {
+            "deleting" => MeetingOperationStatus.MeetingDeleting,
+            "deleted" => MeetingOperationStatus.MeetingDeleted,
+            _ => MeetingOperationStatus.MeetingNotFound
+        };
+    private static string MembershipName(MeetingParticipant participant) => participant.MembershipState == Domain.Enums.MeetingMembershipState.Joined ? "joined" : "left";
+    private static MeetingPermissionsDto Permissions(Meeting meeting, MeetingParticipant participant)
+    {
+        var joined = participant.MembershipState == Domain.Enums.MeetingMembershipState.Joined;
+        var creator = participant.UserId == meeting.CreatorUserId;
+        return new(true, joined, joined, joined && participant.ParticipantType == Domain.Enums.ParticipantType.Human,
+            joined && creator, joined && creator, joined && !creator, participant.LeftThroughSequence, participant.MembershipRevision);
     }
     private bool TryUser(out Guid userId) { userId = currentUser.UserId.GetValueOrDefault(); return currentUser.IsAuthenticated && userId != Guid.Empty; }
     private DateTimeOffset UtcNow() => timeProvider.GetUtcNow();

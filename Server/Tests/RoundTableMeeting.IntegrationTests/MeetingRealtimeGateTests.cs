@@ -26,4 +26,21 @@ public sealed class MeetingRealtimeGateTests
         using var reopened = await gate.AcquireSharedAsync(meetingId);
         Assert.NotNull(reopened);
     }
+    [Fact]
+    public async Task MembershipMutationWaitsReadersWithoutRejectingTheRoom()
+    {
+        var gate = new MeetingRealtimeGate();
+        var id = Guid.NewGuid();
+        using var initial = await gate.AcquireSharedAsync(id);
+        var mutation = gate.AcquireExclusiveMutationAsync(id, TimeSpan.FromSeconds(3)).AsTask();
+        var waiting = gate.AcquireSharedAsync(id).AsTask();
+        Assert.False(waiting.IsCompleted);
+        initial!.Dispose();
+        using var exclusive = await mutation;
+        Assert.NotNull(exclusive);
+        Assert.False(waiting.IsCompleted);
+        exclusive.Dispose();
+        using var resumed = await waiting.WaitAsync(TimeSpan.FromSeconds(3));
+        Assert.NotNull(resumed);
+    }
 }

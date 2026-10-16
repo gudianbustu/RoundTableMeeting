@@ -11,6 +11,27 @@ public sealed class MeetingParticipant : BaseEntity
     public string DisplayName { get; private set; } = string.Empty;
     public string NormalizedDisplayName { get; private set; } = string.Empty;
     public DateTimeOffset JoinedAtUtc { get; private set; }
+    public MeetingMembershipState MembershipState { get; private set; } = MeetingMembershipState.Joined;
+    public long? LeftThroughSequence { get; private set; }
+    public long MembershipRevision { get; private set; } = 1;
+
+    public void Leave(long visibleThroughSequence)
+    {
+        if (visibleThroughSequence < 0) throw new ArgumentOutOfRangeException(nameof(visibleThroughSequence));
+        if (MembershipState == MeetingMembershipState.Left) return;
+        MembershipState = MeetingMembershipState.Left;
+        LeftThroughSequence = visibleThroughSequence;
+        MembershipRevision++;
+    }
+
+    public void Rejoin()
+    {
+        if (MembershipState == MeetingMembershipState.Joined) return;
+        MembershipState = MeetingMembershipState.Joined;
+        LeftThroughSequence = null;
+        MembershipRevision++;
+    }
+
     public MeetingParticipant() { }
     private MeetingParticipant(Guid meetingId, Guid? userId, ParticipantType type, string displayName, DateTimeOffset joinedAtUtc)
     {

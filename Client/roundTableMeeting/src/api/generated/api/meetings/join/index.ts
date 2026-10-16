@@ -24,6 +24,7 @@ export interface JoinRequestBuilder extends BaseRequestBuilder<JoinRequestBuilde
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
      * @throws {ApiProblemDetails} error when the service returns a 404 status code
      * @throws {ApiProblemDetails} error when the service returns a 409 status code
+     * @throws {ApiProblemDetails} error when the service returns a 410 status code
      * @throws {ApiProblemDetails} error when the service returns a 415 status code
      * @throws {ApiProblemDetails} error when the service returns a 429 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
@@ -60,6 +61,7 @@ export const JoinRequestBuilderRequestsMetadata: RequestsMetadata = {
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             429: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,

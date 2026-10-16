@@ -27,10 +27,11 @@ export interface MeetingsRequestBuilder extends BaseRequestBuilder<MeetingsReque
     /**
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<MeetingListItemDto[]>}
+     * @throws {ApiProblemDetails} error when the service returns a 400 status code
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
      */
-     get(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<MeetingListItemDto[] | undefined>;
+     get(requestConfiguration?: RequestConfiguration<MeetingsRequestBuilderGetQueryParameters> | undefined) : Promise<MeetingListItemDto[] | undefined>;
     /**
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -38,6 +39,7 @@ export interface MeetingsRequestBuilder extends BaseRequestBuilder<MeetingsReque
      * @throws {ApiProblemDetails} error when the service returns a 400 status code
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
      * @throws {ApiProblemDetails} error when the service returns a 409 status code
+     * @throws {ApiProblemDetails} error when the service returns a 410 status code
      * @throws {ApiProblemDetails} error when the service returns a 415 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
      */
@@ -46,7 +48,7 @@ export interface MeetingsRequestBuilder extends BaseRequestBuilder<MeetingsReque
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {RequestInformation}
      */
-     toGetRequestInformation(requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
+     toGetRequestInformation(requestConfiguration?: RequestConfiguration<MeetingsRequestBuilderGetQueryParameters> | undefined) : RequestInformation;
     /**
      * @param body The request body
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
@@ -54,10 +56,13 @@ export interface MeetingsRequestBuilder extends BaseRequestBuilder<MeetingsReque
      */
      toPostRequestInformation(body: CreateMeetingRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : RequestInformation;
 }
+export interface MeetingsRequestBuilderGetQueryParameters {
+    view?: string;
+}
 /**
  * Uri template for the request builder.
  */
-export const MeetingsRequestBuilderUriTemplate = "{+baseurl}/api/meetings";
+export const MeetingsRequestBuilderUriTemplate = "{+baseurl}/api/meetings{?view*}";
 /**
  * Metadata for all the navigation properties in the request builder.
  */
@@ -80,6 +85,7 @@ export const MeetingsRequestBuilderRequestsMetadata: RequestsMetadata = {
         uriTemplate: MeetingsRequestBuilderUriTemplate,
         responseBodyContentType: "text/plain;q=0.9",
         errorMappings: {
+            400: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
@@ -93,6 +99,7 @@ export const MeetingsRequestBuilderRequestsMetadata: RequestsMetadata = {
             400: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             409: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },

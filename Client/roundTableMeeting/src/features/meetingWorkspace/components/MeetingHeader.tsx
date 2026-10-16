@@ -6,10 +6,10 @@ export function MeetingHeader({ meeting, invitation, onCopy, onInvite, onRefresh
     <div className="meeting-action-buttons">
       {meeting.canManageInvitation && <Button type="text" aria-label="邀请入会" title="邀请入会" icon={<UserAddOutlined />} onClick={onInvite} />}
       <Button type="text" aria-label="刷新会议" title="刷新会议" icon={<ReloadOutlined />} onClick={onRefresh} />
+      {meeting.description && <Popover trigger="click" title="会议描述" content={<div className="meeting-description">{meeting.description}</div>}><Button type="text" aria-label="会议描述" title="会议描述" icon={<InfoCircleOutlined />} /></Popover>}
       {meeting.canDelete && <Dropdown trigger={['click']} placement="topLeft" menu={{ items: [{ key: 'delete', label: '删除会议', icon: <DeleteOutlined />, danger: true }], onClick: ({ key }) => { if (key === 'delete') onDelete() } }}>
         <Button type="text" aria-label="更多会议操作" title="更多会议操作" icon={<EllipsisOutlined />} />
       </Dropdown>}
-      {meeting.description && <Popover trigger="click" title="会议描述" content={<div className="meeting-description">{meeting.description}</div>}><Button type="text" aria-label="会议描述" title="会议描述" icon={<InfoCircleOutlined />} /></Popover>}
     </div>
     {meeting.canManageInvitation && <div className="meeting-code-row">
       <span className="meeting-code-text" title={invitation?.meetingCode}>{invitation?.meetingCode ?? '会议码加载中…'}</span>

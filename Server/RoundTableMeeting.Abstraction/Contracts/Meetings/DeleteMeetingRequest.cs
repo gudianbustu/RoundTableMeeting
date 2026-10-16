@@ -1,2 +1,2 @@
 namespace RoundTableMeeting.Abstraction.Contracts.Meetings;
-public sealed record DeleteMeetingRequest(string ConfirmationName);
+public sealed record DeleteMeetingRequest(string ConfirmationName, Guid? OperationId = null);

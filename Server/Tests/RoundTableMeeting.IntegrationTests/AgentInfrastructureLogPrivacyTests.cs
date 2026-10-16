@@ -39,6 +39,8 @@ public sealed class AgentInfrastructureLogPrivacyTests
     {
         public ValueTask<IMeetingRealtimeSharedLease?> AcquireSharedAsync(Guid meetingId, CancellationToken cancellationToken = default) => throw new InvalidOperationException(Secret);
         public ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveCloseAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveMutationAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default)
+            => throw new NotSupportedException();
         public void Forget(Guid meetingId) { }
     }
     private sealed class PrivateExceptionLogger<T> : ILogger<T>

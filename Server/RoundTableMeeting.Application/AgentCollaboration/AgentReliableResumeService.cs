@@ -37,6 +37,7 @@ public sealed partial class AgentCollaborationService
         if (gate is null) return ReliableFailure("meeting_not_found");
         var participant = (await participants.ListAsync(preflight.MeetingId, cancellationToken)).SingleOrDefault(item => item.ID == preflight.ParticipantId);
         if (participant is null) return ReliableFailure("meeting_not_found");
+        if (participant.MembershipState == MeetingMembershipState.Left) return ReliableFailure("membership_left");
         await using var participantLease = await joinCoordinator.AcquireAsync(preflight.MeetingId, participant.NormalizedDisplayName, cancellationToken);
         var binding = session.ToStorageBinding();
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(binding)));

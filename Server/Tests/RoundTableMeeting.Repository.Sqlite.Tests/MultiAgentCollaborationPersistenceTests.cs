@@ -66,7 +66,8 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
             var other = MeetingParticipant.CreateAgent(seed.Meeting.ID, "Other", Now);
             var reply = MeetingMessage.CreateParticipant(seed.Meeting.ID, 2, other.ID, MessageAuthorKind.Agent,
                 "Other", "private fixture reply", Guid.NewGuid(), Now);
-            db.AddRange(other, reply);
+            await LegacyMeetingParticipantSeed.InsertAsync(db, other);
+            db.Add(reply);
             await db.SaveChangesAsync();
             await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ReplyMessageId = {reply.ID}, State = 'Replied', RepliedAtUtc = {Now}");
         }
@@ -169,7 +170,7 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         db.Add(root);
         await db.SaveChangesAsync();
         Assert.Single(await db.AgentReplyTasks.ToArrayAsync());
-        Assert.Equal(Current, (await db.Database.GetAppliedMigrationsAsync()).Last());
+        Assert.Contains(Current, await db.Database.GetAppliedMigrationsAsync());
     }
 
     private static Task<long> ForeignKeyErrors(RoundTableMeetingDbContext db)
@@ -186,7 +187,11 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         var agent = MeetingParticipant.CreateAgent(meeting.ID, "A", Now);
         var message = MeetingMessage.CreateParticipant(meeting.ID, 1, human.ID, MessageAuthorKind.Human, "Owner", "@A", Guid.NewGuid(), Now);
         var mention = MessageMention.Create(meeting.ID, message.ID, agent.ID, "A", 0, 2);
-        db.AddRange(user, meeting, human, agent, message, mention);
+        db.AddRange(user, meeting);
+        await db.SaveChangesAsync();
+        await LegacyMeetingParticipantSeed.InsertAsync(db, human);
+        await LegacyMeetingParticipantSeed.InsertAsync(db, agent);
+        db.AddRange(message, mention);
         await db.SaveChangesAsync();
         var taskId = Guid.NewGuid();
         await db.Database.ExecuteSqlInterpolatedAsync($"""

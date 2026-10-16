@@ -35,13 +35,30 @@ public sealed class MeetingDomainTests
     }
 
     [Fact]
-    public void ReceiptBecomesDeletedAndExpiresAfterThirtyDays()
+    public void ReceiptBecomesDeletedWithoutExpiringTheCreationIntent()
     {
         var now = DateTimeOffset.Parse("2026-08-31T00:00:00Z");
         var receipt = MeetingCreationReceipt.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), now);
         receipt.MarkDeleted(now);
         Assert.Equal(MeetingCreationReceiptState.Deleted, receipt.State);
         Assert.Null(receipt.MeetingId);
-        Assert.Equal(now.AddDays(30), receipt.ExpiresAtUtc);
+        Assert.Null(receipt.ExpiresAtUtc);
+    }
+    [Fact]
+    public void LeaveIsIdempotentAndRejoinPreservesIdentity()
+    {
+        var participant = MeetingParticipant.CreateAgent(Guid.NewGuid(), "Worker", DateTimeOffset.UtcNow);
+        var id = participant.ID;
+        participant.Leave(12);
+        participant.Leave(99);
+        Assert.Equal(12, participant.LeftThroughSequence);
+        Assert.Equal(2, participant.MembershipRevision);
+        participant.Rejoin();
+        Assert.Equal(id, participant.ID);
+        Assert.Null(participant.LeftThroughSequence);
+        Assert.Equal(MeetingMembershipState.Joined, participant.MembershipState);
+        Assert.Equal(3, participant.MembershipRevision);
+        participant.Rejoin();
+        Assert.Equal(3, participant.MembershipRevision);
     }
 }

@@ -44,11 +44,17 @@ public interface IAgentActivityNotifier
 }
 public interface IMessageCleanupService { Task DeleteForMeetingAsync(Guid meetingId, CancellationToken cancellationToken = default); }
 public interface IMessageEventRecoveryService { Task<bool> ResumeAsync(Guid deliveryId, CancellationToken cancellationToken = default); }
-public interface IMeetingRealtimeTermination { Task NotifyAndTerminateAsync(Guid meetingId, DateTimeOffset deletedAtUtc, CancellationToken cancellationToken = default); }
+public interface IMeetingRealtimeTermination
+{
+    Task NotifyAndTerminateAsync(Guid meetingId, DateTimeOffset deletedAtUtc, CancellationToken cancellationToken = default);
+    Task NotifyDeletingAsync(Guid meetingId, CancellationToken cancellationToken = default);
+    Task TerminateParticipantAsync(Guid meetingId, Guid participantId, CancellationToken cancellationToken = default);
+}
 public interface IMeetingRealtimeGate
 {
     ValueTask<IMeetingRealtimeSharedLease?> AcquireSharedAsync(Guid meetingId, CancellationToken cancellationToken = default);
     ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveCloseAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default);
+    ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveMutationAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default);
     void Forget(Guid meetingId);
 }
 public interface IMeetingRealtimeSharedLease : IDisposable { }

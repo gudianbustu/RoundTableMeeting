@@ -1,5 +1,6 @@
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Domain.Repositories;
+using RoundTableMeeting.Domain.Entities;
 using RoundTableMeeting.Domain.UnitOfWork;
 using RoundTableMeeting.RealtimeChat;
 
@@ -36,7 +37,7 @@ public sealed class MeetingDeletionRecoveryService(
             var repository = scanScope.ServiceProvider.GetRequiredService<IMeetingRepository>();
             var meetingIds = (await repository.ListDeletingAsync(cancellationToken)).Select(meeting => meeting.ID).ToArray();
             foreach (var meetingId in meetingIds) await RecoverMeetingAsync(meetingId, cancellationToken);
-            await DeleteExpiredReceiptsAsync(cancellationToken);
+
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
         catch (Exception exception)
@@ -52,22 +53,33 @@ public sealed class MeetingDeletionRecoveryService(
             var deletedAt = timeProvider.GetUtcNow();
             agentConnections.TerminateMeeting(meetingId);
             agentSignals.TerminateMeeting(meetingId);
-            await realtimeTermination.NotifyAndTerminateAsync(meetingId, deletedAt, cancellationToken);
+            await realtimeTermination.NotifyDeletingAsync(meetingId, cancellationToken);
             await using var scope = scopeFactory.CreateAsyncScope();
             var meetings = scope.ServiceProvider.GetRequiredService<IMeetingRepository>();
             var participants = scope.ServiceProvider.GetRequiredService<IMeetingParticipantRepository>();
+            var lifecycle = scope.ServiceProvider.GetRequiredService<IMeetingLifecycleRepository>();
             var messages = scope.ServiceProvider.GetRequiredService<IMessageCleanupService>();
             var agents = scope.ServiceProvider.GetRequiredService<IAgentCollaborationCleanupService>();
             var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
             var runner = scope.ServiceProvider.GetRequiredService<IMeetingTransactionRunner>();
+            foreach (var resources in scope.ServiceProvider.GetServices<IMeetingDeletionResourceCleanup>())
+                await resources.DeleteForMeetingAsync(meetingId, cancellationToken);
             await runner.RunAsync(async token =>
             {
                 var meeting = await meetings.FindByIdAsync(meetingId, token);
                 if (meeting is null) return true;
                 if (meeting.LifecycleState != Domain.Enums.MeetingLifecycleState.Deleting)
                     throw new InvalidOperationException("Deletion recovery requires a Deleting meeting.");
+                var deletion = await lifecycle.FindDeletionAsync(meetingId, token);
+                if (deletion is null)
+                {
+                    deletion = MeetingDeletionOperation.Create(meetingId, meeting.CreatorUserId);
+                    unitOfWork.RegisterAdd(deletion);
+                }
+                else unitOfWork.RegisterEdit(deletion);
                 await agents.DeleteForMeetingAsync(meetingId, deletedAt, token);
                 await messages.DeleteForMeetingAsync(meetingId, token);
+                foreach (var leave in await lifecycle.ListLeavesAsync(meetingId, token)) unitOfWork.RegisterDelete(leave);
                 foreach (var participant in await participants.ListAsync(meetingId, token)) unitOfWork.RegisterDelete(participant);
                 var receipt = await meetings.FindActiveReceiptByMeetingIdAsync(meetingId, token);
                 if (receipt is not null)
@@ -76,8 +88,10 @@ public sealed class MeetingDeletionRecoveryService(
                     unitOfWork.RegisterEdit(receipt);
                 }
                 unitOfWork.RegisterDelete(meeting);
+                deletion.Complete(timeProvider.GetUtcNow());
                 return true;
             }, cancellationToken);
+            await realtimeTermination.NotifyAndTerminateAsync(meetingId, timeProvider.GetUtcNow(), cancellationToken);
             realtimeGate.Forget(meetingId);
         }
         catch (Exception exception)
@@ -86,16 +100,4 @@ public sealed class MeetingDeletionRecoveryService(
         }
     }
 
-    private async Task DeleteExpiredReceiptsAsync(CancellationToken cancellationToken)
-    {
-        await using var scope = scopeFactory.CreateAsyncScope();
-        var meetings = scope.ServiceProvider.GetRequiredService<IMeetingRepository>();
-        var unitOfWork = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
-        var runner = scope.ServiceProvider.GetRequiredService<IMeetingTransactionRunner>();
-        await runner.RunAsync(async token =>
-        {
-            foreach (var receipt in await meetings.ListExpiredDeletedReceiptsAsync(timeProvider.GetUtcNow(), token)) unitOfWork.RegisterDelete(receipt);
-            return true;
-        }, cancellationToken);
-    }
 }

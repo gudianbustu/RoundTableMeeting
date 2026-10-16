@@ -110,14 +110,14 @@ export function useMeetingWorkspace() {
   const join = async (code: string, displayName: string) => {
     setJoinSucceeded(false); setOperationLoading(true)
     try {
-      if (preview?.alreadyJoined) { const meetingId = preview.meetingId; setPreview(undefined); setJoinSucceeded(true); navigate(`/meetings/${meetingId}`); return }
+      if (preview?.alreadyJoined) { const meetingId = preview.meetingId; setPreview(undefined); setJoinSucceeded(true); if (meetingId === routeId) await loadDetails(meetingId); else navigate(`/meetings/${meetingId}`); return }
       let result: MeetingDetails
       try { result = await joinMeeting(code.trim(), displayName) } catch (value) {
         const apiError = value as MeetingWorkspaceApiError
         if (apiError.code !== 'meeting_join_conflict') throw value
         result = await joinMeeting(code.trim(), displayName)
       }
-      setDetails(result); setPreview(undefined); await loadList(false); setJoinSucceeded(true); navigate(`/meetings/${result.meetingId}`)
+      setDetails(result); setPreview(undefined); await loadList(false); setJoinSucceeded(true); if (result.meetingId === routeId) await loadDetails(result.meetingId); else navigate(`/meetings/${result.meetingId}`)
     } catch (value) { setError(value as MeetingWorkspaceApiError) } finally { setOperationLoading(false) }
   }
   const remove = async (id: string, name: string) => {

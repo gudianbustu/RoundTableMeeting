@@ -66,6 +66,8 @@ public sealed partial class McpAgentContractTests
             Closing.TrySetResult();
             return pending;
         }
+        public ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveMutationAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default)
+            => inner.AcquireExclusiveMutationAsync(meetingId, timeout, cancellationToken);
         public void Forget(Guid meetingId) => inner.Forget(meetingId);
     }
 }

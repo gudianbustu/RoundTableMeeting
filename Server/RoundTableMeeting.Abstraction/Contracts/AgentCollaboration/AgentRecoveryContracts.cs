@@ -78,6 +78,10 @@ public sealed partial record AgentConnectionDto
 public sealed partial record AgentJoinResultDto
 {
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? LifecycleProof { get; init; }
+    public override string ToString() => "AgentJoinResultDto { redacted }";
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public string? Kind { get; init; }
 
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

@@ -9,6 +9,7 @@ using RoundTableMeeting.Domain.UnitOfWork;
 namespace RoundTableMeeting.Application.RealtimeChat;
 
 public sealed class ResolvedMessageAppendCore(
+    IMeetingRepository meetings,
 	IMeetingParticipantRepository participants,
 	IMessageRepository messages,
 	IUnitOfWork unitOfWork,
@@ -36,6 +37,17 @@ public sealed class ResolvedMessageAppendCore(
             || (author.Kind == MessageAuthorKind.System ? author.ParticipantId is not null : author.ParticipantId is null || author.ParticipantId == Guid.Empty))
 			throw new ArgumentException("Message identity is invalid.");
 
+        if (await meetings.FindActiveByIdAsync(meetingId, cancellationToken) is null)
+            throw new RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException("meeting_not_found");
+        var roster = await participants.ListAsync(meetingId, cancellationToken);
+        if (author.Kind != MessageAuthorKind.System)
+        {
+            var participant = roster.SingleOrDefault(p => p.ID == author.ParticipantId);
+            if (participant is null) throw new RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException("meeting_not_found");
+            if (participant.MembershipState == RoundTableMeeting.Domain.Enums.MeetingMembershipState.Left)
+                throw new RoundTableMeeting.Domain.Exceptions.MeetingMessageAccessException("membership_left");
+        }
+
 		var normalizedContent = MeetingMessage.NormalizeContent(content);
 		MeetingMessage.ValidateContentLength(normalizedContent, options.MaxContentLength);
 		var sequence = await messages.GetNextSequenceAsync(meetingId, cancellationToken);
@@ -54,7 +66,7 @@ public sealed class ResolvedMessageAppendCore(
 
         if (author.Kind != MessageAuthorKind.System)
         {
-		var people = (await participants.ListAsync(meetingId, cancellationToken))
+		var people = roster.Where(participant => participant.MembershipState == RoundTableMeeting.Domain.Enums.MeetingMembershipState.Joined)
 			.Select(participant => new MentionParticipant(participant.ID, participant.DisplayName, participant.NormalizedDisplayName))
 			.ToArray();
 		foreach (var mention in parser.Parse(normalizedContent, people, mentionCandidates))

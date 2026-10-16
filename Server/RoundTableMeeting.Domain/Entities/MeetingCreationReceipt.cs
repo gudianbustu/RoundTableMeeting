@@ -15,6 +15,6 @@ public sealed class MeetingCreationReceipt : BaseEntity
         CreatorUserId = creatorUserId; CreationRequestId = requestId; MeetingId = meetingId; State = MeetingCreationReceiptState.Active; CreatedAtUtc = createdAtUtc;
     }
     public static MeetingCreationReceipt Create(Guid creatorUserId, Guid requestId, Guid meetingId, DateTimeOffset createdAtUtc) => new(creatorUserId, requestId, meetingId, createdAtUtc);
-    public void MarkDeleted(DateTimeOffset deletedAtUtc) { State = MeetingCreationReceiptState.Deleted; MeetingId = null; ExpiresAtUtc = deletedAtUtc.AddDays(30); }
+    public void MarkDeleted(DateTimeOffset deletedAtUtc) { State = MeetingCreationReceiptState.Deleted; MeetingId = null; ExpiresAtUtc = null; }
 }
 public enum MeetingCreationReceiptState { Active, Deleted }

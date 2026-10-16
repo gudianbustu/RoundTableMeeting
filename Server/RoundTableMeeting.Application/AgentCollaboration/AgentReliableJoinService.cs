@@ -63,6 +63,7 @@ public sealed partial class AgentCollaborationService
                 var agent = await participants.FindByNormalizedNameAsync(meeting.ID, name, token);
                 var initial = await agentRepository.FindInitialContextAsync(meeting.ID, receipt.ParticipantId, resultConnection.ID, token);
                 if (agent is null || initial is null) return ReliableJoinOutcome.Fail("agent_operation_unavailable");
+                if (agent.MembershipState == MeetingMembershipState.Left) return ReliableJoinOutcome.Fail("membership_left");
                 return new ReliableJoinOutcome(null, meeting, agent, resultConnection, initial, true,
                     resultConnection.State == AgentConnectionState.Activating, request.JoinMode == "takeover" ? "taken_over" : "created");
             }
@@ -72,12 +73,14 @@ public sealed partial class AgentCollaborationService
             var existing = await participants.FindByNormalizedNameAsync(meeting.ID, name, token);
             if (existing is not null && existing.ParticipantType != ParticipantType.Agent) return ReliableJoinOutcome.Fail("agent_name_in_use");
             var takeover = request.JoinMode == AgentReliabilityProtocol.Takeover;
+            var rejoining = existing?.MembershipState == MeetingMembershipState.Left;
+            if (takeover && rejoining) return ReliableJoinOutcome.Fail("membership_left");
             if (takeover && existing is null) return ReliableJoinOutcome.Fail("agent_not_found");
             var existingCursor = existing is null ? null : await agentRepository.FindCursorAsync(meeting.ID, existing.ID, token);
             var previous = existingCursor?.CurrentConnectionId is Guid currentId
                 ? await agentRepository.FindConnectionAsync(meeting.ID, currentId, token) : null;
             if (existing is not null && (existingCursor is null || previous is null)) return ReliableJoinOutcome.Fail("agent_operation_unavailable");
-            if (existing is not null && !takeover)
+            if (existing is not null && !takeover && !rejoining)
             {
                 var active = previous!.State == AgentConnectionState.Activating
                     || (previous.State == AgentConnectionState.Connected
@@ -92,6 +95,7 @@ public sealed partial class AgentCollaborationService
             var sequence = await messages.GetSequenceSummaryAsync(meeting.ID, token);
             var context = await contextBuilder.BuildInitialAsync(meeting.ID, sequence.HighWatermarkSequence, request.ContextCharacterLimit, token);
             var agentIdentity = existing ?? MeetingParticipant.CreateAgent(meeting.ID, displayName, now);
+            if (rejoining) { agentIdentity.Rejoin(); unitOfWork.RegisterEdit(agentIdentity); }
             var currentCursor = existingCursor ?? AgentContextCursor.Create(meeting.ID, agentIdentity.ID, sequence.HighWatermarkSequence, now);
             var next = AgentConnectionSession.CreateActivating(meeting.ID, agentIdentity.ID, request.ContextCharacterLimit,
                 binding, currentCursor.NextConnectionGeneration(), AgentReliabilityProtocol.ExplicitAck,
@@ -165,7 +169,8 @@ public sealed partial class AgentCollaborationService
         var finalCursor = await agentRepository.FindCursorAsync(registration.MeetingId, registration.ParticipantId, cancellationToken);
         var finalError = ReliableConnectionError(current!, finalCursor, registration, UtcNow());
         if (finalError is not null) return finalError;
-        return AgentOperationResult.Success(dto, "The Agent joined the meeting.");
+        var proof = await lifecycleService.IssueProofAsync(registration.MeetingId, registration.ParticipantId, cancellationToken);
+        return AgentOperationResult.Success(dto with { LifecycleProof = proof }, "The Agent joined the meeting.");
     }
 
     private async Task DisconnectForRecoveryAsync(AgentConnectionSession connection, AgentTaskFailureCode reason,

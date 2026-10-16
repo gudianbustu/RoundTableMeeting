@@ -7,23 +7,35 @@ public sealed class MeetingRealtimeGate : IMeetingRealtimeGate
 {
     private readonly ConcurrentDictionary<Guid, Entry> entries = new();
 
-    public ValueTask<IMeetingRealtimeSharedLease?> AcquireSharedAsync(Guid meetingId, CancellationToken cancellationToken = default)
+    public async ValueTask<IMeetingRealtimeSharedLease?> AcquireSharedAsync(Guid meetingId, CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
         while (true)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             var entry = entries.GetOrAdd(meetingId, static _ => new Entry());
+            Task wait;
             lock (entry.Sync)
             {
                 if (!entries.TryGetValue(meetingId, out var current) || !ReferenceEquals(current, entry)) continue;
-                if (entry.Closing || entry.Closed) return ValueTask.FromResult<IMeetingRealtimeSharedLease?>(null);
-                entry.Readers++;
-                return ValueTask.FromResult<IMeetingRealtimeSharedLease?>(new SharedLease(this, meetingId, entry));
+                if (entry.Closed || entry.Closing && entry.RejectReaders) return null;
+                if (!entry.Closing)
+                {
+                    entry.Readers++;
+                    return new SharedLease(this, meetingId, entry);
+                }
+                wait = entry.Changed.Task;
             }
+            await wait.WaitAsync(cancellationToken);
         }
     }
 
-    public async ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveCloseAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default)
+    public ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveCloseAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default)
+        => AcquireExclusiveAsync(meetingId, timeout, true, cancellationToken);
+
+    public ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveMutationAsync(Guid meetingId, TimeSpan timeout, CancellationToken cancellationToken = default)
+        => AcquireExclusiveAsync(meetingId, timeout, false, cancellationToken);
+
+    private async ValueTask<IMeetingRealtimeExclusiveLease?> AcquireExclusiveAsync(Guid meetingId, TimeSpan timeout, bool rejectReaders, CancellationToken cancellationToken)
     {
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeoutSource.CancelAfter(timeout);
@@ -42,6 +54,7 @@ public sealed class MeetingRealtimeGate : IMeetingRealtimeGate
                     if (!entry.Closing)
                     {
                         entry.Closing = true;
+                        entry.RejectReaders = rejectReaders;
                         ownsClosing = true;
                     }
                     if (ownsClosing && entry.Readers == 0) return new ExclusiveLease(entry);
@@ -87,6 +100,7 @@ public sealed class MeetingRealtimeGate : IMeetingRealtimeGate
         public object Sync { get; } = new();
         public int Readers { get; set; }
         public bool Closing { get; set; }
+        public bool RejectReaders { get; set; }
         public bool Closed { get; set; }
         public TaskCompletionSource Changed { get; set; } = NewSignal();
     }

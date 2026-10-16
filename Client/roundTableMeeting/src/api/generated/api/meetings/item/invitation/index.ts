@@ -15,6 +15,8 @@ export interface InvitationRequestBuilder extends BaseRequestBuilder<InvitationR
      * @returns {Promise<MeetingInvitationDto>}
      * @throws {ApiProblemDetails} error when the service returns a 401 status code
      * @throws {ApiProblemDetails} error when the service returns a 404 status code
+     * @throws {ApiProblemDetails} error when the service returns a 409 status code
+     * @throws {ApiProblemDetails} error when the service returns a 410 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
      */
      post(requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<MeetingInvitationDto | undefined>;
@@ -38,6 +40,8 @@ export const InvitationRequestBuilderRequestsMetadata: RequestsMetadata = {
         errorMappings: {
             401: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             404: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            409: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            410: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
         adapterMethodName: "send",

@@ -15,7 +15,8 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
         var seed = await SeedOld(db);
         var peer = MeetingParticipant.CreateAgent(seed.Meeting.ID, "B", Now);
         var mention = MessageMention.Create(seed.Meeting.ID, seed.Message.ID, peer.ID, "B", 3, 2);
-        db.AddRange(peer, mention);
+        await LegacyMeetingParticipantSeed.InsertAsync(db, peer);
+        db.Add(mention);
         await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MeetingMessages SET Content = {"@A @B"} WHERE ID = {seed.Message.ID}");
         await db.SaveChangesAsync();
         var peerTaskId = Guid.NewGuid();

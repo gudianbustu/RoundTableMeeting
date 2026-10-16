@@ -57,12 +57,12 @@ public sealed partial class McpAgentContractTests
         {
             await host.WaitForCrashPointAsync();
             using var read = await browser.GetAsync($"/api/meetings/{meeting.MeetingId}");
-            Assert.Equal(HttpStatusCode.NotFound, read.StatusCode);
+            Assert.Equal(HttpStatusCode.Gone, read.StatusCode);
             using var lateWrite = new HttpRequestMessage(HttpMethod.Post, $"/api/meetings/{meeting.MeetingId}/messages")
                 { Content = JsonContent.Create(new { clientSubmissionId = Guid.NewGuid(), content = "late message" }) };
             lateWrite.Headers.Add("Origin", "http://localhost:5173");
             using var rejectedWrite = await browser.SendAsync(lateWrite);
-            Assert.Equal(HttpStatusCode.NotFound, rejectedWrite.StatusCode);
+            Assert.Equal(HttpStatusCode.Gone, rejectedWrite.StatusCode);
             if (!afterCommit)
             {
                 await using var pendingCleanup = host.Database();
@@ -73,7 +73,7 @@ public sealed partial class McpAgentContractTests
                 { Content = JsonContent.Create(new { confirmationName = name }) };
             repeat.Headers.Add("Origin", "http://localhost:5173");
             using var repeated = await browser.SendAsync(repeat);
-            Assert.Equal(HttpStatusCode.NotFound, repeated.StatusCode);
+            Assert.Equal(afterCommit ? HttpStatusCode.NoContent : HttpStatusCode.Accepted, repeated.StatusCode);
         }
         finally { await host.CrashAsync(); }
         await using (var cut = host.Database())
@@ -109,7 +109,7 @@ public sealed partial class McpAgentContractTests
                 var receipt = await final.MeetingCreationReceipts.SingleAsync(item => item.ID == receiptId);
                 Assert.Equal("Deleted", receipt.State.ToString());
                 Assert.Null(receipt.MeetingId);
-                Assert.NotNull(receipt.ExpiresAtUtc);
+                Assert.Null(receipt.ExpiresAtUtc);
                 Assert.True(await final.UserAccounts.AnyAsync(item => item.ID == ownerId));
                 Assert.Equal("Active", (await final.Meetings.SingleAsync(item => item.ID == other.MeetingId)).LifecycleState.ToString());
                 Assert.Equal("Other meeting history", (await final.MeetingMessages.SingleAsync(item => item.MeetingId == other.MeetingId)).Content);

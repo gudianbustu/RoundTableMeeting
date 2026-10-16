@@ -79,8 +79,9 @@ public sealed partial class McpAgentContractTests
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Legacy", ["contextCharacterLimit"] = 12000
         }));
         var data = result.GetProperty("data");
-        Assert.Equal(new[] { "agent", "connection", "initialContext", "meeting", "nextAction", "participants", "residentInstruction", "residentInstructionVersion" },
+        Assert.Equal(new[] { "agent", "connection", "initialContext", "lifecycleProof", "meeting", "nextAction", "participants", "residentInstruction", "residentInstructionVersion" },
             data.EnumerateObject().Select(property => property.Name).Order());
+        Assert.Matches("^[0-9A-Fa-f]{64}$", data.GetProperty("lifecycleProof").GetString()!);
         Assert.Equal(new[] { "connectionSessionId", "declaredContextCharacterLimit", "initialContextState", "state" },
             data.GetProperty("connection").EnumerateObject().Select(property => property.Name).Order());
         var error = SdkPayload(await sdk.CallToolAsync("get_agent_status", new Dictionary<string, object?> { ["connectionSessionId"] = Guid.NewGuid() }));
