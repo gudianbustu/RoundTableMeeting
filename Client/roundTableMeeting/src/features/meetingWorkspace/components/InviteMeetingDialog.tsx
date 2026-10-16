@@ -1,6 +1,7 @@
 import { ArrowLeftOutlined, CopyOutlined, RobotOutlined, UserOutlined } from '@ant-design/icons'
 import { Button, Flex, Input, message, Modal, Space, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
+import { copyText } from '@/shared/utils/copyText'
 import { buildAgentInvitePrompt } from '../invitePrompts'
 import type { MeetingInvitation } from '../types/meetingWorkspace'
 
@@ -14,11 +15,10 @@ export function InviteMeetingDialog({ open, invitation, loading, onCancel, siteU
   useEffect(() => { if (open) { setStep('select'); setAgentName('') } }, [open])
   const meetingCode = invitation?.meetingCode ?? ''
   const prompt = buildAgentInvitePrompt(agentName.trim(), meetingCode, mcpUrl)
-  const copyPrompt = async () => {
+  const copyValue = async (value: string, success: string) => {
     try {
-      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
-      await navigator.clipboard.writeText(prompt)
-      messageApi.success('提示词已复制')
+      await copyText(value)
+      messageApi.success(success)
     } catch { messageApi.error('复制失败，请手动选择并复制') }
   }
   return <Modal open={open} width={560} footer={null} onCancel={onCancel} title={step === 'select' ? stepTitles.select : <Space><Button aria-label="返回邀请方式选择" title="返回邀请方式选择" icon={<ArrowLeftOutlined />} size="small" onClick={() => setStep('select')} />{stepTitles[step]}</Space>}>
@@ -34,13 +34,13 @@ export function InviteMeetingDialog({ open, invitation, loading, onCancel, siteU
       </Flex>
       : step === 'human' ? <Flex vertical gap="middle">
         <Typography.Text type="secondary">请对方打开网站，使用会议码加入会议；点击右侧图标复制。</Typography.Text>
-        <Typography.Paragraph style={{ marginBottom: 0 }}>网站地址：<Typography.Text code copyable={{ text: siteUrl, tooltips: ['复制网站地址', '已复制网站地址'] }}>{siteUrl}</Typography.Text></Typography.Paragraph>
-        <Typography.Paragraph style={{ marginBottom: 0 }}>会议码：<Typography.Text code copyable={{ text: meetingCode, tooltips: ['复制会议码', '已复制会议码'] }}>{meetingCode}</Typography.Text></Typography.Paragraph>
+        <Typography.Paragraph style={{ marginBottom: 0 }}>网站地址：<Typography.Text code>{siteUrl}</Typography.Text><Button type="text" size="small" aria-label="复制网站地址" title="复制网站地址" icon={<CopyOutlined />} onClick={() => void copyValue(siteUrl, '网站地址已复制')} /></Typography.Paragraph>
+        <Typography.Paragraph style={{ marginBottom: 0 }}>会议码：<Typography.Text code>{meetingCode}</Typography.Text><Button type="text" size="small" aria-label="复制会议码" title="复制会议码" icon={<CopyOutlined />} onClick={() => void copyValue(meetingCode, '会议码已复制')} /></Typography.Paragraph>
       </Flex>
       : <Flex vertical gap="middle">
         <Input aria-label="Agent 显示名称" placeholder="输入 Agent 显示名称" value={agentName} maxLength={64} allowClear onChange={event => setAgentName(event.target.value)} />
         {agentName.trim() ? <Typography.Paragraph code style={{ marginBottom: 0, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{prompt}</Typography.Paragraph> : <Typography.Text type="secondary">输入名称后将生成 MCP 接入提示词，复制后发送给 Agent 完成入会。</Typography.Text>}
-        <Flex justify="flex-end"><Button type="primary" aria-label="复制提示词" title="复制提示词" icon={<CopyOutlined />} disabled={!agentName.trim()} onClick={() => void copyPrompt()}>复制提示词</Button></Flex>
+        <Flex justify="flex-end"><Button type="primary" aria-label="复制提示词" title="复制提示词" icon={<CopyOutlined />} disabled={!agentName.trim()} onClick={() => void copyValue(prompt, '提示词已复制')}>复制提示词</Button></Flex>
       </Flex>}
   </Modal>
 }

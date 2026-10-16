@@ -1,4 +1,5 @@
 import type { MessageComposerHandle } from '../components/MessageComposer'
+import { copyText } from '@/shared/utils/copyText'
 import { Alert, Button, Flex, Input, Modal, Typography, message } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { MeetingNavigation } from '../components/MeetingNavigation'
@@ -51,8 +52,7 @@ export function MeetingWorkspacePage() {
   const copyInvitation = async () => {
     if (!workspace.invitation) return
     try {
-      if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable')
-      await navigator.clipboard.writeText(workspace.invitation.meetingCode)
+      await copyText(workspace.invitation.meetingCode)
       messageApi.success('邀请码已复制')
     } catch { messageApi.error('复制失败，请手动选择并复制邀请码') }
   }
