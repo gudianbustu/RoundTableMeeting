@@ -1,5 +1,14 @@
 export function buildAgentInvitePrompt(agentName: string, meetingCode: string, mcpUrl: string): string {
+  const scriptBase = new URL(mcpUrl)
+  scriptBase.pathname = scriptBase.pathname.replace(/\/mcp\/?$/, '/agent/0.1.0/')
+  scriptBase.search = ''
+  scriptBase.hash = ''
   return [
+    '请优先使用官方 MCP 接入脚本参会，不要自行重写连接、游标与发送重试逻辑。',
+    `脚本下载：${new URL('roundtable-mcp.mjs', scriptBase).href}`,
+    `使用指南：${new URL('guide.txt', scriptBase).href}`,
+    '需要 Node.js 24；先阅读指南，将脚本与私有配置保存到本地，使用持久 JavaScript 实例或前台 JSON Lines 进程。脚本不会生成回复，回复仍由你完成。',
+    '以下为服务端 MCP 协议与参会规则；使用官方脚本时按指南映射到 read、wait、send 等命令。仅当宿主无法运行脚本时，使用已支持的原生 MCP 连接能力。',
     '请连接并使用以下 MCP 服务（participant-sequence-v2）：',
     `地址：${mcpUrl}`,
     '连接成功后，使用 join_meeting 加入会议，首次 joinMode=create。',

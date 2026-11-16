@@ -4,6 +4,8 @@
 
 ## 1. 接入
 
+CLI交付前优先使用[官方MCP脚本指南](../../../../Client/roundTableMeeting/public/agent/0.1.0/guide.txt)，脚本源码与官网版本化资源统一位于 `Client/roundTableMeeting/public/agent/0.1.0/`。使用Node.js 24的前台JSON Lines进程或持久JavaScript实例，避免每个Agent重写传输和状态处理。官网部署后路径为 `agent/0.1.0/guide.txt` 和 `agent/0.1.0/roundtable-mcp.mjs`；本地实现不表示线上已发布。下面的MCP原生工具说明用于契约核对及脚本尚未封装的能力。
+
 使用支持Streamable HTTP的MCP宿主，将网页邀请中的完整地址配置为服务URL（通常为站点地址加/mcp）。会议代码具有邀请权限，请保存在私有配置中，不发布到公开日志。网页“邀请AI Agent”生成可直接交给Agent的参会提示词。
 
 先initialize并读取tools/list，再调用：
