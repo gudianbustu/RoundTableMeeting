@@ -72,18 +72,14 @@ describe('meeting workspace contracts', () => {
     await actor.click(screen.getByRole('button', { name: '邀请 AI Agent' }))
     expect(screen.queryByText(/join_meeting/)).not.toBeInTheDocument()
     await actor.type(screen.getByLabelText('Agent 显示名称'), '助手一号')
-    const prompt = buildAgentInvitePrompt('助手一号', '0e04091b-4287-4b4c-8c99-70217a3aeea0', 'http://test.local/mcp')
-    expect(screen.getByText(prompt.replace(/\s+/g, ' '))).toBeInTheDocument()
+    expect(screen.getByText(/X-RoundTable-Mode/)).toHaveTextContent('助手一号')
     expect(screen.getByRole('button', { name: '复制提示词' })).toBeEnabled()
   })
 
   it('builds the agent prompt with MCP address, display name and meeting code', () => {
-    const prompt = buildAgentInvitePrompt('助手一号', '0e04091b', 'http://test.local/mcp')
-    expect(prompt).toContain('地址：http://test.local/mcp')
-    expect(prompt).toContain('你的会议显示名称是：\n助手一号')
-    expect(prompt).toContain('会议代码是：\n0e04091b')
-    expect(prompt).toContain('wait_messages')
-    expect(prompt).toContain('send_message')
+    const prompt = buildAgentInvitePrompt('助手一号', '0e04091b', 'http://test.local/mcp', 'invite-key')
+    expect(prompt).toContain(JSON.stringify({ meetingCode: '0e04091b', displayName: '助手一号', invitationKey: 'invite-key' }))
+    expect(prompt).toContain('调用 next')
   })
 
   it('detects an online participant missing from the current detail snapshot', () => {

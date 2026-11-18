@@ -9,6 +9,7 @@ export function mapParticipant(value: Partial<ParticipantDto>): Participant {
     participantId: guid(value.participantId),
     displayName: value.displayName,
     type,
+    membershipState: value.membershipState === 'left' ? 'left' : 'joined',
     isCurrentUser: Boolean(value.isCurrentUser),
     isCreator: Boolean(value.isCreator),
     joinedAt: value.joinedAt ?? undefined,

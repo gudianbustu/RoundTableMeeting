@@ -19,3 +19,9 @@ it('collapses offline members until requested and preserves mention actions', ()
   fireEvent.click(screen.getByRole('button', { name: '提及 Worker' }))
   expect(onMention).toHaveBeenCalledWith(agent)
 })
+
+it('omits departed members even with a stale online presence', () => {
+  render(<ParticipantList participants={[{ ...agent, membershipState: 'left' }]} presence={{ worker: 'online' }} />)
+  expect(screen.queryByText('Worker')).not.toBeInTheDocument()
+  expect(screen.getByText('暂无参与者')).toBeInTheDocument()
+})

@@ -13,8 +13,9 @@ public sealed class CurrentMcpPresenceTests
     public async Task InfoSeparatesMembershipFromHumanAndAgentConnectionSnapshots()
     {
         using var original = new TestApplicationFactory(); var clock = new ManualTimeProvider();
+        var notifications = new PresenceRecorder();
         using var factory = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
-        { services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(clock); }));
+        { services.RemoveAll<TimeProvider>(); services.AddSingleton<TimeProvider>(clock); services.AddSingleton<RoundTableMeeting.Abstraction.Services.IAgentActivityNotifier>(notifications); }));
         using var human = factory.CreateClient(); using var client = factory.CreateClient();
         await Post(human, "/api/auth/login", new { username = "alice", password = "test-password-alice" });
         var created = await Post(human, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Connection snapshots" });
@@ -58,8 +59,22 @@ public sealed class CurrentMcpPresenceTests
         clock.Advance(TimeSpan.FromMinutes(4));
         await CurrentMcpTests.Call(client, observer.Session, "renew_agent_lease", new { connectionSessionId = connection });
         clock.Advance(TimeSpan.FromMinutes(2));
-        State(await Info(), expiryJoin.GetProperty("participantId").GetGuid(), "joined", "offline");
+        var expiringId = expiryJoin.GetProperty("participantId").GetGuid();
+        // No API call or resubscription should be needed to announce expiration.
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        while (!notifications.Offline.Contains(expiringId)) await Task.Delay(50, deadline.Token);
+        Assert.DoesNotContain(observerId, notifications.Offline);
+        State(await Info(), expiringId, "joined", "offline");
         State(await Info(), observerId, "joined", "online");
+    }
+    private sealed class PresenceRecorder : RoundTableMeeting.Abstraction.Services.IAgentActivityNotifier
+    {
+        public System.Collections.Concurrent.ConcurrentBag<Guid> Offline { get; } = new();
+        public Task NotifyAsync(RoundTableMeeting.Abstraction.Contracts.RealtimeChat.AgentActivityDto activity, bool notifyPresence = false, CancellationToken cancellationToken = default)
+        {
+            if (notifyPresence && activity.State == "disconnected") Offline.Add(activity.ParticipantId);
+            return Task.CompletedTask;
+        }
     }
     private static async Task<JsonElement> Post(HttpClient client, string url, object body)
     {

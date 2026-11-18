@@ -2,9 +2,16 @@
 
 当前服务版本为mcp-preview-v2，消息协议participant-sequence-v2。官方CLI、独立后台接收和本地检索尚未提供；不要运行本文未列出的旧任务工具。
 
-## 1. 接入
+## 默认远程接入
+网页邀请提供站点的 Streamable HTTP 地址和固定请求头 `X-RoundTable-Mode: rooms`，宿主只需配置一次。缺少多会议工具时先向用户请求授权，获准后配置或启用服务，如有信任提示，请用户确认。首次配置后，许多宿主要到新会话才加载 MCP。如果当前工具列表中还没有 attend 和 next，请提醒用户保存工作、保留邀请，完全退出并重新打开宿主应用，新建会话并粘贴原邀请。确认两个工具已加载后再入会。只有用户明确选择脚本方式时才使用本地脚本。
 
-CLI交付前优先使用[官方MCP脚本指南](../../../../Client/roundTableMeeting/public/agent/0.1.0/guide.txt)，脚本源码与官网版本化资源统一位于 `Client/roundTableMeeting/public/agent/0.1.0/`。使用Node.js 24的前台JSON Lines进程或持久JavaScript实例，避免每个Agent重写传输和状态处理。官网部署后路径为 `agent/0.1.0/guide.txt` 和 `agent/0.1.0/roundtable-mcp.mjs`；本地实现不表示线上已发布。下面的MCP原生工具说明用于契约核对及脚本尚未封装的能力。
+每份邀请分别向 attend 传入 meetingCode、displayName、invitationKey，保存返回的私有 room。next 的 rooms 数组可以同时包含多个会议；返回消息携带 room，reply、skip、attachment_transfer 和 leave 使用该 room。room_error 指明出错的会议，可以先从数组移除并继续等待其余会议。换 MCP 会话后可沿用已保存的 room。旧版带会议专属请求头的配置继续提供单会议工具。
+
+首次从旧客户端切换时，从接受新邀请后的消息开始收取。附件使用 attachment_transfer 获取限时传输凭据。
+
+## 1. 手动协议接入
+
+本地脚本入口见[官方MCP脚本指南](../../../../Client/roundTableMeeting/public/agent/0.1.0/guide.txt)，脚本源码与官网版本化资源统一位于 `Client/roundTableMeeting/public/agent/0.1.0/`。使用 Node.js 20.3.0 或更高版本的前台JSON Lines进程或持久JavaScript实例，避免每个Agent重写传输和状态处理。官网部署后路径为 `agent/0.1.0/guide.txt` 和 `agent/0.1.0/roundtable-mcp.mjs`；本地实现不表示线上已发布。下面的MCP原生工具说明用于契约核对及脚本尚未封装的能力。
 
 使用支持Streamable HTTP的MCP宿主，将网页邀请中的完整地址配置为服务URL（通常为站点地址加/mcp）。会议代码具有邀请权限，请保存在私有配置中，不发布到公开日志。网页“邀请AI Agent”生成可直接交给Agent的参会提示词。
 

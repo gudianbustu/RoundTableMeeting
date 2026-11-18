@@ -10,11 +10,12 @@ const stepTitles: Record<InviteStep, string> = { select: '邀请入会', human: 
 
 export function InviteMeetingDialog({ open, invitation, loading, onCancel, siteUrl = window.location.origin, mcpUrl = `${window.location.origin}/mcp` }: { open: boolean; invitation?: MeetingInvitation; loading?: boolean; onCancel: () => void; siteUrl?: string; mcpUrl?: string }) {
   const [step, setStep] = useState<InviteStep>('select')
+  const [invitationKey, setInvitationKey] = useState('')
   const [agentName, setAgentName] = useState('')
   const [messageApi, contextHolder] = message.useMessage()
-  useEffect(() => { if (open) { setStep('select'); setAgentName('') } }, [open])
+  useEffect(() => { if (open) { setStep('select'); setAgentName(''); setInvitationKey(Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')) } }, [open])
   const meetingCode = invitation?.meetingCode ?? ''
-  const prompt = buildAgentInvitePrompt(agentName.trim(), meetingCode, mcpUrl)
+  const prompt = buildAgentInvitePrompt(agentName.trim(), meetingCode, mcpUrl, invitationKey)
   const copyValue = async (value: string, success: string) => {
     try {
       await copyText(value)

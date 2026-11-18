@@ -1000,6 +1000,7 @@ export function deserializeIntoParticipantDto(participantDto: Partial<Participan
         "isCreator": n => { participantDto.isCreator = n.getBooleanValue(); },
         "isCurrentUser": n => { participantDto.isCurrentUser = n.getBooleanValue(); },
         "joinedAt": n => { participantDto.joinedAt = n.getDateValue(); },
+        "membershipState": n => { participantDto.membershipState = n.getStringValue(); },
         "participantId": n => { participantDto.participantId = n.getGuidValue(); },
         "type": n => { participantDto.type = n.getEnumValue<ParticipantKind>(ParticipantKindObject); },
     }
@@ -1475,6 +1476,7 @@ export interface MessageRecipientDto extends AdditionalDataHolder, Parsable {
     participantId?: Guid | null;
 }
 export interface ParticipantDto extends AdditionalDataHolder, Parsable {
+    membershipState?: string | null;
     /**
      * The displayName property
      */
@@ -1985,6 +1987,7 @@ export function serializeParticipantDto(writer: SerializationWriter, participant
     writer.writeBooleanValue("isCreator", participantDto.isCreator);
     writer.writeBooleanValue("isCurrentUser", participantDto.isCurrentUser);
     writer.writeDateValue("joinedAt", participantDto.joinedAt);
+    writer.writeStringValue("membershipState", participantDto.membershipState);
     writer.writeGuidValue("participantId", participantDto.participantId);
     writer.writeEnumValue<ParticipantKind>("type", participantDto.type);
     writer.writeAdditionalData(participantDto.additionalData);

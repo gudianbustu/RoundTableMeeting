@@ -137,6 +137,10 @@ public sealed class CurrentMcpTests
         var reconnected = await Call(c, next.Session, "join_meeting", new { meetingCode = code, displayName = "AgentA", joinMode = "reconnect" });
         Assert.Equal(ap, reconnected.GetProperty("participantId").GetGuid()); newId = reconnected.GetProperty("connectionSessionId").GetGuid();        var left = await Call(c, next.Session, "leave_meeting", new { connectionSessionId = newId, operationId = Guid.NewGuid() });
         Assert.Equal("left", left.GetProperty("membershipState").GetString());
+        var roster = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}");
+        Assert.Equal("left", roster.GetProperty("participants").EnumerateArray().Single(p => p.GetProperty("participantId").GetGuid() == ap).GetProperty("membershipState").GetString());
+        var info = await Call(c, b.Session, "get_meeting_info", new { connectionSessionId = bid });
+        Assert.Equal(humanId, info.GetProperty("participants").EnumerateArray().Single(p => p.GetProperty("isCreator").GetBoolean()).GetProperty("participantId").GetGuid());
         await Call(c, next.Session, "read_messages", new { connectionSessionId = newId }, false);
     }
     [Fact]

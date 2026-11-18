@@ -7,7 +7,7 @@ public sealed record McpResult<T>(bool Succeeded, T? Data, string? ErrorCode = n
     public static McpResult<T> Ok(T value) => new(true, value);
     public static McpResult<T> Fail(string error) => new(false, default, error);
 }
-public sealed record McpParticipant(Guid ParticipantId, string DisplayName, string Type, string MembershipState, string ConnectionState);
+public sealed record McpParticipant(Guid ParticipantId, string DisplayName, string Type, string MembershipState, string ConnectionState, bool IsCreator = false);
 public sealed record McpConnection(Guid ConnectionSessionId, Guid MeetingId, Guid ParticipantId, string DisplayName,
     long ConnectionGeneration, DateTimeOffset? LeaseExpiresAt, string? LifecycleProof);
 public sealed record McpMeetingInfo(Guid MeetingId, string Name, string? Description, IReadOnlyList<McpParticipant> Participants);

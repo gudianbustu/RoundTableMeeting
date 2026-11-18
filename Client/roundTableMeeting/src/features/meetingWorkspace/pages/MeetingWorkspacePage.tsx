@@ -14,7 +14,7 @@ import type { Participant } from '../types/meetingWorkspace'
 import { RealtimeChatRegion, type ChatSessionCache } from './RealtimeChatRegion'
 
 export function hasUnknownOnlineParticipant(participants: Participant[], presence: Record<string, 'online' | 'offline'>) {
-  const participantIds = new Set(participants.map(participant => participant.participantId))
+  const participantIds = new Set(participants.filter(p => p.membershipState !== 'left').map(p => p.participantId))
   return Object.entries(presence).some(([participantId, state]) => state === 'online' && !participantIds.has(participantId))
 }
 

@@ -238,7 +238,7 @@ public sealed class MeetingWorkspaceService(
     private async Task<MeetingDetailsDto> BuildDetails(Meeting meeting, Guid userId, CancellationToken cancellationToken)
     {
         var all = await participants.ListAsync(meeting.ID, cancellationToken);
-        var mapped = all.Select(p => new ParticipantDto(p.ID, p.DisplayName, p.ParticipantType == Domain.Enums.ParticipantType.Human ? ParticipantKind.Human : ParticipantKind.Agent, p.UserId == userId, p.UserId == meeting.CreatorUserId, p.JoinedAtUtc)).ToArray();
+        var mapped = all.Select(p => new ParticipantDto(p.ID, p.DisplayName, p.ParticipantType == Domain.Enums.ParticipantType.Human ? ParticipantKind.Human : ParticipantKind.Agent, p.UserId == userId, p.UserId == meeting.CreatorUserId, p.JoinedAtUtc) { MembershipState = MembershipName(p) }).ToArray();
         var current = all.Single(p => p.UserId == userId);
         var permissions = Permissions(meeting, current);
         return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), permissions.CanDelete, permissions.CanInvite, mapped)

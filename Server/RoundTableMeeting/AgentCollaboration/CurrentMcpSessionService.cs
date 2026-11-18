@@ -137,7 +137,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         return new(m.ID, m.Name, m.Description, (await participants.ListAsync(m.ID, ct))
             .Select(p => new McpParticipant(p.ID, p.DisplayName, p.ParticipantType.ToString().ToLowerInvariant(),
                 p.MembershipState.ToString().ToLowerInvariant(), p.MembershipState == MeetingMembershipState.Joined
-                    && (p.ParticipantType == ParticipantType.Agent ? agentOnline : humanOnline).Contains(p.ID) ? "online" : "offline")).ToArray());
+                    && (p.ParticipantType == ParticipantType.Agent ? agentOnline : humanOnline).Contains(p.ID) ? "online" : "offline", p.UserId == m.CreatorUserId)).ToArray());
     }
     public async Task<McpAcknowledgement> DisconnectAsync(AgentConnectionSession c, CancellationToken ct)
     {

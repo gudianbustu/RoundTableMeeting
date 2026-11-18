@@ -12,6 +12,7 @@ public sealed class MeetingRealtimeTermination(IHubContext<MeetingChatHub> hub, 
     public async Task TerminateParticipantAsync(Guid meetingId, Guid participantId, CancellationToken cancellationToken = default)
     {
         foreach (var registration in agents.ListRegistrations(meetingId).Where(r => r.ParticipantId == participantId)) agents.Retire(registration);
+        await hub.Clients.Group(MeetingChatHub.Group(meetingId)).SendAsync("membershipLeft", new { meetingId, participantId }, cancellationToken);
         var connections = presence.GetConnections(meetingId, new HashSet<Guid> { participantId });
         try
         {

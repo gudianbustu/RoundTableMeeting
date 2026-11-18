@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
 		builder.Services.AddSingleton<IAgentTaskSignalRegistry, AgentTaskSignalRegistry>();
 		builder.Services.AddScoped<MeetingAgentContext>();
         builder.Services.AddScoped<CurrentMcpSessionService>();
+        builder.Services.AddHostedService<AgentConnectionStartupReconciler>();
         builder.Services.AddSingleton<McpTransferTickets>();
         builder.Services.AddScoped<McpTransportSessionAccessor>();
 		builder.Services.AddScoped((Func<IServiceProvider, IMcpTransportSessionAccessor>)((IServiceProvider sp) => sp.GetRequiredService<McpTransportSessionAccessor>()));
@@ -75,7 +76,12 @@ public static class ServiceCollectionExtensions
 #pragma warning disable MCPEXP002
 		.WithHttpTransport(options =>
 		{
-			options.RunSessionHandler = async (context, server, cancellationToken) =>
+			options.ConfigureSessionOptions = (context, sessionOptions, _) =>
+            {
+                SimpleMeetingTools.Configure(context, sessionOptions, jsonSerializerOptions);
+                return Task.CompletedTask;
+            };
+            options.RunSessionHandler = async (context, server, cancellationToken) =>
 			{
 				var connectionRegistry = context.RequestServices.GetRequiredService<IAgentConnectionRegistry>();
 				var connectionCompensator = context.RequestServices.GetRequiredService<IAgentConnectionCompensator>();
