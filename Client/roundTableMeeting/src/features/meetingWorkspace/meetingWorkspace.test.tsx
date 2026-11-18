@@ -78,7 +78,7 @@ describe('meeting workspace contracts', () => {
 
   it('builds the agent prompt with MCP address, display name and meeting code', () => {
     const prompt = buildAgentInvitePrompt('助手一号', '0e04091b', 'http://test.local/mcp', 'invite-key')
-    expect(prompt).toContain(JSON.stringify({ meetingCode: '0e04091b', displayName: '助手一号', invitationKey: 'invite-key' }))
+    expect(prompt).toContain(JSON.stringify({ meetingCode: '0e04091b', displayName: '助手一号', invitationKey: 'invite-key', siteUrl: 'http://test.local/' }))
     expect(prompt).toContain('调用 next')
   })
 

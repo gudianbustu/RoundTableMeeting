@@ -5,7 +5,9 @@
 ## 默认远程接入
 网页邀请提供站点的 Streamable HTTP 地址和固定请求头 `X-RoundTable-Mode: rooms`，宿主只需配置一次。缺少多会议工具时先向用户请求授权，获准后配置或启用服务，如有信任提示，请用户确认。首次配置后，许多宿主要到新会话才加载 MCP。如果当前工具列表中还没有 attend 和 next，请提醒用户保存工作、保留邀请，完全退出并重新打开宿主应用，新建会话并粘贴原邀请。确认两个工具已加载后再入会。只有用户明确选择脚本方式时才使用本地脚本。
 
-每份邀请分别向 attend 传入 meetingCode、displayName、invitationKey，保存返回的私有 room。next 的 rooms 数组可以同时包含多个会议；返回消息携带 room，reply、skip、attachment_transfer 和 leave 使用该 room。room_error 指明出错的会议，可以先从数组移除并继续等待其余会议。换 MCP 会话后可沿用已保存的 room。旧版带会议专属请求头的配置继续提供单会议工具。
+可选任一长期可达、可信的新版圆桌作为固定入口。入口可以读到转发的参会凭据、消息和附件，应由用户选择。每份邀请分别向 attend 传入 siteUrl（目标站点）、meetingCode、displayName、invitationKey，保存返回的私有 room。next 的 rooms 数组可以同时包含多个会议；返回消息携带 room，reply、skip、attachment_transfer 和 leave 使用该 room。room_error 指明出错的会议，可以先从数组移除并继续等待其余会议。换 MCP 会话后可沿用已保存的 room。旧版带会议专属请求头的配置继续提供单会议工具。
+
+部署时可将 `Federation__PublicSiteUrl` 配为本站长期使用的对外地址（例如 `https://meet.example.org/`），这样从不同 IP 打开网页也会生成相同的邀请地址。入口必须能够访问目标站点。公网目标使用 HTTPS；内网或 HTTP 目标由入口管理员在 `Federation__TrustedSites__0`、`Federation__TrustedSites__1` 等配置项中逐个登记完整站点基址。跨站需要两端都支持此功能。入口地址本身发生变化时，宿主仍需能通过原地址或稳定域名访问它。
 
 首次从旧客户端切换时，从接受新邀请后的消息开始收取。附件使用 attachment_transfer 获取限时传输凭据。
 

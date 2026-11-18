@@ -24,7 +24,8 @@ public sealed class MeetingWorkspaceService(
     IMeetingMembershipService membership,
     IMeetingLifecycleService lifecycleService,
     IMeetingDiscussionRepository discussion,
-    IResolvedMessageAppendCore appendCore) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
+    IResolvedMessageAppendCore appendCore,
+    MeetingSiteAddress? site = null) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
 {
     public async Task<MeetingOperationResult<CreateMeetingResultDto>> CreateAsync(CreateMeetingRequest request, CancellationToken cancellationToken = default)
     {
@@ -73,7 +74,7 @@ public sealed class MeetingWorkspaceService(
         if (createLease is null || await meetings.FindActiveByIdAsync(outcome.Item2.ID, cancellationToken) is null)
             return new(MeetingOperationStatus.CreationRequestConsumed);
         var details = await BuildDetails(outcome.Item2!, userId, cancellationToken);
-        return new(outcome.Item1, new CreateMeetingResultDto(details, new(outcome.Item2!.ID, outcome.Item2.MeetingCode.ToString("D").ToLowerInvariant())), IsCreated: outcome.Item1 == MeetingOperationStatus.Created);
+        return new(outcome.Item1, new CreateMeetingResultDto(details, new(outcome.Item2!.ID, outcome.Item2.MeetingCode.ToString("D").ToLowerInvariant(), site?.PublicUrl)), IsCreated: outcome.Item1 == MeetingOperationStatus.Created);
     }
 
     public async Task<MeetingOperationResult<object>> SetDiscussionModeAsync(Guid meetingId, string mode, CancellationToken ct)
@@ -133,7 +134,7 @@ public sealed class MeetingWorkspaceService(
         var participant = meeting is null ? null : await participants.FindByUserAsync(meetingId, userId, cancellationToken);
         if (meeting is null || participant is null) return new(MeetingOperationStatus.MeetingNotFound);
         if (participant.MembershipState == Domain.Enums.MeetingMembershipState.Left) return new(MeetingOperationStatus.MembershipLeft);
-        return new(MeetingOperationStatus.Success, new(meeting.ID, meeting.MeetingCode.ToString("D").ToLowerInvariant()));
+        return new(MeetingOperationStatus.Success, new(meeting.ID, meeting.MeetingCode.ToString("D").ToLowerInvariant(), site?.PublicUrl));
     }
 
     public async Task<MeetingOperationResult<JoinPreviewDto>> PreviewJoinAsync(PreviewJoinRequest request, CancellationToken cancellationToken = default)

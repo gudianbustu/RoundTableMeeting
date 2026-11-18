@@ -830,6 +830,7 @@ export function deserializeIntoMeetingInvitationDto(meetingInvitationDto: Partia
     return {
         "meetingCode": n => { meetingInvitationDto.meetingCode = n.getStringValue(); },
         "meetingId": n => { meetingInvitationDto.meetingId = n.getGuidValue(); },
+        "publicSiteUrl": n => { meetingInvitationDto.publicSiteUrl = n.getStringValue(); },
     }
 }
 /**
@@ -1253,6 +1254,10 @@ export interface MeetingInvitationDto extends AdditionalDataHolder, Parsable {
      * The meetingId property
      */
     meetingId?: Guid | null;
+    /**
+     * The publicSiteUrl property
+     */
+    publicSiteUrl?: string | null;
 }
 export interface MeetingLifecycleStatusDto extends AdditionalDataHolder, Parsable {
     /**
@@ -1829,6 +1834,7 @@ export function serializeMeetingInvitationDto(writer: SerializationWriter, meeti
     if (!meetingInvitationDto || isSerializingDerivedType) { return; }
     writer.writeStringValue("meetingCode", meetingInvitationDto.meetingCode);
     writer.writeGuidValue("meetingId", meetingInvitationDto.meetingId);
+    writer.writeStringValue("publicSiteUrl", meetingInvitationDto.publicSiteUrl);
     writer.writeAdditionalData(meetingInvitationDto.additionalData);
 }
 /**

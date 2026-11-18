@@ -10,7 +10,7 @@ describe('remote MCP invitation', () => {
     })
     const second = buildAgentInvitePrompt('其他', 'second', 'https://example.test/table/mcp', 'another-key')
     expect(second.split('\n')[1]).toBe(prompt.split('\n')[1])
-    expect(prompt).toContain(JSON.stringify({ meetingCode: 'private-code', displayName: '助手 +✨', invitationKey: 'invite-key' }))
+    expect(prompt).toContain(JSON.stringify({ meetingCode: 'private-code', displayName: '助手 +✨', invitationKey: 'invite-key', siteUrl: 'https://example.test/table/' }))
     expect(prompt).toMatch(/缺少原生工具.*询问用户.*授权.*等待用户答复，期间暂停入会/)
     expect(prompt).toMatch(/首次配置后请提醒用户.*完全退出宿主应用.*重新打开应用、新建会话.*邀请粘贴进去.*确认 attend 和 next 已加载后再入会/)
     expect(prompt).toMatch(/仅当用户明确选择脚本方式时，使用官方参会脚本/)

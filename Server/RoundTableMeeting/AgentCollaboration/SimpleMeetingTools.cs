@@ -70,8 +70,7 @@ public sealed class SimpleMeetingTools
         object instance;
         if (multi)
         {
-            instance = new MultiMeetingTools(scopes, directory, address,
-                http.RequestServices.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>());
+            instance = MultiMeetingTools.ForRequest(http);
         }
         else
         {

@@ -60,6 +60,10 @@ public static class ServiceCollectionExtensions
         builder.Services.AddScoped<CurrentMcpSessionService>();
         builder.Services.AddHostedService<AgentConnectionStartupReconciler>();
         builder.Services.AddSingleton<McpTransferTickets>();
+        var publicUrl = builder.Configuration["Federation:PublicSiteUrl"];
+        builder.Services.AddSingleton(new RoundTableMeeting.Abstraction.Contracts.Meetings.MeetingSiteAddress(
+            string.IsNullOrWhiteSpace(publicUrl) ? null : PeerTransport.Normalize(publicUrl).AbsoluteUri));
+        builder.Services.AddSingleton<PeerTransport>();
         builder.Services.AddScoped<McpTransportSessionAccessor>();
 		builder.Services.AddScoped((Func<IServiceProvider, IMcpTransportSessionAccessor>)((IServiceProvider sp) => sp.GetRequiredService<McpTransportSessionAccessor>()));
 		JsonSerializerOptions jsonSerializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web);

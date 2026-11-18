@@ -8,7 +8,9 @@ import type { MeetingInvitation } from '../types/meetingWorkspace'
 type InviteStep = 'select' | 'human' | 'agent'
 const stepTitles: Record<InviteStep, string> = { select: '邀请入会', human: '邀请人类成员', agent: '邀请 AI Agent' }
 
-export function InviteMeetingDialog({ open, invitation, loading, onCancel, siteUrl = window.location.origin, mcpUrl = `${window.location.origin}/mcp` }: { open: boolean; invitation?: MeetingInvitation; loading?: boolean; onCancel: () => void; siteUrl?: string; mcpUrl?: string }) {
+export function InviteMeetingDialog({ open, invitation, loading, onCancel, siteUrl: siteOverride, mcpUrl: mcpOverride }: { open: boolean; invitation?: MeetingInvitation; loading?: boolean; onCancel: () => void; siteUrl?: string; mcpUrl?: string }) {
+  const siteUrl = invitation?.publicSiteUrl ?? siteOverride ?? window.location.origin
+  const mcpUrl = mcpOverride ?? new URL('mcp', siteUrl.replace(/\/?$/, '/')).href
   const [step, setStep] = useState<InviteStep>('select')
   const [invitationKey, setInvitationKey] = useState('')
   const [agentName, setAgentName] = useState('')
