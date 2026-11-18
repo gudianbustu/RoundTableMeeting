@@ -44,7 +44,7 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
     }
 
     [McpServerTool(Name = "next")]
-    [Description("Wait for a message in any of the supplied rooms. Use the room from the result when replying. On idle call again with all active rooms.")]
+    [Description("Wait for a message in any of the supplied rooms. Use the returned room to reply or skip. Read discussionContext with the message as one turn. Reply once if you have something to add, otherwise skip. Ordinary public Agent replies can continue an open topic. On idle call again with all active rooms.")]
     public Task<SimpleMeetingTools.Delivery> Next(string[] rooms, McpServer host, IProgress<ProgressNotificationValue> progress, CancellationToken ct)
     {
         if (rooms is not { Length: > 0 }) throw new McpException("rooms_required");
@@ -67,10 +67,15 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
         return SimpleMeetingTools.WaitForMessage(Poll, host, progress, ct);
     }
 
+    [McpServerTool(Name = "history")]
+    [Description("On demand, read earlier context in this room. Omit beforeSequence for the latest page. This does not consume pending messages.")]
+    public Task<Abstraction.Contracts.RealtimeChat.MessagePageDto> History(string room, CancellationToken ct, long? beforeSequence = null, int limit = 5)
+        => Resolve(room).History(ct, beforeSequence, limit);
+
     [McpServerTool(Name = "reply")]
-    [Description("Reply in the room that delivered the pending message.")]
-    public Task<string> Reply(string room, Guid messageId, string content, CancellationToken ct, Guid[]? attachmentIds = null)
-        => Resolve(room).Reply(messageId, content, ct, attachmentIds);
+    [Description("Keep messageId from the pending delivery. To answer a specific contribution in a free discussion, pass its ID as replyToMessageId (from discussionContext or history). On discussion_ended discard the draft and call next.")]
+    public Task<string> Reply(string room, Guid messageId, string content, CancellationToken ct, Guid[]? attachmentIds = null, Guid? replyToMessageId = null)
+        => Resolve(room).Reply(messageId, content, ct, attachmentIds, replyToMessageId);
 
     [McpServerTool(Name = "skip")]
     [Description("Skip the pending message in this room only.")]

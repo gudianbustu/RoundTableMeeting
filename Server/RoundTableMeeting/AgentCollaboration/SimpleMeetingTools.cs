@@ -36,6 +36,7 @@ public sealed class SimpleMeetingTools
         public long PendingSequence { get; set; }
         public Guid Submission { get; set; }
         public string? Decision { get; set; }
+        public Guid? LastInterrupted { get; set; }
         public Guid? LastHandled { get; set; }
         public string? LastDecision { get; set; }
         public Guid? Leaving { get; set; }
@@ -173,10 +174,10 @@ public sealed class SimpleMeetingTools
         return "joined";
     }, ct, invited: true);
 
-    public sealed record Delivery(string State, MessageDto? Message = null, bool FromMeetingCreator = false, string? Room = null, string? Error = null);
+    public sealed record Delivery(string State, MessageDto? Message = null, bool FromMeetingCreator = false, string? Room = null, string? Error = null, IReadOnlyList<MessageDto>? DiscussionContext = null);
 
     [McpServerTool(Name = "next")]
-    [Description("Wait for one public mention or private message. On idle call next immediately. After message, reply or skip. An interrupted wait is safe to retry.")]
+    [Description("Wait for a mention, private message, or voluntary discussion turn (message.optionalAgentResponse=true). On idle call next immediately. After message, reply or skip. An interrupted wait is safe to retry.")]
     public async Task<Delivery> Next(McpServer host, IProgress<ProgressNotificationValue> progress, CancellationToken ct)
         => await WaitForMessage(() => Poll(ct), host, progress, ct);
 
@@ -188,12 +189,38 @@ public sealed class SimpleMeetingTools
             var service = sp.GetRequiredService<CurrentMcpSessionService>();
             return await service.ExecuteAsync(Key(s), s.Connection, async (c, token) =>
             {
+                if (!s.Pending.HasValue) s.Cursor = Math.Max(s.Cursor, await sp.GetRequiredService<IMeetingDiscussionRepository>().InboxStartAsync(c.MeetingId, c.ParticipantId, token));
                 var page = await sp.GetRequiredService<IMessageHistoryService>().GetPageAsync(c.MeetingId, new(AfterSequence: s.Cursor, Limit: 25), token);
                 if (page.Data is null) throw new McpOperationException("history_unavailable");
-                var found = page.Data.Items.FirstOrDefault(m => m.Mentions.Any(x => x.ParticipantId == c.ParticipantId)
-                    || (m.Visibility == "private" && m.Recipient?.ParticipantId == c.ParticipantId));
+                if (s.Pending is Guid pending && page.Data.Items.Any(m => m.MessageId == pending && m.DiscussionInterrupted))
+                {
+                    if (s.Decision is not null && (await sp.GetRequiredService<IMessageLookupService>()
+                        .GetSubmissionAsync(c.MeetingId, s.Submission, token)).Data?.Status == "saved")
+                    {
+                        s.LastHandled = pending;
+                        s.LastDecision = s.Decision;
+                    }
+                    else s.LastInterrupted = pending;
+                    s.Cursor = s.PendingSequence;
+                    s.Pending = null;
+                    s.Decision = null;
+                    Save(s);
+                }
+                var eligible = page.Data.Items.Where(m => m.Sequence > s.Cursor && m.IsForAgent(c.ParticipantId)).ToArray();
+                var found = eligible.FirstOrDefault();
                 if (found is not null)
                 {
+                    MessageDto[] context = [];
+                    if (found.OptionalAgentResponse && found.MessageId != found.DiscussionTopicId && found.DiscussionTopicId.HasValue)
+                    {
+                        var windowEnd = found.CreatedAt.AddMilliseconds(750);
+                        if (!s.Pending.HasValue && sp.GetRequiredService<TimeProvider>().GetUtcNow() < windowEnd)
+                            return new Delivery("idle");
+                        var batch = eligible.TakeWhile(m => m.OptionalAgentResponse && m.DiscussionTopicId == found.DiscussionTopicId
+                            && m.CreatedAt <= windowEnd && (!s.Pending.HasValue || m.Sequence <= s.PendingSequence)).Take(4).ToArray();
+                        context = batch[..^1];
+                        found = batch[^1];
+                    }
                     if (s.Pending != found.MessageId)
                     {
                         s.Pending = found.MessageId;
@@ -205,7 +232,7 @@ public sealed class SimpleMeetingTools
                     var meeting = await sp.GetRequiredService<IMeetingRepository>().FindActiveByIdAsync(c.MeetingId, token);
                     var creator = meeting is not null && (await sp.GetRequiredService<IMeetingParticipantRepository>().ListAsync(c.MeetingId, token))
                         .Any(p => p.ID == found.Author.ParticipantId && p.UserId == meeting.CreatorUserId);
-                    return new Delivery("message", found, creator);
+                    return new Delivery("message", found, creator, DiscussionContext: context.Length > 0 ? context : null);
                 }
                 if (page.Data.Items.Count > 0) { s.Cursor = page.Data.Items[^1].Sequence; Save(s); }
                 return new Delivery(page.Data.HasMoreAfter ? "more" : "idle");
@@ -240,20 +267,39 @@ public sealed class SimpleMeetingTools
         return new Delivery("idle");
     }
 
+    [McpServerTool(Name = "history")]
+    [Description("Read recent messages visible to you only when earlier context is needed. This leaves next and its pending decision untouched. Use nextBeforeSequence for an older page.")]
+    public Task<MessagePageDto> History(CancellationToken ct, long? beforeSequence = null, int limit = 5)
+        => Locked(async (s, sp) =>
+        {
+            RequireActive(s);
+            if (limit is < 1 or > 10 || beforeSequence < 1) throw new McpOperationException("validation_failed");
+            await Connect(s, sp, ct);
+            return await sp.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(s), s.Connection, async (c, token) =>
+            {
+                var page = await sp.GetRequiredService<IMessageHistoryService>().GetPageAsync(c.MeetingId, new(BeforeSequence: beforeSequence, Limit: limit), token);
+                return page.Data ?? throw new McpOperationException("history_unavailable");
+            }, ct);
+        }, ct);
+
     [McpServerTool(Name = "reply")]
-    [Description("Reply to the pending message. Private replies stay private. Retrying the same decision is safe.")]
-    public Task<string> Reply(Guid messageId, string content, CancellationToken ct, Guid[]? attachmentIds = null)
-        => Handle(messageId, content, attachmentIds, ct);
+    [Description("messageId acknowledges the pending delivery. For a voluntary turn, set replyToMessageId to the specific public contribution you are answering within that topic. Omit it to quote the delivered message. Private replies stay private. Retrying the same decision is safe. On discussion_ended discard the draft and call next.")]
+    public Task<string> Reply(Guid messageId, string content, CancellationToken ct, Guid[]? attachmentIds = null, Guid? replyToMessageId = null)
+        => Handle(messageId, content, attachmentIds, ct, replyToMessageId);
 
     [McpServerTool(Name = "skip")]
     [Description("Mark the pending message handled without sending a reply.")]
     public Task<string> Skip(Guid messageId, CancellationToken ct) => Handle(messageId, null, null, ct);
 
-    private Task<string> Handle(Guid messageId, string? content, Guid[]? attachmentIds, CancellationToken ct) => Locked(async (s, sp) =>
+    private Task<string> Handle(Guid messageId, string? content, Guid[]? attachmentIds, CancellationToken ct, Guid? replyToMessageId = null) => Locked(async (s, sp) =>
     {
         RequireActive(s);
-        var digest = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { content, attachmentIds })));
+        var target = replyToMessageId ?? messageId;
+        var decision = target == messageId ? JsonSerializer.SerializeToUtf8Bytes(new { content, attachmentIds })
+            : JsonSerializer.SerializeToUtf8Bytes(new { content, attachmentIds, replyToMessageId });
+        var digest = Convert.ToHexString(SHA256.HashData(decision));
         if (s.LastHandled == messageId && s.LastDecision == digest) return "handled";
+        if (s.LastInterrupted == messageId) return "discussion_ended";
         if (s.Pending != messageId) throw new McpOperationException("no_matching_pending_message");
         if (s.Decision is not null && s.Decision != digest) throw new McpOperationException("decision_already_in_progress");
         await Connect(s, sp, ct);
@@ -261,10 +307,24 @@ public sealed class SimpleMeetingTools
         {
             s.Decision = digest;
             Save(s);
-            await sp.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(s), s.Connection, async (c, token) =>
+            var accepted = await sp.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(s), s.Connection, async (c, token) =>
             {
+                if (target != messageId)
+                {
+                    var discussion = sp.GetRequiredService<IMeetingDiscussionRepository>();
+                    var pending = await discussion.FindTurnAsync(messageId, token);
+                    var quoted = await discussion.FindTurnAsync(target, token);
+                    if (pending?.Optional != true || quoted?.Optional != true || pending.MeetingId != c.MeetingId
+                        || quoted.MeetingId != c.MeetingId || pending.TopicId != quoted.TopicId)
+                    {
+                        s.Decision = null;
+                        Save(s);
+                        throw new McpOperationException("invalid_reply_target");
+                    }
+                }
                 var sent = await sp.GetRequiredService<IMessageAppendService>().AppendHumanAsync(c.MeetingId,
-                    new(s.Submission, content, AttachmentIds: attachmentIds, ReplyToMessageId: messageId), token);
+                    new(s.Submission, content, AttachmentIds: attachmentIds, ReplyToMessageId: target), token);
+                if (sent.Status == MessageOperationStatus.DiscussionEnded) return false;
                 if (sent.Data is null)
                 {
                     s.Decision = null;
@@ -273,6 +333,15 @@ public sealed class SimpleMeetingTools
                 }
                 return true;
             }, ct);
+            if (!accepted)
+            {
+                s.LastInterrupted = messageId;
+                s.Cursor = s.PendingSequence;
+                s.Pending = null;
+                s.Decision = null;
+                Save(s);
+                return "discussion_ended";
+            }
         }
         s.Cursor = s.PendingSequence;
         s.Pending = null;

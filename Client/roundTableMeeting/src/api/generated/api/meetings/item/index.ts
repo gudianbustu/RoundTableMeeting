@@ -8,6 +8,8 @@ import { AttachmentsRequestBuilderNavigationMetadata, AttachmentsRequestBuilderR
 // @ts-ignore
 import { DeletionRequestBuilderNavigationMetadata, DeletionRequestBuilderRequestsMetadata, type DeletionRequestBuilder } from './deletion/index.js';
 // @ts-ignore
+import { DiscussionModeRequestBuilderRequestsMetadata, type DiscussionModeRequestBuilder } from './discussionMode/index.js';
+// @ts-ignore
 import { InvitationRequestBuilderRequestsMetadata, type InvitationRequestBuilder } from './invitation/index.js';
 // @ts-ignore
 import { LeaveRequestBuilderRequestsMetadata, type LeaveRequestBuilder } from './leave/index.js';
@@ -30,6 +32,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The deletion property
      */
     get deletion(): DeletionRequestBuilder;
+    /**
+     * The discussionMode property
+     */
+    get discussionMode(): DiscussionModeRequestBuilder;
     /**
      * The invitation property
      */
@@ -76,6 +82,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     deletion: {
         requestsMetadata: DeletionRequestBuilderRequestsMetadata,
         navigationMetadata: DeletionRequestBuilderNavigationMetadata,
+    },
+    discussionMode: {
+        requestsMetadata: DiscussionModeRequestBuilderRequestsMetadata,
     },
     invitation: {
         requestsMetadata: InvitationRequestBuilderRequestsMetadata,

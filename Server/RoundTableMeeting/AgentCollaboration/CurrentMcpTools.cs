@@ -9,7 +9,7 @@ using RoundTableMeeting.Domain.Entities;
 namespace RoundTableMeeting.AgentCollaboration;
 
 [McpServerToolType]
-public sealed class CurrentMcpTools(CurrentMcpSessionService sessions, IMessageHistoryService history,
+public sealed class CurrentMcpTools(Domain.Repositories.IMeetingDiscussionRepository discussion, CurrentMcpSessionService sessions, IMessageHistoryService history,
     IMessageAppendService messages, IMessageLookupService lookup, IAttachmentService attachments,
     IMeetingLifecycleService lifecycle, IServiceScopeFactory scopes,
     IHttpContextAccessor http, ILogger<CurrentMcpTools> logger, McpTransferTickets tickets)
@@ -49,13 +49,13 @@ public sealed class CurrentMcpTools(CurrentMcpSessionService sessions, IMessageH
     internal async Task<McpMessages> ReadCore(AgentConnectionSession c, long after, int offset, int budget, bool mentionsOnly, CancellationToken ct)
     {
         if (after < 0 || offset < 0 || budget is < 1 or > 100000) throw new McpOperationException("validation_failed");
+        if (mentionsOnly) after = Math.Max(after, await discussion.InboxStartAsync(c.MeetingId, c.ParticipantId, ct));
         var page = Data(await history.GetPageAsync(c.MeetingId, new(AfterSequence: after, Limit: 100), ct));
         var selected = new List<McpMessageFragment>(); var cursor = new McpReadCursor(after, offset); var remaining = budget;
         foreach (var message in page.Items)
         {
-            if (mentionsOnly && !message.Mentions.Any(m => m.ParticipantId == c.ParticipantId)
-                && !(message.Visibility == "private" && message.Recipient?.ParticipantId == c.ParticipantId))
-            { if (cursor.ContentOffset != 0) throw new McpOperationException("invalid_content_offset"); cursor = new(message.Sequence); continue; }
+            if (mentionsOnly && !message.IsForAgent(c.ParticipantId))
+            { if (cursor.ContentOffset != 0 && !message.DiscussionInterrupted) throw new McpOperationException("invalid_content_offset"); cursor = new(message.Sequence); continue; }
             var scalars = message.Content.EnumerateRunes().ToArray();
             var start = cursor.ContentOffset;
             if (start > scalars.Length) throw new McpOperationException("invalid_content_offset");
@@ -63,7 +63,7 @@ public sealed class CurrentMcpTools(CurrentMcpSessionService sessions, IMessageH
             var count = Math.Min(remaining, scalars.Length - start);
             var text = new StringBuilder(); for (var i = start; i < start + count; i++) text.Append(scalars[i].ToString());
             var complete = start + count == scalars.Length;
-            selected.Add(new(message with { Content = text.ToString() }, start, scalars.Length, complete));
+            selected.Add(new(message with { Content = text.ToString() }, start, scalars.Length, complete) { DiscussionTopicId = message.DiscussionTopicId });
             remaining -= count;
             cursor = complete ? new(message.Sequence) : new(cursor.AfterSequence, start + count);
             if (!complete) break;
@@ -74,7 +74,7 @@ public sealed class CurrentMcpTools(CurrentMcpSessionService sessions, IMessageH
     }
 
     [McpServerTool(Name = "wait_messages", UseStructuredContent = true)]
-    [Description("Bounded wait for explicit public mentions or incoming private messages by default. idle means keep waiting, not leave. Pass and persist nextCursor, including offset. Each wait renews the five-minute connection lease. Use renew_agent_lease during longer work. Do not reply to unaddressed public conversation.")]
+    [Description("Bounded wait for explicit public mentions or incoming private messages by default. idle means keep waiting, not leave. Pass and persist nextCursor, including offset. Each wait renews the five-minute connection lease. Use renew_agent_lease during longer work. Messages with optionalAgentResponse=true invite a voluntary reply; skip when you have nothing to add.")]
     public Task<McpResult<McpMessages>> Wait(Guid connectionSessionId, McpServer server, CancellationToken cancellationToken,
         long afterSequence = 0, int contentOffset = 0, int characterBudget = 100000, int timeoutSeconds = 25, bool mentionsOnly = true)
         => Safe(async () =>
@@ -90,6 +90,19 @@ public sealed class CurrentMcpTools(CurrentMcpSessionService sessions, IMessageH
                 var tools = ActivatorUtilities.CreateInstance<CurrentMcpTools>(scope.ServiceProvider);
                 var result = await service.ExecuteAsync(transport, connectionSessionId,
                     (c, ct) => tools.ReadCore(c, cursor.AfterSequence, cursor.ContentOffset, characterBudget, mentionsOnly, ct), cancellationToken);
+                if (mentionsOnly && result.Items.FirstOrDefault() is { Message.OptionalAgentResponse: true } first
+                    && first.DiscussionTopicId.HasValue && first.DiscussionTopicId != first.Message.MessageId)
+                {
+                    var now = DateTimeOffset.UtcNow;
+                    var deadline = first.Message.CreatedAt.AddMilliseconds(750);
+                    var delay = (deadline < until ? deadline : until) - now;
+                    if (delay > TimeSpan.Zero)
+                    {
+                        await Task.Delay(delay, cancellationToken);
+                        return await service.ExecuteAsync(transport, connectionSessionId,
+                            (c, ct) => tools.ReadCore(c, cursor.AfterSequence, cursor.ContentOffset, characterBudget, mentionsOnly, ct), cancellationToken);
+                    }
+                }
                 if (result.Items.Count > 0 || DateTimeOffset.UtcNow >= until) return result;
                 cursor = result.NextCursor;
                 await Task.Delay(300, cancellationToken);
@@ -97,7 +110,7 @@ public sealed class CurrentMcpTools(CurrentMcpSessionService sessions, IMessageH
         });
 
     [McpServerTool(Name = "send_message", Idempotent = true, UseStructuredContent = true)]
-    [Description("Send public or private text, attachments, or reply. Persist a new clientSubmissionId BEFORE calling; retry the exact payload with that same UUID after uncertain outcomes. visibility is public or private; private requires recipientParticipantId. MentionCandidates use explicit participant IDs and UTF-16 text offsets; plain @ text alone is not a mention.")]
+    [Description("Send public or private text, attachments, or reply. Persist a new clientSubmissionId BEFORE calling; retry the exact payload with that same UUID after uncertain outcomes. Set replyToMessageId to the message that prompted your reply. After a free discussion is interrupted this is required for ordinary unaddressed public Agent messages. On discussion_ended discard the draft and resume waiting. visibility is public or private; private requires recipientParticipantId. MentionCandidates use explicit participant IDs and UTF-16 text offsets; plain @ text alone is not a mention.")]
     public Task<McpResult<MessageDto>> Send(Guid connectionSessionId, SubmitMessageRequest request, McpServer server, CancellationToken cancellationToken)
         => Run(connectionSessionId, server, cancellationToken, async (c, ct) => Data(await messages.AppendHumanAsync(c.MeetingId, request, ct)));
 

@@ -4,6 +4,8 @@
 // @ts-ignore
 import { ApiRequestBuilderNavigationMetadata, type ApiRequestBuilder } from './api/index.js';
 // @ts-ignore
+import { McpFilesRequestBuilderRequestsMetadata, type McpFilesRequestBuilder } from './mcpFiles/index.js';
+// @ts-ignore
 import { apiClientProxifier, ParseNodeFactoryRegistry, SerializationWriterFactoryRegistry, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type RequestAdapter } from '@microsoft/kiota-abstractions';
 // @ts-ignore
 import { FormParseNodeFactory, FormSerializationWriterFactory } from '@microsoft/kiota-serialization-form';
@@ -53,6 +55,10 @@ export interface RoundTableMeetingApiClient extends BaseRequestBuilder<RoundTabl
      * The api property
      */
     get api(): ApiRequestBuilder;
+    /**
+     * The mcpFiles property
+     */
+    get mcpFiles(): McpFilesRequestBuilder;
 }
 /**
  * Uri template for the request builder.
@@ -64,6 +70,9 @@ export const RoundTableMeetingApiClientUriTemplate = "{+baseurl}";
 export const RoundTableMeetingApiClientNavigationMetadata: Record<Exclude<keyof RoundTableMeetingApiClient, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
     api: {
         navigationMetadata: ApiRequestBuilderNavigationMetadata,
+    },
+    mcpFiles: {
+        requestsMetadata: McpFilesRequestBuilderRequestsMetadata,
     },
 };
 /* tslint:enable */

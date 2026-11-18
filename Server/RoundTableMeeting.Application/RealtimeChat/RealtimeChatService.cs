@@ -46,6 +46,8 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
         {
             return exception.Code switch
             {
+                "reply_reference_required" => new(MessageOperationStatus.ReplyReferenceRequired),
+                "discussion_ended" => new(MessageOperationStatus.DiscussionEnded),
                 "membership_left" => new(MessageOperationStatus.MembershipLeft),
                 "submission_mismatch" => new(MessageOperationStatus.SubmissionMismatch),
                 "meeting_not_found" => new(MessageOperationStatus.MeetingNotFound),

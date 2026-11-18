@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
+import { getMessage } from '../api/messageResources'
 import { AttachmentLinks } from './AttachmentControls'
 
 function contentNodes(message: ChatMessage): ReactNode[]
@@ -19,8 +20,32 @@ function contentNodes(message: ChatMessage): ReactNode[]
   return nodes
 }
 
-type Props = { pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
-export function MessageTimeline({ pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
+function ReplyQuote({ meetingId, id, loaded, onLocate }: {
+  meetingId: string; id: string; loaded?: ChatMessage; onLocate?: (id: string) => Promise<void>
+}) {
+  const [fetched, setFetched] = useState<ChatMessage>()
+  const [unavailable, setUnavailable] = useState(false)
+  useEffect(() => {
+    if (loaded) return
+    const controller = new AbortController()
+    getMessage(meetingId, id, controller.signal).then(original => {
+      if (!controller.signal.aborted) setFetched(original)
+    }).catch(() => { if (!controller.signal.aborted) setUnavailable(true) })
+    return () => controller.abort()
+  }, [meetingId, id, loaded])
+  const original = loaded ?? fetched
+  const excerpt = original?.content.trim() || original?.attachments?.map(file => file.name).join('、') || ''
+  const preview = excerpt.match(/^.{1,96}/su)?.[0] ?? ''
+  const label = original ? `回复 ${original.author.displayName} · ${preview || '原消息'}${preview.length < excerpt.length ? '…' : ''}` : unavailable ? '引用的原消息暂不可用' : '正在读取引用…'
+  return <button type="button" className="message-quote" title={original ? '定位到原消息' : undefined}
+    disabled={!original || !onLocate} onClick={() => { void onLocate?.(id).catch(() => setUnavailable(true)) }}>
+    {unavailable && original ? '暂时无法定位 · ' : ''}{label}
+  </button>
+}
+
+type Props = { onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
+export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
+  const originals = new Map(messages.map(message => [message.messageId, message]))
   const scrollRef = useRef<HTMLDivElement>(null)
   const processedFocus = useRef<string | undefined>(undefined)
   const itemsRef = useRef<HTMLDivElement>(null)
@@ -77,6 +102,7 @@ export function MessageTimeline({ pendingMessage, messages, hasEarlierMessages, 
           {canReply && onReply && <Button size="small" type="text" onClick={() => onReply(message)}>回复</Button>}
           {onPrivateChat && message.author.participantId && message.author.participantId !== currentParticipantId && <Button size="small" type="text" onClick={() => onPrivateChat(message.author.participantId!)}>私聊</Button>}
         </header>
+        {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
         {message.content && <Typography.Paragraph className="message-body">{contentNodes(message)}</Typography.Paragraph>}
         {!!message.attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={message.attachments} />}
       </article>)}

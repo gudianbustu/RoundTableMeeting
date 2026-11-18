@@ -44,7 +44,7 @@ public sealed class SimpleMeetingTests
         }
 
         await using var first = await Host();
-        Assert.Equal(new[] { "attachment_transfer", "attend", "leave", "next", "reply", "skip" },
+        Assert.Equal(new[] { "attachment_transfer", "attend", "history", "leave", "next", "reply", "skip" },
             (await first.ListToolsAsync()).Select(t => t.Name).Order().ToArray());
         Assert.Equal("joined", await Call(first, "attend"));
         await using var other = await Host(Guid.NewGuid().ToString("N"));
@@ -97,7 +97,7 @@ public sealed class SimpleMeetingTests
             Assert.False(result.IsError == true, text);
             return text;
         }
-        async Task<(Guid Id, string Room, Guid Member)> Join(string name)
+        async Task<(Guid Id, string Room, Guid Member, string Code)> Join(string name)
         {
             using var create = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name });
             var created = await create.Content.ReadFromJsonAsync<JsonElement>();
@@ -109,7 +109,7 @@ public sealed class SimpleMeetingTests
             })).RootElement;
             var details = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}");
             var member = Assert.Single(details.GetProperty("participants").EnumerateArray(), x => x.GetProperty("displayName").GetString() == "同一个助手");
-            return (id, joined.GetProperty("room").GetString()!, member.GetProperty("participantId").GetGuid());
+            return (id, joined.GetProperty("room").GetString()!, member.GetProperty("participantId").GetGuid(), created.GetProperty("invitation").GetProperty("meetingCode").GetString()!);
         }
         async Task Send(Guid id, Guid member, string content)
         {
@@ -118,6 +118,71 @@ public sealed class SimpleMeetingTests
         }
         var a = await Join("会议 A");
         var b = await Join("会议 B");
+        using var switched = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "free" });
+        switched.EnsureSuccessStatusCode();
+        foreach (var room in new[] { b.Id, a.Id })
+        {
+            using var posted = await human.PostAsJsonAsync($"/api/meetings/{room}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "自由发言", visibility = "public" });
+            posted.EnsureSuccessStatusCode();
+        }
+        var optional = JsonDocument.Parse(await Call(host, "next", new() { ["rooms"] = new[] { b.Room, a.Room } })).RootElement;
+        Assert.Equal(a.Room, optional.GetProperty("room").GetString());
+        var discussion = optional.GetProperty("message");
+        Assert.True(discussion.GetProperty("optionalAgentResponse").GetBoolean());
+        Assert.Equal("handled", await Call(host, "skip", new() { ["room"] = a.Room, ["messageId"] = discussion.GetProperty("messageId").GetGuid() }));
+        var contributors = new List<string>();
+        foreach (var name in new[] { "第一位", "第二位" })
+        {
+            var admitted = JsonDocument.Parse(await Call(host, "attend", new() { ["meetingCode"] = a.Code, ["displayName"] = name, ["invitationKey"] = Guid.NewGuid().ToString("N") })).RootElement;
+            contributors.Add(admitted.GetProperty("room").GetString()!);
+        }
+        using var topic = await human.PostAsJsonAsync($"/api/meetings/{a.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "新话题" });
+        topic.EnsureSuccessStatusCode();
+        async Task<JsonElement> Next(string room) => JsonDocument.Parse(await Call(host, "next", new() { ["rooms"] = new[] { room } })).RootElement;
+        var archive = JsonDocument.Parse(await Call(host, "history", new() { ["room"] = contributors[0], ["limit"] = 10 })).RootElement;
+        Assert.Contains(archive.GetProperty("items").EnumerateArray(), item => item.GetProperty("content").GetString() == "自由发言");
+        var opener = (await Next(a.Room)).GetProperty("message").GetProperty("messageId").GetGuid();
+        await Call(host, "skip", new() { ["room"] = a.Room, ["messageId"] = opener });
+        foreach (var room in contributors)
+        {
+            var incoming = (await Next(room)).GetProperty("message");
+            Assert.Equal(opener, incoming.GetProperty("messageId").GetGuid());
+        }
+        foreach (var room in contributors)
+            await Call(host, "reply", new() { ["room"] = room, ["messageId"] = opener, ["content"] = "补充" });
+        var batch = await Next(a.Room);
+        var context = Assert.Single(batch.GetProperty("discussionContext").EnumerateArray());
+        Assert.Equal("第一位", context.GetProperty("author").GetProperty("displayName").GetString());
+        var last = batch.GetProperty("message");
+        Assert.Equal("第二位", last.GetProperty("author").GetProperty("displayName").GetString());
+        Assert.Equal(batch.GetRawText(), (await Next(a.Room)).GetRawText());
+        var invalid = await host.CallToolAsync("reply", new Dictionary<string, object?> {
+            ["room"] = a.Room, ["messageId"] = last.GetProperty("messageId").GetGuid(), ["content"] = "跨话题", ["replyToMessageId"] = discussion.GetProperty("messageId").GetGuid() });
+        Assert.True(invalid.IsError);
+        var decision = new Dictionary<string, object?> { ["room"] = a.Room, ["messageId"] = last.GetProperty("messageId").GetGuid(), ["content"] = "合并回复", ["replyToMessageId"] = context.GetProperty("messageId").GetGuid() };
+        Assert.Equal("handled", await Call(host, "reply", decision));
+        Assert.Equal("handled", await Call(host, "reply", decision));
+        var combinedHistory = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{a.Id}/messages");
+        var combined = Assert.Single(combinedHistory.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "合并回复");
+        Assert.Equal(context.GetProperty("messageId").GetGuid(), combined.GetProperty("replyToMessageId").GetGuid());
+        var held = (await Next(contributors[0])).GetProperty("message").GetProperty("messageId").GetGuid();
+        using var interrupted = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "directed" });
+        interrupted.EnsureSuccessStatusCode();
+        using var reopened = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "free" });
+        reopened.EnsureSuccessStatusCode();
+        var stale = new Dictionary<string, object?> { ["room"] = contributors[0], ["messageId"] = held, ["content"] = "过期回复" };
+        Assert.Equal("discussion_ended", await Call(host, "reply", stale));
+        Assert.Equal("discussion_ended", await Call(host, "reply", stale));
+        using var fresh = await human.PostAsJsonAsync($"/api/meetings/{a.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "重开后的议题" });
+        fresh.EnsureSuccessStatusCode();
+        foreach (var room in contributors.Append(a.Room))
+        {
+            var next = (await Next(room)).GetProperty("message");
+            Assert.Equal("重开后的议题", next.GetProperty("content").GetString());
+            await Call(host, "skip", new() { ["room"] = room, ["messageId"] = next.GetProperty("messageId").GetGuid() });
+        }
+        var checkedHistory = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{a.Id}/messages");
+        Assert.DoesNotContain(checkedHistory.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "过期回复");
         var waiting = Call(host, "next", new() { ["rooms"] = new[] { a.Room, b.Room } });
         await Send(b.Id, b.Member, "乙");
         var received = JsonDocument.Parse(await waiting).RootElement;

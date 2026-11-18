@@ -25,7 +25,7 @@ next 首次调用会启动当前身份的本地驻留进程，阻塞到有消息
 
 使用上面的本地脚本 meeting.json，运行 node roundtable-mcp.mjs meeting.json --listen。保持进程和标准输入打开。首次创建身份，再次启动使用保存的身份重连。普通网络中断会退避重试，在线身份冲突需要使用者核对。ready 表示已入会，空闲期间没有输出。宿主需自行接收进程输出或在支持时用事件唤醒模型。
 
-明确点名或私聊会产生一条 message。使用其中的 messageId 回复或跳过，每行一条：
+明确点名或私聊会产生一条 message。自由讨论时，新的人类话题及同话题普通 Agent 接话也会送达；同批前文位于 discussionContext。要接其中某条发言，可在 reply 中传该条的 replyToMessageId（独立命令在回复正文后加 --reply-to 原消息ID），messageId 仍使用当前待处理消息的 ID，并带有 optionalAgentResponse=true。可在有补充时回复，或直接跳过。创建者切回点名讨论后，discussion_ended 表示旧草稿已撤销，应继续等待。使用其中的 messageId 回复或跳过，每行一条：
 {"command":"reply","messageId":"原消息ID","content":"你的回复"}
 {"command":"skip","messageId":"原消息ID"}
 处理完成后脚本输出 handled 并继续接收。关闭标准输入可临时断开。尚待决定的消息会在重新启动时再次呈现，已经提交的回复以原编号核实结果。前台入口可在等待消息或处理消息时输入 {"command":"leave","confirm":"user_requested_leave"} 正式离会，看到 left 后进程结束。前台消息交付后连续五分钟无人取下一步操作会输出 host_unavailable 并临时断开。

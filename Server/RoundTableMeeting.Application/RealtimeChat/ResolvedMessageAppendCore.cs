@@ -14,7 +14,7 @@ namespace RoundTableMeeting.Application.RealtimeChat;
 
 public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeetingParticipantRepository participants,
     IMessageRepository messages, IMessageVisibilityRepository visibility, IMeetingAttachmentRepository attachments,
-    IUnitOfWork unitOfWork, IMessageMentionParser parser, IMessageEventConsumerCatalog consumerCatalog,
+    IUnitOfWork unitOfWork, IMeetingDiscussionRepository discussion, IMessageMentionParser parser, IMessageEventConsumerCatalog consumerCatalog,
     RealtimeChatOptions options, TimeProvider timeProvider) : IResolvedMessageAppendCore
 {
     public Task<ResolvedMessageAppendResult> AppendAgentAsync(Guid meetingId, Guid participantId, string authorDisplayName,
@@ -64,6 +64,21 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
                 && request.ReplyToMessageId is null && existing.Content == content)) throw new MeetingMessageAccessException("submission_mismatch");
             return Result(existing) with { Replayed = true };
         }
+        // Replay of an already committed submission takes precedence over a later mode change.
+        if (author.Kind == TransportAuthorKind.Agent && request.ReplyToMessageId is Guid parentId
+            && await discussion.FindTurnAsync(parentId, ct) is { Optional: true } parent
+            && await discussion.WasInterruptedAsync(meetingId, parent.Sequence, ct))
+            throw new MeetingMessageAccessException("discussion_ended");
+        IReadOnlyList<ParsedMention> mentions = [];
+        if (sender is not null)
+        {
+            var people = roster.Where(p => p.MembershipState == MeetingMembershipState.Joined && (scope == "public" || p.ID == sender.ID || p.ID == recipient))
+                .Select(p => new MentionParticipant(p.ID, p.DisplayName, p.NormalizedDisplayName)).ToArray();
+            mentions = parser.Parse(content, people, request.MentionCandidates);
+        }
+        if (author.Kind == TransportAuthorKind.Agent && scope == "public" && mentions.Count == 0 && request.ReplyToMessageId is null
+            && await discussion.WasInterruptedAsync(meetingId, 0, ct))
+            throw new MeetingMessageAccessException("reply_reference_required");
         if (scope == "private" && (sender is null || recipient == sender.ID
             || !roster.Any(p => p.ID == recipient && p.MembershipState == MeetingMembershipState.Joined)))
             throw new MeetingMessageAccessException("recipient_unavailable");
@@ -82,9 +97,9 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
         }
         if (sender is not null)
         {
-            var people = roster.Where(p => p.MembershipState == MeetingMembershipState.Joined && (scope == "public" || p.ID == sender.ID || p.ID == recipient))
-                .Select(p => new MentionParticipant(p.ID, p.DisplayName, p.NormalizedDisplayName)).ToArray();
-            foreach (var mention in parser.Parse(content, people, request.MentionCandidates))
+            if (scope == "public" && await discussion.ClassifyAsync(message, mentions.Count != 0, ct) is { } turn)
+                unitOfWork.RegisterAdd(turn);
+            foreach (var mention in mentions)
                 unitOfWork.RegisterAdd(MessageMention.Create(meetingId, message.ID, mention.ParticipantId, mention.DisplayName, mention.StartOffset, mention.Length));
         }
         var evt = MessageAppendedEvent.Create(meetingId, message.ID, sequence, message.CreatedAtUtc);

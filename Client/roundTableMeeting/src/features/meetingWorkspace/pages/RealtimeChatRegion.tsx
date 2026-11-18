@@ -20,7 +20,7 @@ import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates } from '../chat/mentionCandidates'
 
 export type ChatSessionCache = { states: Map<string, ChatState>; selection: Record<string, string | undefined> }
-type ChatProps = { sessionCache?: ChatSessionCache; composerRef?: Ref<MessageComposerHandle>; composerTools?: ReactNode; meetingId: string; participants: Participant[]; readOnly?: boolean; onMeetingUnavailable?: () => void; onMembershipChanged?: () => void; onPresenceChanged?: (presence: Record<string, 'online' | 'offline'>) => void; onAgentActivitiesChanged?: (activities: Record<string, AgentActivity>) => void }
+type ChatProps = { sessionCache?: ChatSessionCache; composerRef?: Ref<MessageComposerHandle>; composerTools?: ReactNode; meetingId: string; participants: Participant[]; readOnly?: boolean; onMeetingUnavailable?: () => void; onMeetingDetailsChanged?: () => void; onMembershipChanged?: () => void; onPresenceChanged?: (presence: Record<string, 'online' | 'offline'>) => void; onAgentActivitiesChanged?: (activities: Record<string, AgentActivity>) => void }
 export function RealtimeChatRegion(props: ChatProps) {
   const [selection, setSelection] = useState<Record<string, string | undefined>>(props.sessionCache?.selection ?? {})
   const cache = useRef(props.sessionCache?.states ?? new Map<string, ChatState>())
@@ -46,7 +46,7 @@ export function RealtimeChatRegion(props: ChatProps) {
   </div>
 }
 
-function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { notificationControl: ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
+function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMeetingDetailsChanged, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { notificationControl: ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
   const savedInitial = useRef(initialState)
   const generation = useRef(initialState?.generation ?? 1)
   const controller = useRef<AbortController | undefined>(undefined)
@@ -115,17 +115,18 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
     const scoped = () => ({ meetingId, generation: expected })
     const hub = new MeetingChatConnection({
       onState: value => dispatch({ ...scoped(), type: 'connectionStateChanged', state: value }),
-      onMessage: message => { if (expected !== generation.current) return; onNotificationMessage(message); if (matches(message)) dispatch({ ...scoped(), type: 'messageEventReceived', message }) },
+      onMessage: message => { if (expected !== generation.current) return; onNotificationMessage(message); if (message.author.kind === 'system') onMeetingDetailsChanged?.(); if (matches(message)) dispatch({ ...scoped(), type: 'messageEventReceived', message }) },
       onPresence: (participantId, value) => dispatch({ ...scoped(), type: 'presenceChanged', participantId, state: value }),
       onAgentActivity: activity => dispatch({ ...scoped(), type: 'agentActivityChanged', activity }),
       onMembershipLeft: () => { if (expected === generation.current) onMembershipChanged?.() },
       onDeleted: () => reportUnavailable(expected),
-      onResubscribed: snapshot => { void synchronize(snapshot, expected).catch(error => handleError(error, expected)) },
+      onResubscribed: snapshot => { onMeetingDetailsChanged?.(); void synchronize(snapshot, expected).catch(error => handleError(error, expected)) },
     })
     connection.current = hub
     try {
       const snapshot = await hub.start(meetingId)
       if (expected !== generation.current) { await hub.stop(); return }
+      onMeetingDetailsChanged?.()
       await synchronize(snapshot, expected, true)
     } catch (error) {
       await hub.stop().catch(() => undefined)
@@ -133,7 +134,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
       if ((error as { message?: string }).message?.includes('meeting_not_found')) { dispatch({ ...scoped(), type: 'connectionStateChanged', state: 'rejected' }); onMembershipChanged?.() }
       else dispatch({ ...scoped(), type: 'connectionStateChanged', state: 'disconnected' })
     }
-  }, [readOnly, load, meetingId, matches, synchronize, reportUnavailable, onMembershipChanged, handleError, onNotificationMessage])
+  }, [readOnly, load, meetingId, matches, synchronize, reportUnavailable, onMeetingDetailsChanged, onMembershipChanged, handleError, onNotificationMessage])
   useEffect(() => {
     generation.current += 1; dispatch({ type: 'reset', meetingId, generation: generation.current, initialState: savedInitial.current }); void connect()
     return () => { generation.current += 1; controller.current?.abort(); void connection.current?.stop(); connection.current = undefined }
@@ -242,7 +243,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
   const locked = readOnly || state.send === 'sending' || state.send === 'pending_confirmation'
   return <section className={peerId ? 'realtime-chat-region chat-private' : 'realtime-chat-region'}>
     {readOnly ? <Alert type={state.history === 'error' ? 'error' : 'info'} title={state.history === 'error' ? '历史消息加载失败' : '已退出会议，只能查看退出前有权访问的历史。'} action={state.history === 'error' ? <Button onClick={() => void connect()}>重试</Button> : undefined} /> : <ChatConnectionStatus connection={state.connection} history={state.history} error={state.history === 'error' ? '消息历史加载失败。' : undefined} onRetry={() => void connect()} />}
-    <MessageTimeline pendingMessage={state.failedSubmission && state.send !== 'idle' ? <PendingMessage key={state.failedSubmission.clientSubmissionId} submission={state.failedSubmission} status={state.send} attachments={state.attachments} readOnly={readOnly} onRetry={retry} /> : undefined} messages={messages} hasEarlierMessages={state.hasEarlierMessages} loading={state.history === 'loading' || state.history === 'appending'} onLoadEarlier={() => { if (state.earliestLoadedSequence) void load({ beforeSequence: state.earliestLoadedSequence, limit: 100 }) }} newMessageCount={0} onNewMessageClick={() => {}} onReply={message => dispatch({ ...scope(), type: 'replyChanged', message })} onPrivateChat={onPrivateChat} currentParticipantId={participants.find(p => p.isCurrentUser)?.participantId} focusMessageId={focusMessageId} focusRevision={focusRevision} canReply={!locked} scrollPosition={state.scrollPosition} onScrollPositionChanged={retainScroll} />
+    <MessageTimeline onLocate={locate} pendingMessage={state.failedSubmission && state.send !== 'idle' ? <PendingMessage key={state.failedSubmission.clientSubmissionId} submission={state.failedSubmission} status={state.send} attachments={state.attachments} readOnly={readOnly} onRetry={retry} /> : undefined} messages={messages} hasEarlierMessages={state.hasEarlierMessages} loading={state.history === 'loading' || state.history === 'appending'} onLoadEarlier={() => { if (state.earliestLoadedSequence) void load({ beforeSequence: state.earliestLoadedSequence, limit: 100 }) }} newMessageCount={0} onNewMessageClick={() => {}} onReply={message => dispatch({ ...scope(), type: 'replyChanged', message })} onPrivateChat={onPrivateChat} currentParticipantId={participants.find(p => p.isCurrentUser)?.participantId} focusMessageId={focusMessageId} focusRevision={focusRevision} canReply={!locked} scrollPosition={state.scrollPosition} onScrollPositionChanged={retainScroll} />
     {state.replyTo && <div className="message-reply-context"><Tag>回复 {state.replyTo.author.displayName}</Tag><span>{state.replyTo.content.slice(0, 120) || '附件消息'}</span><Button size="small" disabled={locked} onClick={() => dispatch({ ...scope(), type: 'replyChanged', message: undefined })}>取消回复</Button></div>}
     {notificationControl}
     <div className="composer-context-toolbar">{scopeControl}<MeetingAttachmentList meetingId={meetingId} {...requestScope} onLocate={locate} /></div>

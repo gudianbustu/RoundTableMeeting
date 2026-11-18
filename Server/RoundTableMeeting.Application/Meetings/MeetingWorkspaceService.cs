@@ -22,7 +22,9 @@ public sealed class MeetingWorkspaceService(
     TimeProvider timeProvider,
     IMeetingLifecycleRepository lifecycle,
     IMeetingMembershipService membership,
-    IMeetingLifecycleService lifecycleService) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
+    IMeetingLifecycleService lifecycleService,
+    IMeetingDiscussionRepository discussion,
+    IResolvedMessageAppendCore appendCore) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
 {
     public async Task<MeetingOperationResult<CreateMeetingResultDto>> CreateAsync(CreateMeetingRequest request, CancellationToken cancellationToken = default)
     {
@@ -72,6 +74,30 @@ public sealed class MeetingWorkspaceService(
             return new(MeetingOperationStatus.CreationRequestConsumed);
         var details = await BuildDetails(outcome.Item2!, userId, cancellationToken);
         return new(outcome.Item1, new CreateMeetingResultDto(details, new(outcome.Item2!.ID, outcome.Item2.MeetingCode.ToString("D").ToLowerInvariant())), IsCreated: outcome.Item1 == MeetingOperationStatus.Created);
+    }
+
+    public async Task<MeetingOperationResult<object>> SetDiscussionModeAsync(Guid meetingId, string mode, CancellationToken ct)
+    {
+        if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        if (mode is not ("directed" or "free")) return Invalid<object>("mode");
+        using var lease = await realtimeGate.AcquireExclusiveMutationAsync(meetingId, TimeSpan.FromSeconds(realtimeChatOptions.GateCloseTimeoutSeconds), ct);
+        if (lease is null) return new(MeetingOperationStatus.DeleteBusy);
+        var status = await transactionRunner.RunAsync(async token =>
+        {
+            var meeting = await meetings.FindActiveByIdAsync(meetingId, token);
+            var member = await participants.FindByUserAsync(meetingId, userId, token);
+            if (meeting is null || member is null) return MeetingOperationStatus.MeetingNotFound;
+            if (meeting.CreatorUserId != userId) return MeetingOperationStatus.CreatorRequired;
+            var enabled = mode == "free";
+            if (await discussion.IsFreeAsync(meetingId, long.MaxValue, token) != enabled)
+            {
+                var notification = await appendCore.AppendAsync(meetingId, new(null, "会议", Abstraction.Contracts.RealtimeChat.MessageAuthorKind.System),
+                    enabled ? "已开启自由讨论" : "已切回点名讨论", Guid.NewGuid(), cancellationToken: token);
+                unitOfWork.RegisterAdd(MeetingDiscussionChange.Create(meetingId, notification.Sequence, enabled));
+            }
+            return MeetingOperationStatus.Success;
+        }, ct);
+        return new(status);
     }
 
     public async Task<IReadOnlyList<MeetingListItemDto>> ListAsync(CancellationToken cancellationToken = default, bool history = false)
@@ -242,7 +268,7 @@ public sealed class MeetingWorkspaceService(
         var current = all.Single(p => p.UserId == userId);
         var permissions = Permissions(meeting, current);
         return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), permissions.CanDelete, permissions.CanInvite, mapped)
-        { MembershipState = MembershipName(current), Permissions = permissions };
+        { FreeDiscussion = await discussion.IsFreeAsync(meeting.ID, long.MaxValue, cancellationToken), MembershipState = MembershipName(current), Permissions = permissions };
     }
     private async Task<MeetingOperationStatus> UnavailableStatus(Guid meetingId, Guid userId, CancellationToken cancellationToken)
         => await lifecycleService.GetMemberStateAsync(meetingId, userId, cancellationToken) switch

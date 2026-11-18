@@ -199,4 +199,72 @@ public sealed class CurrentMcpTests
         var recovered = await Call(c, next.Session, "join_meeting", new { meetingCode = code, displayName = "Expiring", joinMode = "reconnect" });
         Assert.Equal(joined.GetProperty("participantId").GetGuid(), recovered.GetProperty("participantId").GetGuid());
         Assert.Equal(2, recovered.GetProperty("connectionGeneration").GetInt64());
-    }}
+    }    [Fact]
+    public async Task FreeDiscussionIsCreatorControlledAndUsesTheModeWhenEachMessageWasSent()
+    {
+        using var factory = new TestApplicationFactory();
+        using var creator = Client(factory);
+        using var peer = Client(factory);
+        using var agents = Client(factory);
+        await Post(creator, "/api/auth/login", new { username = "alice", password = "test-password-alice" });
+        await Post(peer, "/api/auth/login", new { username = "bob", password = "test-password-bob" });
+        var created = await Post(creator, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Discussion" });
+        var id = created.GetProperty("meeting").GetProperty("meetingId").GetGuid();
+        Assert.False(created.GetProperty("meeting").GetProperty("freeDiscussion").GetBoolean());
+        var code = created.GetProperty("invitation").GetProperty("meetingCode").GetString();
+        await Post(peer, "/api/meetings/join", new { meetingCode = code, displayName = "Bob" });
+        async Task<HttpStatusCode> Mode(HttpClient client, string mode)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Put, $"/api/meetings/{id}/discussion-mode") { Content = JsonContent.Create(new { mode }) };
+            req.Headers.Add("Origin", "http://localhost:5173");
+            using var response = await client.SendAsync(req);
+            return response.StatusCode;
+        }
+        async Task<(string Session, Guid Connection, Guid Participant)> Join(string displayName)
+        {
+            var init = await Initialize(agents);
+            var join = await Call(agents, init.Session, "join_meeting", new { meetingCode = code, displayName });
+            return (init.Session, join.GetProperty("connectionSessionId").GetGuid(), join.GetProperty("participantId").GetGuid());
+        }
+        var a = await Join("Alpha");
+        var b = await Join("Beta");
+        Task<JsonElement> Send(string content) => Post(creator, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content });
+        await Send("before");
+        Assert.Equal(HttpStatusCode.Forbidden, await Mode(peer, "free"));
+        Assert.Equal(HttpStatusCode.BadRequest, await Mode(creator, "invalid"));
+        Assert.Equal(HttpStatusCode.NoContent, await Mode(creator, "free"));
+        Assert.Equal(HttpStatusCode.NoContent, await Mode(creator, "free"));
+        var topic = (await Send("optional")).GetProperty("message").GetProperty("messageId").GetGuid();
+        await Post(creator, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "@Alpha 请回答", mentionCandidates = new[] { new { participantId = a.Participant, startOffset = 0, length = 6 } } });
+        await Post(creator, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "private", visibility = "private", recipientParticipantId = b.Participant });
+        await Call(agents, a.Session, "send_message", new { connectionSessionId = a.Connection, request = new { clientSubmissionId = Guid.NewGuid(), content = "agent opinion" } });
+        var late = await Join("Latecomer");
+        for (var i = 2; i <= 4; i++)
+            await Call(agents, a.Session, "send_message", new { connectionSessionId = a.Connection, request = new { clientSubmissionId = Guid.NewGuid(), content = $"follow {i}" } });
+        var latePage = await Call(agents, late.Session, "wait_messages", new { connectionSessionId = late.Connection, timeoutSeconds = 1 });
+        Assert.Equal(new[] { "follow 2", "follow 3", "follow 4" }, latePage.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("message").GetProperty("content").GetString()));
+        var lateHistory = await Call(agents, late.Session, "read_messages", new { connectionSessionId = late.Connection });
+        Assert.Contains(lateHistory.GetProperty("items").EnumerateArray(), x => x.GetProperty("message").GetProperty("content").GetString() == "optional");
+        var publicHistory = await creator.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/messages");
+        Assert.Single(publicHistory.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "已开启自由讨论");
+        var details = await peer.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}");
+        Assert.True(details.GetProperty("freeDiscussion").GetBoolean());
+        Assert.Equal(HttpStatusCode.NoContent, await Mode(creator, "directed"));
+        var stopped = await Call(agents, late.Session, "send_message", new { connectionSessionId = late.Connection,
+            request = new { clientSubmissionId = Guid.NewGuid(), content = "stale draft", replyToMessageId = topic } }, false);
+        Assert.Equal("discussion_ended", stopped.GetProperty("errorCode").GetString());
+        var unlinked = await Call(agents, late.Session, "send_message", new { connectionSessionId = late.Connection,
+            request = new { clientSubmissionId = Guid.NewGuid(), content = "unlinked stale draft" } }, false);
+        Assert.Equal("reply_reference_required", unlinked.GetProperty("errorCode").GetString());
+        await Call(agents, late.Session, "send_message", new { connectionSessionId = late.Connection,
+            request = new { clientSubmissionId = Guid.NewGuid(), content = "@Alpha 点名仍可用" } });
+        await Send("after");
+        foreach (var participant in new[] { a, b })
+        {
+            var page = await Call(agents, participant.Session, "wait_messages", new { connectionSessionId = participant.Connection, timeoutSeconds = 1 });
+            var messages = page.GetProperty("items").EnumerateArray().Select(i => i.GetProperty("message")).ToArray();
+            Assert.Equal(participant == a ? new[] { "@Alpha 请回答", "@Alpha 点名仍可用" } : new[] { "private" }, messages.Select(m => m.GetProperty("content").GetString()));
+            Assert.False(messages[0].GetProperty("optionalAgentResponse").GetBoolean());
+        }
+    }
+}

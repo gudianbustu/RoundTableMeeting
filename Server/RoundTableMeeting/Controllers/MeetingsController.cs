@@ -15,6 +15,23 @@ namespace RoundTableMeeting.Controllers;
 [NoStoreResponse]
 public sealed class MeetingsController(IMeetingWorkspaceService service) : ControllerBase
 {
+    [HttpPut("{meetingId:guid}/discussion-mode")]
+    [RequireBrowserOrigin(true)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> SetDiscussionMode(Guid meetingId, SetDiscussionModeRequest request, CancellationToken ct)
+    {
+        var result = await service.SetDiscussionModeAsync(meetingId, request.Mode, ct);
+        return result.Status switch
+        {
+            MeetingOperationStatus.Success => NoContent(),
+            MeetingOperationStatus.CreatorRequired => ApiProblemDetailsWriter.CreateResult(HttpContext, 403, "meeting_creator_required"),
+            MeetingOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed", result.Errors),
+            MeetingOperationStatus.DeleteBusy => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "meeting_busy"),
+            MeetingOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
+            _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
+        };
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<MeetingListItemDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]

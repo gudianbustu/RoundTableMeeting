@@ -429,3 +429,60 @@ test('foreground relay without a host response releases the listener and preserv
   assert.deepEqual(events, ['message', 'host_unavailable']);
   assert.equal(client.state.pendingMessages.pending, 'submission');
 });
+
+test('managed discussion keeps the other speakers as context and persists one decision', async t => {
+  const client = await fixture(t);
+  const fragment = (id, topic, at) => ({
+    discussionTopicId: topic, contentOffset: 0, totalContentCharacters: 1, complete: true,
+    message: { messageId: id, content: id, createdAt: new Date(at).toISOString(), optionalAgentResponse: true },
+  });
+  client.tool = async () => ({ items: [fragment('a', 't', 1000), fragment('b', 't', 1300), fragment('c', 't', 2500)],
+    nextCursor: { afterSequence: 3, contentOffset: 0 } });
+  await client.receive(true, { managed: true });
+  assert.deepEqual(Object.keys(client.state.pendingMessages), ['b', 'c']);
+  assert.deepEqual(client.state.inbox.b.discussionContext.map(m => m.messageId), ['a']);
+  assert.equal(client.state.inbox.c.discussionContext, undefined);
+});
+
+test('listener discards cancelled queued and in-flight optional replies and continues to a directed message', async t => {
+  const client = await fixture(t);
+  client.state.pendingMessages = { queued: 'one', writing: 'two', directed: 'three' };
+  client.state.inbox = { queued: { optionalAgentResponse: true }, writing: { optionalAgentResponse: true }, directed: { content: 'directed' } };
+  client.tool = async (name, { messageId }) => {
+    assert.equal(name, 'get_message');
+    return { optionalAgentResponse: messageId === 'writing' };
+  };
+  client.send = async () => {
+    client.state.outbox.two = {};
+    throw new ClientError('discussion_ended');
+  };
+  const input = new PassThrough();
+  const lines = createInterface({ input });
+  const events = [];
+  await listen(client, lines, event => {
+    events.push([event.event, event.messageId]);
+    if (event.messageId === 'writing' && event.event === 'message') input.write(JSON.stringify({ command: 'reply', messageId: 'writing', content: 'stale' }) + '\n');
+    if (event.messageId === 'directed') lines.close();
+  });
+  assert.deepEqual(events, [['message', 'writing'], ['discussion_ended', 'writing'], ['message', 'directed']]);
+  assert.deepEqual(Object.keys(client.state.pendingMessages), ['directed']);
+});
+
+test('a grouped reply can quote a specific delivered contribution', async t => {
+  const client = await fixture(t);
+  client.state.pendingMessages = { latest: 'submission' };
+  client.state.inbox.latest = { optionalAgentResponse: true, discussionContext: [{ messageId: 'earlier' }] };
+  client.tool = async () => ({ optionalAgentResponse: true });
+  const input = new PassThrough();
+  const lines = createInterface({ input });
+  const events = [];
+  let target;
+  client.send = async request => { target = request.replyToMessageId; return {}; };
+  await listen(client, lines, event => {
+    events.push(event.errorCode || event.event);
+    if (event.event === 'handled') return lines.close();
+    input.write(JSON.stringify({ command: 'reply', messageId: 'latest', replyToMessageId: event.event === 'message' ? 'unrelated' : 'earlier', content: '补充原观点' }) + '\n');
+  });
+  assert.deepEqual(events, ['message', 'invalid_reply_target', 'handled']);
+  assert.equal(target, 'earlier');
+});

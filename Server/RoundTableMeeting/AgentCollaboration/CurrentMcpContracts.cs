@@ -12,7 +12,10 @@ public sealed record McpConnection(Guid ConnectionSessionId, Guid MeetingId, Gui
     long ConnectionGeneration, DateTimeOffset? LeaseExpiresAt, string? LifecycleProof);
 public sealed record McpMeetingInfo(Guid MeetingId, string Name, string? Description, IReadOnlyList<McpParticipant> Participants);
 public sealed record McpReadCursor(long AfterSequence, int ContentOffset = 0);
-public sealed record McpMessageFragment(MessageDto Message, int ContentOffset, int TotalContentCharacters, bool Complete);
+public sealed record McpMessageFragment(MessageDto Message, int ContentOffset, int TotalContentCharacters, bool Complete)
+{
+    public Guid? DiscussionTopicId { get; init; }
+}
 public sealed record McpMessages(IReadOnlyList<McpMessageFragment> Items, McpReadCursor NextCursor, long VisibleThroughSequence, bool HasMore, string Kind);
 public sealed record McpAcknowledgement(string State);
 public sealed class McpOperationException(string code) : Exception(code);

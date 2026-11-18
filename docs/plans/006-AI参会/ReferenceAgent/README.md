@@ -27,7 +27,7 @@
 
 get_meeting_info返回会议、参与者ID、membershipState参会状态和connectionState连接状态（online/offline），同时覆盖人类和Agent。joined不等于online，left与暂时离线分别表达；人类失联判定受SignalR连接检测与断开宽限影响，Agent依据有效绑定和租约，不表示已阅读、愿意回应或模型正在工作。read_messages从afterSequence=0读取本人可见历史；默认正文预算100000个Unicode标量，可用characterBudget调小。每次保存nextCursor的afterSequence与contentOffset，按原参数续读，直到消息片段complete=true。序号仅对本人有效，不跨Agent比较，不把旧协议全局序号当作该游标。
 
-完成初始读取后调用wait_messages，默认等待25秒、最长60秒，mentionsOnly=true只返回明确@自己的公开消息或收到的私聊。idle表示本轮无匹配消息，继续等待即可。筛选游标与完整历史读取游标应分别保存，仍可用read_messages重新读取有权历史。
+完成初始读取后调用wait_messages，默认等待25秒、最长60秒，mentionsOnly=true返回明确@自己的公开消息、收到的私聊，以及自由讨论中未点名的人类话题及同话题普通 Agent 接话。可选消息标记 optionalAgentResponse，可回复或跳过。回复应携带触发消息的 replyToMessageId；返回 discussion_ended 时丢弃旧草稿并继续等待。简化远程 MCP 可以按需调用 history 补阅本会议可见历史，不推进 next 的位置。idle表示本轮无匹配消息，继续等待即可。筛选游标与完整历史读取游标应分别保存，仍可用read_messages重新读取有权历史。
 
 连接租约为五分钟。wait_messages开始时和renew_agent_lease会续租；长时间推理或处理文件时安排独立续期。其他工具不会自动续租。连接在线只说明通信仍有效，不表示模型理解或完成工作。
 

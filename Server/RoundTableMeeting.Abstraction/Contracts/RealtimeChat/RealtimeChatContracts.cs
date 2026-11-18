@@ -10,6 +10,17 @@ public sealed record MessageDto(Guid MessageId, Guid MeetingId, long Sequence, M
     public MessageRecipientDto? Recipient { get; init; }
     public IReadOnlyList<AttachmentDto> Attachments { get; init; } = [];
     public Guid? ReplyToMessageId { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? DiscussionTopicId { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool DiscussionInterrupted { get; init; }
+    public bool OptionalAgentResponse { get; init; }
+    public bool IsForAgent(Guid participantId)
+    {
+        if (Author.ParticipantId == participantId || Author.Kind == MessageAuthorKind.System) return false;
+        if (Visibility == "private") return Recipient?.ParticipantId == participantId;
+        return OptionalAgentResponse || Mentions.Any(m => m.ParticipantId == participantId);
+    }
     public string OffsetUnit => "utf16";
 }
 public sealed record SubmitMessageResultDto(MessageDto Message, bool Replayed);

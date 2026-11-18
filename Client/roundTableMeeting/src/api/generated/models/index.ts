@@ -446,6 +446,15 @@ export function createPreviewJoinRequestFromDiscriminatorValue(parseNode: ParseN
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SetDiscussionModeRequest}
+ */
+// @ts-ignore
+export function createSetDiscussionModeRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSetDiscussionModeRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {SubmissionStatusDto}
  */
 // @ts-ignore
@@ -803,6 +812,7 @@ export function deserializeIntoMeetingDetailsDto(meetingDetailsDto: Partial<Meet
         "createdAt": n => { meetingDetailsDto.createdAt = n.getDateValue(); },
         "currentParticipant": n => { meetingDetailsDto.currentParticipant = n.getObjectValue<ParticipantDto>(createParticipantDtoFromDiscriminatorValue); },
         "description": n => { meetingDetailsDto.description = n.getStringValue(); },
+        "freeDiscussion": n => { meetingDetailsDto.freeDiscussion = n.getBooleanValue(); },
         "meetingId": n => { meetingDetailsDto.meetingId = n.getGuidValue(); },
         "membershipState": n => { meetingDetailsDto.membershipState = n.getStringValue(); },
         "name": n => { meetingDetailsDto.name = n.getStringValue(); },
@@ -938,6 +948,7 @@ export function deserializeIntoMessageDto(messageDto: Partial<MessageDto> | unde
         "mentions": n => { messageDto.mentions = n.getCollectionOfObjectValues<MessageMentionDto>(createMessageMentionDtoFromDiscriminatorValue); },
         "messageId": n => { messageDto.messageId = n.getGuidValue(); },
         "offsetUnit": n => { messageDto.offsetUnit = n.getStringValue(); },
+        "optionalAgentResponse": n => { messageDto.optionalAgentResponse = n.getBooleanValue(); },
         "recipient": n => { messageDto.recipient = n.getObjectValue<MessageRecipientDto>(createMessageRecipientDtoFromDiscriminatorValue); },
         "replyToMessageId": n => { messageDto.replyToMessageId = n.getGuidValue(); },
         "sequence": n => { messageDto.sequence = n.getNumberValue(); },
@@ -1014,6 +1025,17 @@ export function deserializeIntoParticipantDto(participantDto: Partial<Participan
 export function deserializeIntoPreviewJoinRequest(previewJoinRequest: Partial<PreviewJoinRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "meetingCode": n => { previewJoinRequest.meetingCode = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SetDiscussionModeRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSetDiscussionModeRequest(setDiscussionModeRequest: Partial<SetDiscussionModeRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "mode": n => { setDiscussionModeRequest.mode = n.getStringValue(); },
     }
 }
 /**
@@ -1197,6 +1219,10 @@ export interface MeetingDetailsDto extends AdditionalDataHolder, Parsable {
      * The description property
      */
     description?: string | null;
+    /**
+     * The freeDiscussion property
+     */
+    freeDiscussion?: boolean | null;
     /**
      * The meetingId property
      */
@@ -1397,6 +1423,10 @@ export interface MessageDto extends AdditionalDataHolder, Parsable {
      */
     offsetUnit?: string | null;
     /**
+     * The optionalAgentResponse property
+     */
+    optionalAgentResponse?: boolean | null;
+    /**
      * The recipient property
      */
     recipient?: MessageRecipientDto | null;
@@ -1476,7 +1506,6 @@ export interface MessageRecipientDto extends AdditionalDataHolder, Parsable {
     participantId?: Guid | null;
 }
 export interface ParticipantDto extends AdditionalDataHolder, Parsable {
-    membershipState?: string | null;
     /**
      * The displayName property
      */
@@ -1493,6 +1522,10 @@ export interface ParticipantDto extends AdditionalDataHolder, Parsable {
      * The joinedAt property
      */
     joinedAt?: Date | null;
+    /**
+     * The membershipState property
+     */
+    membershipState?: string | null;
     /**
      * The participantId property
      */
@@ -1777,6 +1810,7 @@ export function serializeMeetingDetailsDto(writer: SerializationWriter, meetingD
     writer.writeDateValue("createdAt", meetingDetailsDto.createdAt);
     writer.writeObjectValue<ParticipantDto>("currentParticipant", meetingDetailsDto.currentParticipant, serializeParticipantDto);
     writer.writeStringValue("description", meetingDetailsDto.description);
+    writer.writeBooleanValue("freeDiscussion", meetingDetailsDto.freeDiscussion);
     writer.writeGuidValue("meetingId", meetingDetailsDto.meetingId);
     writer.writeStringValue("membershipState", meetingDetailsDto.membershipState);
     writer.writeStringValue("name", meetingDetailsDto.name);
@@ -1921,6 +1955,7 @@ export function serializeMessageDto(writer: SerializationWriter, messageDto: Par
     writer.writeCollectionOfObjectValues<MessageMentionDto>("mentions", messageDto.mentions, serializeMessageMentionDto);
     writer.writeGuidValue("messageId", messageDto.messageId);
     writer.writeStringValue("offsetUnit", messageDto.offsetUnit);
+    writer.writeBooleanValue("optionalAgentResponse", messageDto.optionalAgentResponse);
     writer.writeObjectValue<MessageRecipientDto>("recipient", messageDto.recipient, serializeMessageRecipientDto);
     writer.writeGuidValue("replyToMessageId", messageDto.replyToMessageId);
     writer.writeNumberValue("sequence", messageDto.sequence);
@@ -2003,6 +2038,18 @@ export function serializePreviewJoinRequest(writer: SerializationWriter, preview
     if (!previewJoinRequest || isSerializingDerivedType) { return; }
     writer.writeStringValue("meetingCode", previewJoinRequest.meetingCode);
     writer.writeAdditionalData(previewJoinRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SetDiscussionModeRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSetDiscussionModeRequest(writer: SerializationWriter, setDiscussionModeRequest: Partial<SetDiscussionModeRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!setDiscussionModeRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("mode", setDiscussionModeRequest.mode);
+    writer.writeAdditionalData(setDiscussionModeRequest.additionalData);
 }
 /**
  * Serializes information the current object
@@ -2100,6 +2147,12 @@ export function serializeUserSummaryDto(writer: SerializationWriter, userSummary
     writer.writeGuidValue("userId", userSummaryDto.userId);
     writer.writeStringValue("username", userSummaryDto.username);
     writer.writeAdditionalData(userSummaryDto.additionalData);
+}
+export interface SetDiscussionModeRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The mode property
+     */
+    mode?: string | null;
 }
 export interface SubmissionStatusDto extends AdditionalDataHolder, Parsable {
     /**

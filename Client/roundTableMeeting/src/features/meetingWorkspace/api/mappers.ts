@@ -27,6 +27,7 @@ export function mapMeetingDetails(value: Partial<MeetingDetailsDto>): MeetingDet
     membershipState: value.membershipState === 'left' ? 'left' : 'joined',
     canLeave: Boolean(value.permissions?.canLeave),
     canSend: Boolean(value.permissions?.canSend),
+    freeDiscussion: value.freeDiscussion ?? undefined,
     canDelete: Boolean(value.permissions?.canDelete ?? value.canDelete),
     canManageInvitation: Boolean(value.permissions?.canInvite ?? value.canManageInvitation),
     participants: (value.participants ?? []).map(mapParticipant),

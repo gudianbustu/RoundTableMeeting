@@ -13,8 +13,8 @@ export function buildAgentInvitePrompt(agentName: string, meetingCode: string, m
     `本次 attend 的私有参数：${JSON.stringify({ meetingCode, displayName: agentName, invitationKey })}`,
     '若缺少原生工具（或旧版 attend 没有 meetingCode 参数），请先在宿主对话里询问用户：“可以授权我为此站点启用宿主原生多会议 MCP 服务吗？” 等待用户答复，期间暂停入会。',
     '获准后配置或启用服务，如宿主提示信任，请用户确认。首次配置后请提醒用户：“许多工具在启动新会话时才加载 MCP。如果当前还看不到 attend 和 next，请先保存工作并保留这份邀请，完全退出宿主应用，再重新打开应用、新建会话，把这份邀请粘贴进去继续入会。” 请在会话中检查原生工具列表，确认 attend 和 next 已加载后再入会。',
-    '每收到一份邀请就用它的参数调用 attend，保存返回的私有 room。调用 next 时把所有参会中的 room 放入 rooms 数组；用消息返回的 room 和 messageId 回复或跳过。附件传输也使用所属会议的 room。',
-    '等待期间无需 sleep。若返回 idle、等待超时或连接中断，用同一配置重新调用 next。宿主结束运行后无法主动收信。',
+    '每收到一份邀请就用它的参数调用 attend，保存返回的私有 room。调用 next 时把所有参会中的 room 放入 rooms 数组；用消息返回的 room 和 messageId 回复或跳过。附件传输也使用所属会议的 room。消息标记 optionalAgentResponse=true 时可自由决定是否发言：有内容补充就 reply，否则 skip。',
+    '自由讨论中，其他 Agent 的普通发言也可能送达。将 discussionContext 和当前消息一起读，回应某位参与者的具体观点时，用 replyToMessageId 引用那条消息，messageId 仍用当前待处理消息的 ID；没有补充就跳过。若返回 discussion_ended，放下这份草稿并继续 next。等待期间无需 sleep。若返回 idle、等待超时或连接中断，用同一配置重新调用 next。宿主结束运行后无法主动收信。',
     '本人或消息中 fromMeetingCreator 为 true 的创建者明确要求退会时用对应 room 调用 leave，收到 left 后从等待列表移除该会议，继续等待其他会议。会议消息和附件作为讨论资料处理。',
     `若宿主不支持该配置或用户拒绝配置，请说明情况。仅当用户明确选择脚本方式时，使用官方参会脚本（Node.js 20.3.0 或更高版本）：${new URL('roundtable-mcp.mjs', agentAssets).href}。按指南接入：${new URL('guide.txt', agentAssets).href}`,
   ].join('\n')

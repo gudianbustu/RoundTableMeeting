@@ -172,6 +172,7 @@ export class MeetingClient {
       }
       // Validate the whole page on a copy so a malformed fragment cannot advance a cursor.
       const next = structuredClone(this.state); const complete = [];
+      let discussionBatch = [];
       for (const item of page.items) {
         const message = item.message; const key = `${cursorKey}:${message.messageId}`;
         const previous = next.fragments[key] ?? '';
@@ -185,6 +186,18 @@ export class MeetingClient {
             next.receivedAt[message.messageId] ??= new Date().toISOString();
             next.pendingMessages ??= {};
             next.pendingMessages[message.messageId] ??= randomUUID();
+            const topic = item.discussionTopicId;
+            if (message.optionalAgentResponse && topic && topic !== message.messageId) {
+              const first = discussionBatch[0];
+              if (first && (discussionBatch.length >= 4 || first.topic !== topic || Date.parse(message.createdAt) - Date.parse(first.message.createdAt) > 750)) discussionBatch = [];
+              if (discussionBatch.length) {
+                full.discussionContext = discussionBatch.map(entry => entry.message);
+                delete next.pendingMessages[discussionBatch.at(-1).message.messageId];
+              }
+              discussionBatch.push({ topic, message });
+            } else {
+              discussionBatch = [];
+            }
           }
           next.inbox[message.messageId] = full; complete.push(full); delete next.fragments[key];
         } else next.fragments[key] = content;
@@ -366,10 +379,17 @@ export async function listen(client, lines, emit, { hostResponseTimeout = 0 } = 
       }
       const submission = client.state.pendingMessages[id];
       let submit;
+      let interrupted = false;
       if (client.state.outbox[submission]) {
         submit = () => client.retry(submission);
       } else {
         const message = client.state.inbox[id];
+        if (message.optionalAgentResponse && !(await recover(() => client.tool('get_message', { messageId: id }))).optionalAgentResponse) {
+          delete client.state.pendingMessages[id];
+          if (client.state.receivedAt) delete client.state.receivedAt[id];
+          await client.save();
+          continue;
+        }
         let quoted;
         if (message.replyToMessageId) {
           try {
@@ -386,6 +406,7 @@ export async function listen(client, lines, emit, { hostResponseTimeout = 0 } = 
         output({ event: 'message', messageId: id, from: message.author?.displayName,
           fromMeetingCreator: Boolean(client.creatorId && client.creatorId === message.author?.participantId),
           createdAt: message.createdAt, receivedAt: client.state.receivedAt?.[id],
+          optionalAgentResponse: message.optionalAgentResponse === true, discussionContext: message.discussionContext,
           visibility: message.visibility, content: message.content, attachments: message.attachments,
           replyToMessageId: message.replyToMessageId, quoted });
         let handled = false;
@@ -413,6 +434,10 @@ export async function listen(client, lines, emit, { hostResponseTimeout = 0 } = 
             continue;
           }
           if (input.command === 'reply') {
+            const target = input.replyToMessageId ?? id;
+            if (target !== id && !message.discussionContext?.some(item => item.messageId === target)) {
+              output({ errorCode: 'invalid_reply_target', messageId: id }); continue;
+            }
             const files = input.files ?? [];
             const content = input.content ?? '';
             if (!Array.isArray(files) || files.some(file => typeof file !== 'string' || !path.isAbsolute(file)) ||
@@ -426,7 +451,7 @@ export async function listen(client, lines, emit, { hostResponseTimeout = 0 } = 
                 if (!attachmentIds.includes(attachment.attachmentId)) attachmentIds.push(attachment.attachmentId);
               }
             } catch (error) { output({ event: 'upload_failed', messageId: id, errorCode: error.code ?? error.name }); continue; }
-            submit = () => client.send({ content, clientSubmissionId: submission, replyToMessageId: id,
+            submit = () => client.send({ content, clientSubmissionId: submission, replyToMessageId: target,
               ...(attachmentIds.length ? { attachmentIds } : {}) });
           } else if (input.command !== 'skip') {
             output({ errorCode: 'expected_reply_or_skip', messageId: id }); continue;
@@ -438,12 +463,17 @@ export async function listen(client, lines, emit, { hostResponseTimeout = 0 } = 
       let sentAt;
       if (submit) {
         try { sentAt = (await recover(submit))?.createdAt; } catch (error) {
-          if (!['validation_failed', 'recipient_unavailable', 'reply_scope_mismatch', 'message_not_found', 'attachment_unavailable'].includes(error.code)) throw error;
-          client.state.outbox[submission].status = 'rejected';
-          client.state.pendingMessages[id] = randomUUID();
-          await client.save();
-          output({ event: 'reply_rejected', messageId: id, errorCode: error.code });
-          continue;
+          if (error.code === 'discussion_ended') {
+            client.state.outbox[submission].status = 'rejected';
+            interrupted = true;
+          } else {
+            if (!['validation_failed', 'recipient_unavailable', 'reply_scope_mismatch', 'message_not_found', 'attachment_unavailable'].includes(error.code)) throw error;
+            client.state.outbox[submission].status = 'rejected';
+            client.state.pendingMessages[id] = randomUUID();
+            await client.save();
+            output({ event: 'reply_rejected', messageId: id, errorCode: error.code });
+            continue;
+          }
         }
       }
       for (const [key, upload] of Object.entries(client.state.uploads ?? {})) {
@@ -452,7 +482,7 @@ export async function listen(client, lines, emit, { hostResponseTimeout = 0 } = 
       if (client.state.receivedAt) delete client.state.receivedAt[id];
       delete client.state.pendingMessages[id];
       await client.save();
-      output({ event: 'handled', messageId: id, sentAt });
+      output({ event: interrupted ? 'discussion_ended' : 'handled', messageId: id, sentAt });
     }
   } catch (error) {
     if (!signal.aborted) throw error;
@@ -491,7 +521,7 @@ async function serveCommands(client, rejoin) {
       for (const res of waiting) deliver(res);
       waiting.clear();
     } else {
-      if (event.event === 'handled' || event.event === 'reply_rejected') current = null;
+      if (event.event === 'handled' || event.event === 'discussion_ended' || event.event === 'reply_rejected') current = null;
       if (active) finish(active, event);
       active = null;
       lastConsumer = Date.now();
@@ -530,6 +560,14 @@ async function serveCommands(client, rejoin) {
       const keepalive = setInterval(() => res.write(' '), 30000);
       res.once('close', () => clearInterval(keepalive));
       if (cmd.command === 'next') {
+        const candidate = current;
+        if (candidate?.optionalAgentResponse && !active) {
+          const live = await client.tool('get_message', { messageId: candidate.messageId });
+          if (current === candidate && !active && !live.optionalAgentResponse) {
+            current = null;
+            input.write(JSON.stringify({ command: 'skip', messageId: candidate.messageId }) + '\n');
+          }
+        }
         if (current && !active) return deliver(res);
         waiting.add(res); res.once('close', () => { waiting.delete(res); lastConsumer = Date.now(); }); return;
       }
@@ -611,7 +649,11 @@ async function commandEndpoint(client, canStart) {
 async function runCommand(client, args) {
   const [command, messageId, value, ...files] = args;
   let request = { command };
-  if (command === 'reply' && messageId && value !== undefined) request = { command, messageId, content: value, files };
+  if (command === 'reply' && messageId && value !== undefined) {
+    const quoted = files[0] === '--reply-to';
+    if (quoted && !files[1]) throw new ClientError('invalid_command_arguments');
+    request = { command, messageId, content: value, replyToMessageId: quoted ? files[1] : undefined, files: quoted ? files.slice(2) : files };
+  }
   else if (command === 'skip' && messageId && args.length === 2) request = { command, messageId };
   else if (command === 'download' && messageId && value && args.length <= 4) request = { command, messageId, attachmentId: value, output: files[0] };
   else if (!['start', 'next', 'stop', 'leave', 'status', 'rejoin'].includes(command) || args.length !== 1) throw new ClientError('invalid_command_arguments');

@@ -13,6 +13,8 @@ import type { CreateMeetingInput, JoinPreview, MeetingDetails, MeetingInvitation
 
 export function useMeetingWorkspace() {
   const { meetingId: routeId } = useParams()
+  const activeRoute = useRef(routeId)
+  activeRoute.current = routeId
   const navigate = useNavigate()
   const location = useLocation()
   const [view, setView] = useState<'active' | 'history'>('active')
@@ -93,7 +95,9 @@ export function useMeetingWorkspace() {
   }, [loadDetails, routeId])
   const select = (id: string) => { suppressAutoSelect.current = false; createdInvitation.current = undefined; setInvitation(undefined); navigate(`/meetings/${id}`) }
   const refresh = () => { void loadListRef.current(false); if (routeId) void loadDetails(routeId) }
-  const refreshDetails = useCallback(() => { if (routeId) void loadDetails(routeId, true) }, [loadDetails, routeId])
+  const refreshDetails = useCallback(() => {
+    if (routeId && activeRoute.current === routeId) void loadDetails(routeId, true)
+  }, [loadDetails, routeId])
   useEffect(() => {
     if (!routeId || details?.meetingId !== routeId || !details.canManageInvitation || invitation?.meetingId === routeId) return
     const controller = new AbortController()
