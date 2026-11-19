@@ -1,24 +1,10 @@
+import { MessageBody } from './MessageBody'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
 import { getMessage } from '../api/messageResources'
 import { AttachmentLinks } from './AttachmentControls'
-
-function contentNodes(message: ChatMessage): ReactNode[]
-{
-  const ranges = message.mentions.filter(mention => mention.startOffset >= 0 && mention.length > 1 && mention.startOffset + mention.length <= message.content.length).sort((a, b) => a.startOffset - b.startOffset)
-  const nodes: ReactNode[] = []
-  let cursor = 0
-  for (const range of ranges) {
-    if (range.startOffset < cursor) continue
-    nodes.push(message.content.slice(cursor, range.startOffset))
-    nodes.push(<mark key={range.startOffset}>{message.content.slice(range.startOffset, range.startOffset + range.length)}</mark>)
-    cursor = range.startOffset + range.length
-  }
-  nodes.push(message.content.slice(cursor))
-  return nodes
-}
 
 function ReplyQuote({ meetingId, id, loaded, onLocate }: {
   meetingId: string; id: string; loaded?: ChatMessage; onLocate?: (id: string) => Promise<void>
@@ -103,7 +89,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
           {onPrivateChat && message.author.participantId && message.author.participantId !== currentParticipantId && <Button size="small" type="text" onClick={() => onPrivateChat(message.author.participantId!)}>私聊</Button>}
         </header>
         {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
-        {message.content && <Typography.Paragraph className="message-body">{contentNodes(message)}</Typography.Paragraph>}
+        {message.content && <MessageBody content={message.content} mentions={message.mentions} />}
         {!!message.attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={message.attachments} />}
       </article>)}
       {pendingMessage}

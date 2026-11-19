@@ -51,7 +51,16 @@ a { color: #176b87; }
 .message-meta .message-sequence { color: #58727b; background: #f0f4f6; border-color: transparent; font-variant-numeric: tabular-nums; }
 .message-meta .message-author { min-width: 0; overflow-wrap: anywhere; color: #19313a; }
 .message-time { color: #74858c; font-size: 12px; font-variant-numeric: tabular-nums; }
-.message-item .message-body { margin: 0; line-height: 1.75; overflow-wrap: anywhere; white-space: pre-wrap; }
+.message-item .message-body { margin: 0; line-height: 1.75; overflow-wrap: anywhere; white-space: normal; min-width: 0; }
+.message-body > :first-child { margin-top: 0; }
+.message-body > :last-child { margin-bottom: 0; }
+.message-body p, .message-body li { white-space: pre-wrap; }
+.message-body p { margin: 0 0 .6em; }
+.message-body pre, .message-body .message-table { max-width: 100%; overflow-x: auto; }
+.message-body pre { padding: 8px 12px; background: #f6f8fa; border-radius: 6px; white-space: pre; }
+.message-body blockquote { margin-inline: 0; padding-inline-start: 12px; border-inline-start: 3px solid #cbd5df; }
+.message-body table { border-collapse: collapse; }
+.message-body th, .message-body td { padding: 4px 8px; border: 1px solid #cbd5df; }
 .message-body mark { padding: 1px 3px; border-radius: 3px; background: #fff1b8; }
 .message-system { background: #f5f8f9; }
 .message-composer { display: grid; gap: 8px; padding: 8px; background: #fff; border: 1px solid #dbe5e8; border-radius: 12px; transition: border-color 0.2s, box-shadow 0.2s; }
