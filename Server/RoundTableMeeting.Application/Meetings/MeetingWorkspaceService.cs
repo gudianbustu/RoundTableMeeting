@@ -108,6 +108,7 @@ public sealed class MeetingWorkspaceService(
         foreach (var row in await meetings.ListForUserAsync(userId, cancellationToken))
         {
             if ((row.Participant.MembershipState == Domain.Enums.MeetingMembershipState.Left) != history) continue;
+            if (history && row.Participant.HiddenFromHistory) continue;
             result.Add(new(row.Meeting.ID, row.Meeting.Name, row.Participant.DisplayName, row.Meeting.CreatorUserId == userId, row.Participant.JoinedAtUtc)
             { MembershipState = MembershipName(row.Participant), Permissions = Permissions(row.Meeting, row.Participant) });
         }
@@ -195,6 +196,25 @@ public sealed class MeetingWorkspaceService(
         {
             return new(MeetingOperationStatus.JoinConflict);
         }
+    }
+
+    public async Task<MeetingOperationStatus> UpdateHistoryAsync(Guid meetingId, bool rejoin, CancellationToken ct)
+    {
+        if (!TryUser(out var userId)) return MeetingOperationStatus.Unauthenticated;
+        using var lease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        if (lease is null) return MeetingOperationStatus.MeetingNotFound;
+        return await transactionRunner.RunAsync(async token =>
+        {
+            var meeting = await meetings.FindActiveByIdAsync(meetingId, token);
+            var member = await participants.FindByUserAsync(meetingId, userId, token);
+            if (meeting is null || member is null) return MeetingOperationStatus.MeetingNotFound;
+            if (member.MembershipState != Domain.Enums.MeetingMembershipState.Left)
+                return rejoin ? MeetingOperationStatus.Success : MeetingOperationStatus.AlreadyMember;
+            if (rejoin) member.Rejoin();
+            else member.HideFromHistory();
+            unitOfWork.RegisterEdit(member);
+            return MeetingOperationStatus.Success;
+        }, ct);
     }
 
     public async Task<MeetingOperationResult<MeetingMembershipDto>> LeaveAsync(Guid meetingId, LeaveMeetingRequest request, CancellationToken cancellationToken = default)

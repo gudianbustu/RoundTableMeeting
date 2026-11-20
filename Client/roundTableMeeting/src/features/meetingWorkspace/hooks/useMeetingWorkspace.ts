@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { createUuid } from '@/shared/utils/createUuid'
+import { updateMeetingHistory } from '../api/updateMeetingHistory'
 import { leaveMeeting } from '../api/leaveMeeting'
 import { createMeeting } from '../api/createMeeting'
 import { deleteMeeting } from '../api/deleteMeeting'
@@ -82,17 +83,18 @@ export function useMeetingWorkspace() {
         }
       }
     } finally {
-      if (detailController.current === controller) { detailController.current = undefined; if (!preserveCurrent) setDetailLoading(false) }
+      if (detailController.current === controller) { detailController.current = undefined; setDetailLoading(false) }
     }
   }, [navigate])
 
-  useEffect(() => { void loadList(true); return () => { listController.current?.abort(); detailController.current?.abort() } }, [loadList])
+  useEffect(() => { void loadList(true); return () => { listController.current?.abort() } }, [loadList])
   useEffect(() => {
     if (!routeId) { setDetails(undefined); setInvitation(undefined); return }
     const created = createdInvitation.current
     setInvitation(created?.meetingId === routeId ? created : undefined)
     void loadDetails(routeId)
-  }, [loadDetails, routeId])
+    return () => detailController.current?.abort()
+  }, [loadDetails, routeId, view])
   const select = (id: string) => { suppressAutoSelect.current = false; createdInvitation.current = undefined; setInvitation(undefined); navigate(`/meetings/${id}`) }
   const refresh = () => { void loadListRef.current(false); if (routeId) void loadDetails(routeId) }
   const refreshDetails = useCallback(() => {
@@ -158,6 +160,24 @@ export function useMeetingWorkspace() {
     finally { setOperationLoading(false) }
   }
 
+  const updateHistory = async (id: string, action: 'rejoin' | 'hide') => {
+    setOperationLoading(true)
+    try {
+      await updateMeetingHistory(id, action)
+      if (activeRoute.current !== id) { void loadListRef.current(false); return true }
+      setError(undefined)
+      if (action === 'rejoin') {
+        setView('active')
+      } else {
+        setMeetings(items => items.filter(item => item.meetingId !== id))
+        suppressAutoSelect.current = false
+        navigate('/', { replace: true })
+      }
+      return true
+    } catch (value) { setError(value as MeetingWorkspaceApiError); return false }
+    finally { setOperationLoading(false) }
+  }
+
   const handleMeetingUnavailable = useCallback(() => {
     suppressAutoSelect.current = true
     setDetails(undefined)
@@ -167,5 +187,5 @@ export function useMeetingWorkspace() {
     void loadListRef.current(false)
   }, [navigate])
 
-  return { view, setView, leave, membershipChanged, meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
+  return { view, setView, updateHistory, leave, membershipChanged, meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
 }

@@ -187,6 +187,25 @@ public sealed class MeetingsController(IMeetingWorkspaceService service) : Contr
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
         };
     }
+    [HttpPost("{meetingId:guid}/rejoin")]
+    [RequireBrowserOrigin(false)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public Task<IActionResult> Rejoin(Guid meetingId, CancellationToken ct) => UpdateHistory(meetingId, true, ct);
+
+    [HttpDelete("{meetingId:guid}/history")]
+    [RequireBrowserOrigin(false)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public Task<IActionResult> HideFromHistory(Guid meetingId, CancellationToken ct) => UpdateHistory(meetingId, false, ct);
+
+    private async Task<IActionResult> UpdateHistory(Guid meetingId, bool rejoin, CancellationToken ct)
+        => await service.UpdateHistoryAsync(meetingId, rejoin, ct) switch
+        {
+            MeetingOperationStatus.Success => NoContent(),
+            MeetingOperationStatus.AlreadyMember => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "already_member"),
+            MeetingOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
+            _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
+        };
+
     [HttpPost("{meetingId:guid}/leave")]
     [RequireBrowserOrigin(true)]
     [ProducesResponseType(typeof(MeetingMembershipDto), StatusCodes.Status200OK)]

@@ -32,6 +32,7 @@ export function MeetingWorkspacePage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [hideId, setHideId] = useState<string>()
   const [confirmName, setConfirmName] = useState('')
   const [presence, setPresence] = useState<Record<string, 'online' | 'offline'>>({})
   const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>({})
@@ -39,7 +40,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
-    setPresence({}); setAgentActivities({})
+    setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
   }, [workspace.selectedId])
@@ -60,7 +61,7 @@ export function MeetingWorkspacePage() {
   const closeDelete = () => { setDeleteOpen(false); setConfirmName('') }
   return <section className="meeting-workspace">
     {contextHolder}
-    <MeetingNavigation details={workspace.details} detailLoading={workspace.detailLoading} onLeave={() => setLeaveOpen(true)} onDelete={() => setDeleteOpen(true)} view={workspace.view} onViewChange={workspace.setView} meetings={workspace.meetings} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={workspace.select} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
+    <MeetingNavigation details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={setHideId} onLeave={() => setLeaveOpen(true)} onDelete={() => setDeleteOpen(true)} view={workspace.view} onViewChange={workspace.setView} meetings={workspace.meetings} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={workspace.select} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
     <main className="meeting-main">
       {workspace.error && <Alert closable type="error" showIcon title={workspace.error.code === 'meeting_not_found' ? '会议已不可访问' : '操作未能完成'} description={workspace.error.message} onClose={workspace.clearError} />}
       {workspace.detailLoading ? <Typography.Text>正在加载会议...</Typography.Text> : workspace.details ? <>
@@ -72,7 +73,10 @@ export function MeetingWorkspacePage() {
     <InviteMeetingDialog open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />
     <JoinMeetingDialog open={joinOpen} loading={workspace.operationLoading} succeeded={workspace.joinSucceeded} previewLoading={workspace.previewLoading} preview={workspace.preview} error={workspace.error?.message} retryAfterSeconds={workspace.error?.retryAfterSeconds} onCancel={() => { workspace.clearJoin(); setJoinOpen(false) }} onPreview={workspace.previewCode} onSubmit={value => void workspace.join(value.code, value.displayName)} />
     <Modal open={leaveOpen} title="退出会议" okText="确认退出" cancelText="取消" confirmLoading={workspace.operationLoading} onCancel={() => setLeaveOpen(false)} onOk={() => void workspace.leave().then(success => { if (success) setLeaveOpen(false) })}>
-      <Typography.Paragraph>退出后不再接收新消息，可以在历史会议中查看退出前有权访问的消息。之后可通过邀请码重新加入。</Typography.Paragraph>
+      <Typography.Paragraph>退出后不再接收新消息，可以在历史会议中查看退出前有权访问的消息。之后可在历史会议中重新入会，也可通过邀请码加入。</Typography.Paragraph>
+    </Modal>
+    <Modal open={!!hideId && hideId === workspace.selectedId} title="从历史会议中删除" okText="确认删除" cancelText="取消" okButtonProps={{ danger: true }} confirmLoading={workspace.operationLoading} onCancel={() => setHideId(undefined)} onOk={() => { if (hideId) void workspace.updateHistory(hideId, 'hide').then(ok => { if (ok) setHideId(undefined) }) }}>
+      <Typography.Paragraph>从你的历史列表中移除“{workspace.details?.name}”。会议、消息和其他人的记录都会保留。之后仍可使用邀请码加入。</Typography.Paragraph>
     </Modal>
     <Modal open={deleteOpen} title="删除会议" okText="确认删除" cancelText="取消" okButtonProps={{ danger: true, disabled: confirmName.normalize().trim() !== workspace.details?.name }} confirmLoading={workspace.operationLoading} onCancel={closeDelete} onOk={() => { if (workspace.selectedId) void workspace.remove(workspace.selectedId, confirmName).then(success => { if (success) { const id = workspace.selectedId!; for (const key of chatCache.current.states.keys()) if (key.startsWith(id + ':')) chatCache.current.states.delete(key); delete chatCache.current.selection[id]; closeDelete() } }) }}>
       <Typography.Paragraph>请输入完整会议名称“<strong>{workspace.details?.name}</strong>”确认删除。公开消息、私聊、全部附件和参与者记录将永久删除，会议码失效，此操作不可恢复。</Typography.Paragraph><Input aria-label="确认会议名称" value={confirmName} onChange={event => setConfirmName(event.target.value)} />

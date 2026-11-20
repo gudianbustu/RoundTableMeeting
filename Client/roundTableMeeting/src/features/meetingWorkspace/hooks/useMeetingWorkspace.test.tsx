@@ -31,3 +31,13 @@ it.each([false, true])('reloads the current meeting session after joining, alrea
   expect(view.result.current.details).toEqual(meeting)
   expect(mocks.navigate).not.toHaveBeenCalled()
 })
+
+it('clears initial loading when a realtime refresh supersedes the first details request', async () => {
+  const meeting = { meetingId: 'current', name: 'Meeting', canManageInvitation: false, participants: [] }
+  mocks.details.mockImplementationOnce(() => new Promise(() => {})).mockResolvedValueOnce(meeting)
+  const view = renderHook(() => useMeetingWorkspace())
+  await waitFor(() => expect(view.result.current.detailLoading).toBe(true))
+  act(() => view.result.current.refreshDetails())
+  await waitFor(() => expect(view.result.current.details).toEqual(meeting))
+  expect(view.result.current.detailLoading).toBe(false)
+})

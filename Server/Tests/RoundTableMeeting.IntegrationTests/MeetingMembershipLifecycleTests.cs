@@ -65,6 +65,39 @@ public sealed class MeetingMembershipLifecycleTests
     }
 
     [Fact]
+    public async Task HistoryActionsOnlyAffectTheCurrentMembership()
+    {
+        using var factory = new TestApplicationFactory();
+        using var owner = Client(factory);
+        using var member = Client(factory);
+        await Login(owner, "alice");
+        await Login(member, "bob");
+        var created = await Create(owner, "Personal history");
+        var id = created.GetProperty("meeting").GetProperty("meetingId").GetGuid();
+        var code = created.GetProperty("invitation").GetProperty("meetingCode").GetString();
+        var path = $"/api/meetings/{id}";
+        member.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+        Assert.Equal(HttpStatusCode.NotFound, (await Post(member, path + "/rejoin", null)).StatusCode);
+        var joined = await Body(await Post(member, "/api/meetings/join", new { meetingCode = code, displayName = "Member" }), HttpStatusCode.OK);
+        var identity = joined.GetProperty("currentParticipant").GetProperty("participantId").GetGuid();
+        Assert.Equal(HttpStatusCode.Conflict, (await member.DeleteAsync(path + "/history")).StatusCode);
+        await Message(owner, id, "keep");
+        await Body(await Post(member, path + "/leave", new { operationId = Guid.NewGuid() }), HttpStatusCode.OK);
+        Assert.Equal(HttpStatusCode.NoContent, (await Post(member, path + "/rejoin", null)).StatusCode);
+        var active = await member.GetFromJsonAsync<JsonElement>(path);
+        Assert.Equal(identity, active.GetProperty("currentParticipant").GetProperty("participantId").GetGuid());
+        await Body(await Post(member, path + "/leave", new { operationId = Guid.NewGuid() }), HttpStatusCode.OK);
+        for (var attempt = 0; attempt < 2; attempt++)
+            Assert.Equal(HttpStatusCode.NoContent, (await member.DeleteAsync(path + "/history")).StatusCode);
+        Assert.Empty((await member.GetFromJsonAsync<JsonElement[]>("/api/meetings?view=history"))!);
+        Assert.Single((await owner.GetFromJsonAsync<JsonElement[]>("/api/meetings"))!);
+        Assert.Single((await owner.GetFromJsonAsync<JsonElement>(path + "/messages")).GetProperty("items").EnumerateArray());
+        await Body(await Post(member, "/api/meetings/join", new { meetingCode = code, displayName = "Member" }), HttpStatusCode.OK);
+        await Body(await Post(member, path + "/leave", new { operationId = Guid.NewGuid() }), HttpStatusCode.OK);
+        Assert.Single((await member.GetFromJsonAsync<JsonElement[]>("/api/meetings?view=history"))!);
+    }
+
+    [Fact]
     public async Task DeletePurgesBusinessRowsButKeepsOnlyVerifiableDeletionAndCreationReceipts()
     {
         using var factory = new TestApplicationFactory();

@@ -30,6 +30,19 @@ it('keeps list selection separate from info and permission-controlled destructiv
   expect(document.querySelector('button button')).toBeNull()
 })
 
+it('routes historical deletion and rejoin to personal membership actions', async () => {
+  const hide = vi.fn(), rejoin = vi.fn(), remove = vi.fn()
+  render(<MeetingNavigation meetings={meetings} selectedId="a" view="history" details={{ ...details, membershipState: 'left', canDelete: false }} onSelect={vi.fn()} onCreate={vi.fn()} onJoin={vi.fn()} onHide={hide} onRejoin={rejoin} onDelete={remove} />)
+  const more = screen.getByRole('button', { name: '更多会议操作 甲会议' })
+  fireEvent.click(more)
+  fireEvent.click(await screen.findByRole('menuitem', { name: /重新入会/ }))
+  expect(rejoin).toHaveBeenCalledWith('a')
+  fireEvent.click(more)
+  fireEvent.click(await screen.findByRole('menuitem', { name: /删除会议/ }))
+  expect(hide).toHaveBeenCalledWith('a')
+  expect(remove).not.toHaveBeenCalled()
+})
+
 it('waits for the target meeting permissions instead of reusing the previous meeting delete action', async () => {
   const select = vi.fn(), remove = vi.fn(), leave = vi.fn()
   const props = { meetings, onSelect: select, onCreate: vi.fn(), onJoin: vi.fn(), onDelete: remove, onLeave: leave }

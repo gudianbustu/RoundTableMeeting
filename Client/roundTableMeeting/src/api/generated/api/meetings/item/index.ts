@@ -10,11 +10,15 @@ import { DeletionRequestBuilderNavigationMetadata, DeletionRequestBuilderRequest
 // @ts-ignore
 import { DiscussionModeRequestBuilderRequestsMetadata, type DiscussionModeRequestBuilder } from './discussionMode/index.js';
 // @ts-ignore
+import { HistoryRequestBuilderRequestsMetadata, type HistoryRequestBuilder } from './history/index.js';
+// @ts-ignore
 import { InvitationRequestBuilderRequestsMetadata, type InvitationRequestBuilder } from './invitation/index.js';
 // @ts-ignore
 import { LeaveRequestBuilderRequestsMetadata, type LeaveRequestBuilder } from './leave/index.js';
 // @ts-ignore
 import { MessagesRequestBuilderNavigationMetadata, MessagesRequestBuilderRequestsMetadata, type MessagesRequestBuilder } from './messages/index.js';
+// @ts-ignore
+import { RejoinRequestBuilderRequestsMetadata, type RejoinRequestBuilder } from './rejoin/index.js';
 // @ts-ignore
 import { SubmissionsRequestBuilderNavigationMetadata, type SubmissionsRequestBuilder } from './submissions/index.js';
 // @ts-ignore
@@ -37,6 +41,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      */
     get discussionMode(): DiscussionModeRequestBuilder;
     /**
+     * The history property
+     */
+    get history(): HistoryRequestBuilder;
+    /**
      * The invitation property
      */
     get invitation(): InvitationRequestBuilder;
@@ -48,6 +56,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The messages property
      */
     get messages(): MessagesRequestBuilder;
+    /**
+     * The rejoin property
+     */
+    get rejoin(): RejoinRequestBuilder;
     /**
      * The submissions property
      */
@@ -86,6 +98,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     discussionMode: {
         requestsMetadata: DiscussionModeRequestBuilderRequestsMetadata,
     },
+    history: {
+        requestsMetadata: HistoryRequestBuilderRequestsMetadata,
+    },
     invitation: {
         requestsMetadata: InvitationRequestBuilderRequestsMetadata,
     },
@@ -95,6 +110,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     messages: {
         requestsMetadata: MessagesRequestBuilderRequestsMetadata,
         navigationMetadata: MessagesRequestBuilderNavigationMetadata,
+    },
+    rejoin: {
+        requestsMetadata: RejoinRequestBuilderRequestsMetadata,
     },
     submissions: {
         navigationMetadata: SubmissionsRequestBuilderNavigationMetadata,

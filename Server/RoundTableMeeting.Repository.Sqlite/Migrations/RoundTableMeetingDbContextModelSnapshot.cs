@@ -1021,6 +1021,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("HiddenFromHistory")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTimeOffset>("JoinedAtUtc")
                         .HasColumnType("TEXT");
 

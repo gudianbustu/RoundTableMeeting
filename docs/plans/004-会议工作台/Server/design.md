@@ -29,7 +29,7 @@ MeetingCode 为随机 Guid 的 D 格式，Trim 后严格解析，仅用于加入
 - deleting/deleted：所有人均无消息、附件、检索、加入、接管或收发资格，已退出者与创建者无例外。
 - 非成员或无效会议码：404 meeting_not_found，不泄露资源；管理员不额外取得会议或私聊权限。
 
-活跃列表为 active+joined；历史列表仅含仍存在的 active+left。删除会议从两类列表移除。列表按 joinedAt 降序及稳定ID排序；详情不带会议码，不展示私聊关系、数量、时间或活动。普通详情、浏览历史、reconnect/takeover 不改变成员状态，只有明确 join 可重入。
+活跃列表为 active+joined；历史列表仅含仍存在且本人未隐藏的 active+left。成员可通过 POST /api/meetings/{id}/rejoin 恢复原身份，也可通过 DELETE /api/meetings/{id}/history 持久隐藏本人的历史条目。重入后清除隐藏标记，再次退出时重新显示。删除会议从两类列表移除。列表按 joinedAt 降序及稳定ID排序；详情不带会议码，不展示私聊关系、数量、时间或活动。普通详情、浏览历史、reconnect/takeover 不改变成员状态，只有明确 join 可重入。
 
 ## 5. HTTP目标契约
 

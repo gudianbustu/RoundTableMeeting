@@ -15,6 +15,14 @@ public sealed class MeetingParticipant : BaseEntity
     public long? LeftThroughSequence { get; private set; }
     public long MembershipRevision { get; private set; } = 1;
 
+    public bool HiddenFromHistory { get; private set; }
+
+    public void HideFromHistory()
+    {
+        if (MembershipState != MeetingMembershipState.Left) throw new InvalidOperationException("Only a left meeting can be hidden.");
+        HiddenFromHistory = true;
+    }
+
     public void Leave(long visibleThroughSequence)
     {
         if (visibleThroughSequence < 0) throw new ArgumentOutOfRangeException(nameof(visibleThroughSequence));
@@ -28,6 +36,7 @@ public sealed class MeetingParticipant : BaseEntity
     {
         if (MembershipState == MeetingMembershipState.Joined) return;
         MembershipState = MeetingMembershipState.Joined;
+        HiddenFromHistory = false;
         LeftThroughSequence = null;
         MembershipRevision++;
     }

@@ -22,7 +22,10 @@ public sealed class PrivateMessageMigrationTests
             db.AddRange(user, meeting); await db.SaveChangesAsync();
             var author = MeetingParticipant.CreateHuman(meeting.ID, user.ID, "Owner", now);
             var left = MeetingParticipant.CreateAgent(meeting.ID, "Left", now); left.Leave(4);
-            db.AddRange(author, left); await db.SaveChangesAsync();
+            await LegacyMeetingParticipantSeed.InsertAsync(db, author);
+            await LegacyMeetingParticipantSeed.InsertAsync(db, left);
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE MeetingParticipants SET MembershipState = 'Left', LeftThroughSequence = {left.LeftThroughSequence}, MembershipRevision = {left.MembershipRevision} WHERE ID = {left.ID}");
             db.Add(MeetingLeaveOperation.Create(left, Guid.NewGuid())); await db.SaveChangesAsync();
             var messages = new[] { 1L, 4L, 7L }.Select(n => MeetingMessage.CreateParticipant(meeting.ID, n, author.ID,
                 MessageAuthorKind.Human, author.DisplayName, "original " + n, Guid.NewGuid(), now)).ToArray();
