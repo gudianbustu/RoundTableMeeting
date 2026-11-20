@@ -77,7 +77,7 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
             mentions = parser.Parse(content, people, request.MentionCandidates);
         }
         if (author.Kind == TransportAuthorKind.Agent && scope == "public" && mentions.Count == 0 && request.ReplyToMessageId is null
-            && await discussion.WasInterruptedAsync(meetingId, 0, ct))
+            && !request.StartsPublicTopic && await discussion.WasInterruptedAsync(meetingId, 0, ct))
             throw new MeetingMessageAccessException("reply_reference_required");
         if (scope == "private" && (sender is null || recipient == sender.ID
             || !roster.Any(p => p.ID == recipient && p.MembershipState == MeetingMembershipState.Joined)))
@@ -97,7 +97,7 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
         }
         if (sender is not null)
         {
-            if (scope == "public" && await discussion.ClassifyAsync(message, mentions.Count != 0, ct) is { } turn)
+            if (scope == "public" && await discussion.ClassifyAsync(message, mentions.Count != 0, request.StartsPublicTopic, ct) is { } turn)
                 unitOfWork.RegisterAdd(turn);
             foreach (var mention in mentions)
                 unitOfWork.RegisterAdd(MessageMention.Create(meetingId, message.ID, mention.ParticipantId, mention.DisplayName, mention.StartOffset, mention.Length));

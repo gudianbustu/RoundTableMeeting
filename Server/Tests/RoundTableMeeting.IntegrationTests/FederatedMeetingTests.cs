@@ -49,6 +49,19 @@ public sealed class FederatedMeetingTests
         var recipientJoin = await resumed.CallToolAsync("attend", args);
         var recipientRoom = JsonDocument.Parse(Assert.Single(recipientJoin.Content.OfType<TextContentBlock>()).Text)
             .RootElement.GetProperty("room").GetString();
+        using var opened = await human.PutAsJsonAsync($"/api/meetings/{meetingId}/discussion-mode", new { mode = "free" });
+        opened.EnsureSuccessStatusCode();
+        using var closed = await human.PutAsJsonAsync($"/api/meetings/{meetingId}/discussion-mode", new { mode = "directed" });
+        closed.EnsureSuccessStatusCode();
+        var announcement = new Dictionary<string, object?> { ["room"] = room, ["clientSubmissionId"] = Guid.NewGuid(),
+            ["content"] = "主动公告" };
+        var posted = await first.CallToolAsync("send_public_message", announcement);
+        Assert.False(posted.IsError == true, Assert.Single(posted.Content.OfType<TextContentBlock>()).Text);
+        var postedAgain = await resumed.CallToolAsync("send_public_message", announcement);
+        Assert.Equal(Assert.Single(posted.Content.OfType<TextContentBlock>()).Text, Assert.Single(postedAgain.Content.OfType<TextContentBlock>()).Text);
+        announcement["content"] = "复用提交 ID 修改内容";
+        Assert.True((await resumed.CallToolAsync("send_public_message", announcement)).IsError);
+
         var send = new Dictionary<string, object?> { ["room"] = room, ["clientSubmissionId"] = Guid.NewGuid(),
             ["recipientDisplayName"] = "收信助手", ["content"] = "仅收件人可见" };
         var sent = await resumed.CallToolAsync("send_private_message", send);
@@ -60,6 +73,17 @@ public sealed class FederatedMeetingTests
         var pending = JsonDocument.Parse(Assert.Single(inbox.Content.OfType<TextContentBlock>()).Text).RootElement.GetProperty("message");
         Assert.Equal("private", pending.GetProperty("visibility").GetString());
         Assert.Equal("仅收件人可见", pending.GetProperty("content").GetString());
+        using var reopened = await human.PutAsJsonAsync($"/api/meetings/{meetingId}/discussion-mode", new { mode = "free" });
+        reopened.EnsureSuccessStatusCode();
+        var topic = new Dictionary<string, object?> { ["room"] = recipientRoom, ["clientSubmissionId"] = Guid.NewGuid(),
+            ["content"] = "独立的公开议题" };
+        Assert.False((await resumed.CallToolAsync("send_public_message", topic)).IsError == true);
+        var delivered = await resumed.CallToolAsync("next", new Dictionary<string, object?> { ["rooms"] = new[] { room } }, cancellationToken: timeout.Token);
+        var publicTurn = JsonDocument.Parse(Assert.Single(delivered.Content.OfType<TextContentBlock>()).Text).RootElement.GetProperty("message");
+        Assert.Equal("独立的公开议题", publicTurn.GetProperty("content").GetString());
+        Assert.True(publicTurn.GetProperty("optionalAgentResponse").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, publicTurn.GetProperty("replyToMessageId").ValueKind);
+
         var answer = new Dictionary<string, object?> { ["room"] = recipientRoom, ["clientSubmissionId"] = Guid.NewGuid(),
             ["recipientParticipantId"] = pending.GetProperty("author").GetProperty("participantId").GetGuid(), ["content"] = "另一条私信" };
         Assert.False((await resumed.CallToolAsync("send_private_message", answer)).IsError == true);
@@ -67,6 +91,9 @@ public sealed class FederatedMeetingTests
         Assert.Equal("handled", Assert.Single(skip.Content.OfType<TextContentBlock>()).Text);
         var visible = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}/messages");
         Assert.DoesNotContain(visible.GetProperty("items").EnumerateArray(), m => m.GetProperty("visibility").GetString() == "private");
+        var announcementRow = Assert.Single(visible.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "主动公告");
+        Assert.Equal("public", announcementRow.GetProperty("visibility").GetString());
+        Assert.Equal("跨站助手", announcementRow.GetProperty("author").GetProperty("displayName").GetString());
         send["recipientDisplayName"] = "不存在的参会者";
         Assert.True((await resumed.CallToolAsync("send_private_message", send)).IsError);
 

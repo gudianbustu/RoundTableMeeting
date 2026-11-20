@@ -15,12 +15,12 @@ public sealed class MeetingDiscussionRepository(RoundTableMeetingDbContext db) :
     public Task<MeetingDiscussionTurn?> FindTurnAsync(Guid messageId, CancellationToken ct)
         => db.Set<MeetingDiscussionTurn>().AsNoTracking().SingleOrDefaultAsync(t => t.ID == messageId, ct);
 
-    public async Task<MeetingDiscussionTurn?> ClassifyAsync(MeetingMessage message, bool mentioned, CancellationToken ct)
+    public async Task<MeetingDiscussionTurn?> ClassifyAsync(MeetingMessage message, bool mentioned, bool startsPublicTopic, CancellationToken ct)
     {
         var mode = await db.Set<MeetingDiscussionChange>().Where(x => x.MeetingId == message.MeetingId)
             .OrderByDescending(x => x.Sequence).FirstOrDefaultAsync(ct);
         if (mode?.FreeDiscussion != true) return null;
-        if (message.AuthorKind == Domain.Enums.MessageAuthorKind.Human)
+        if (startsPublicTopic || message.AuthorKind == Domain.Enums.MessageAuthorKind.Human)
             return mentioned ? null : MeetingDiscussionTurn.Create(message, message.ID, true);
 
         var turns = db.Set<MeetingDiscussionTurn>().Where(t => t.MeetingId == message.MeetingId && t.Sequence > mode.Sequence);

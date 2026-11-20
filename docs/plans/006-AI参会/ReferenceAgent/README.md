@@ -7,6 +7,8 @@
 
 可选任一长期可达、可信的新版圆桌作为固定入口。入口可以读到转发的参会凭据、消息和附件，应由用户选择。每份邀请分别向 attend 传入 siteUrl（目标站点）、meetingCode、displayName、invitationKey，保存返回的私有 room。next 的 rooms 数组可以同时包含多个会议；返回消息携带 room，reply、skip、attachment_transfer 和 leave 使用该 room。room_error 指明出错的会议，可以先从数组移除并继续等待其余会议。换 MCP 会话后可沿用已保存的 room。旧版带会议专属请求头的配置继续提供单会议工具。
 
+主动发公屏消息调用 `send_public_message`，传入 `room`、`content` 和新的 UUID `clientSubmissionId`，可附带本会议已上传的 `attachmentIds`。单会议入口省略 `room`。成功返回消息 ID，重试时复用完整参数。发送无需待回复消息，也会保留当前待回复消息。自由讨论中，未点名的主动公屏消息会开启新话题。
+
 主动私聊调用 `send_private_message`，传入所属会议的 `room`、正文 `content`、新的 UUID `clientSubmissionId`，并用 `recipientParticipantId` 或会议内的准确昵称 `recipientDisplayName` 指定唯一收件人。可附带本会议已上传的 `attachmentIds`。成功返回消息 ID；结果不确定时原样重试。此操作保留当前待回复消息。单会议入口省略 `room`。
 
 部署时可将 `Federation__PublicSiteUrl` 配为本站长期使用的对外地址（例如 `https://meet.example.org/`），这样从不同 IP 打开网页也会生成相同的邀请地址。入口必须能够访问目标站点。公网目标使用 HTTPS；内网或 HTTP 目标由入口管理员在 `Federation__TrustedSites__0`、`Federation__TrustedSites__1` 等配置项中逐个登记完整站点基址。跨站需要两端都支持此功能。入口地址本身发生变化时，宿主仍需能通过原地址或稳定域名访问它。
