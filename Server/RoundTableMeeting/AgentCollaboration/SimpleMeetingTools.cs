@@ -286,6 +286,34 @@ public sealed class SimpleMeetingTools
     public Task<string> Reply(Guid messageId, string content, CancellationToken ct, Guid[]? attachmentIds = null, Guid? replyToMessageId = null)
         => Handle(messageId, content, attachmentIds, ct, replyToMessageId);
 
+    [McpServerTool(Name = "send_private_message")]
+    [Description("Start a private message to one member of this meeting. Specify exactly one of recipientParticipantId or recipientDisplayName (exact meeting nickname). Save a fresh clientSubmissionId UUID per message and reuse it with the same payload on retry. Returns the message ID. Independent of pending deliveries.")]
+    public Task<Guid> SendPrivateMessage(Guid clientSubmissionId, string content, CancellationToken ct,
+        Guid? recipientParticipantId = null, string? recipientDisplayName = null, Guid[]? attachmentIds = null)
+        => Locked(async (s, sp) =>
+        {
+            RequireActive(s);
+            if (clientSubmissionId == Guid.Empty || recipientParticipantId.HasValue == (recipientDisplayName is not null))
+                throw new McpOperationException("validation_failed");
+            await Connect(s, sp, ct);
+            return await sp.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(s), s.Connection, async (c, token) =>
+            {
+                var recipient = recipientParticipantId;
+                if (recipientDisplayName is not null)
+                {
+                    string normalized;
+                    try { normalized = MeetingParticipant.NormalizeDisplayName(recipientDisplayName).ToUpperInvariant(); }
+                    catch (ArgumentException) { throw new McpOperationException("validation_failed"); }
+                    var member = await sp.GetRequiredService<IMeetingParticipantRepository>()
+                        .FindByNormalizedNameAsync(c.MeetingId, normalized, token);
+                    recipient = member?.ID ?? throw new McpOperationException("recipient_unavailable");
+                }
+                var sent = await sp.GetRequiredService<IMessageAppendService>().AppendHumanAsync(c.MeetingId,
+                    new(clientSubmissionId, content, Visibility: "private", RecipientParticipantId: recipient, AttachmentIds: attachmentIds), token);
+                return sent.Data?.MessageId ?? throw new McpOperationException(JsonNamingPolicy.SnakeCaseLower.ConvertName(sent.Status.ToString()));
+            }, ct);
+        }, ct);
+
     [McpServerTool(Name = "skip")]
     [Description("Mark the pending message handled without sending a reply.")]
     public Task<string> Skip(Guid messageId, CancellationToken ct) => Handle(messageId, null, null, ct);

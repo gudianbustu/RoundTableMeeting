@@ -44,7 +44,7 @@ public sealed class SimpleMeetingTests
         }
 
         await using var first = await Host();
-        Assert.Equal(new[] { "attachment_transfer", "attend", "history", "leave", "next", "reply", "skip" },
+        Assert.Equal(new[] { "attachment_transfer", "attend", "history", "leave", "next", "reply", "send_private_message", "skip" },
             (await first.ListToolsAsync()).Select(t => t.Name).Order().ToArray());
         Assert.Equal("joined", await Call(first, "attend"));
         await using var other = await Host(Guid.NewGuid().ToString("N"));

@@ -116,6 +116,14 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
     public Task<string> Reply(string room, Guid messageId, string content, CancellationToken ct, Guid[]? attachmentIds = null, Guid? replyToMessageId = null)
         => Route(room, "reply", new(MessageId: messageId, Content: content, AttachmentIds: attachmentIds, ReplyToMessageId: replyToMessageId), tool => tool.Reply(messageId, content, ct, attachmentIds, replyToMessageId), ct);
 
+    [McpServerTool(Name = "send_private_message")]
+    [Description("Start a private message in this room. Specify exactly one of recipientParticipantId or recipientDisplayName (exact meeting nickname). Save a new clientSubmissionId UUID per message; retry with the same UUID and payload. Returns the message ID without consuming any pending delivery.")]
+    public Task<Guid> SendPrivateMessage(string room, Guid clientSubmissionId, string content, CancellationToken ct,
+        Guid? recipientParticipantId = null, string? recipientDisplayName = null, Guid[]? attachmentIds = null)
+        => Route(room, "send_private_message", new(ClientSubmissionId: clientSubmissionId, Content: content,
+            RecipientParticipantId: recipientParticipantId, RecipientDisplayName: recipientDisplayName, AttachmentIds: attachmentIds),
+            tool => tool.SendPrivateMessage(clientSubmissionId, content, ct, recipientParticipantId, recipientDisplayName, attachmentIds), ct);
+
     [McpServerTool(Name = "skip")]
     [Description("Skip the pending message in this room only.")]
     public Task<string> Skip(string room, Guid messageId, CancellationToken ct) => Route(room, "skip", new(MessageId: messageId), tool => tool.Skip(messageId, ct), ct);

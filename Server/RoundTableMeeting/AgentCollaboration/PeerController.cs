@@ -30,6 +30,8 @@ public sealed class PeerController(PeerTransport peers) : ControllerBase
                 "poll" => await room.Poll(ct),
                 "history" => await room.History(ct, command.BeforeSequence, command.Limit),
                 "reply" when command.Content is not null => await room.Reply(command.MessageId, command.Content, ct, command.AttachmentIds, command.ReplyToMessageId),
+                "send_private_message" when command.Content is not null => await room.SendPrivateMessage(command.ClientSubmissionId,
+                    command.Content, ct, command.RecipientParticipantId, command.RecipientDisplayName, command.AttachmentIds),
                 "skip" => await room.Skip(command.MessageId, ct),
                 "transfer" => await room.Transfer(ct, command.AttachmentId),
                 "leave" => await room.Leave(ct),
