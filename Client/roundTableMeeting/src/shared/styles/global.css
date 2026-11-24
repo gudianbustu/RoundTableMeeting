@@ -240,6 +240,7 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid var(--rt-accent);
 
 .app-shell:has(.profile-settings) { padding: 0; }
 .app-shell:has(.profile-settings) .top-navigation { background: var(--rt-surface); padding-inline: clamp(20px, 3vw, 48px); margin: 0; }
+body:has(.profile-settings) { min-width: min(320px, 100%); }
 .profile-settings { display: grid; grid-template-columns: minmax(245px, 300px) minmax(0, 1fr); gap: 24px; max-width: 1080px; padding: 0 20px; margin: clamp(32px, 6vw, 72px) auto; }
 .profile-column { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
 .profile-settings .ant-card, .profile-identity { border: 1px solid var(--rt-border); border-radius: 14px; }
@@ -273,6 +274,14 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid var(--rt-accent);
 .profile-settings .ant-form-item { margin-bottom: 0; }
 .nickname-settings { grid-template-columns: minmax(0,1fr) auto; }
 .password-settings { grid-template-columns: repeat(2,minmax(0,1fr)); }
+@media (min-width: 741px) and (max-width: 1000px) {
+  .authenticated-shell:has(.profile-settings) { padding-inline: 0; }
+  .authenticated-shell:has(.profile-settings) .top-navigation { padding-inline: 24px; }
+  .profile-settings { width: calc(100% - 32px); padding: 0; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; }
+}
+@media (max-width: 1000px) {
+  .profile-settings .password-settings { grid-template-columns: minmax(0, 1fr); }
+}
 .password-settings > :first-child, .password-settings > button { grid-column: 1 / -1; }
 .profile-settings form button[type=submit] { justify-self: end; height: 40px; padding-inline: 24px; }
 @media(max-width: 740px) {

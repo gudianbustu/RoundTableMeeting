@@ -18,8 +18,8 @@ export const colors: Record<Palette, Record<Mode, Colors>> = {
       success: '#3B7A57', warning: '#C98A2E', danger: '#C44536',
     },
     dark: {
-      page: '#191b19', surface: '#232623', subtle: '#303530', primary: '#e6e3da', hover: '#f5f3ed', accent: '#dea38d',
-      text: '#f0eee7', secondary: '#c2c5bd', muted: '#a5aaa1', border: '#41463e',
+      page: '#202320', surface: '#282C28', subtle: '#343831', primary: '#E8E4D8', hover: '#f5f3ed', accent: '#E5A68D',
+      text: '#EDECE5', secondary: '#C0C2B9', muted: '#A1A69D', border: '#454A43',
       success: '#83be95', warning: '#dbb370', danger: '#e99889',
     },
   },
