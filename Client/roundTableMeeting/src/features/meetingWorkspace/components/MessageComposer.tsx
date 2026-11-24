@@ -6,7 +6,7 @@ import type { MentionCandidate, SendState } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates } from '../chat/mentionCandidates'
 export interface MessageComposerHandle { mention: (displayName: string) => void; privateChat?: (participantId: string) => void }
-export function MessageComposer({ composerRef, attachments, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
+export function MessageComposer({ composerRef, attachments, onCancelReply, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onCancelReply?: () => void; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
   const inputRef = useRef<MentionsRef>(null)
   const focusPending = useRef(false)
   const mentionPopupRef = useRef<HTMLDivElement>(null)
@@ -58,6 +58,11 @@ export function MessageComposer({ composerRef, attachments, onFiles, tools, valu
       onKeyDownCapture={event => {
         if (event.nativeEvent.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.shiftKey)) {
           event.stopPropagation()
+          return
+        }
+        if (event.key === 'Backspace' && !value.length && onCancelReply && !disabled && send !== 'sending' && send !== 'pending_confirmation') {
+          event.preventDefault()
+          onCancelReply()
           return
         }
         if (event.key === 'Tab' && !event.shiftKey) {

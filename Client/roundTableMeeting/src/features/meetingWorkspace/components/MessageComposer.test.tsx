@@ -109,3 +109,20 @@ it('selects the highlighted mention with Tab and leaves ordinary Tab navigation 
   fireEvent.keyUp(input, { key: 'y', keyCode: 89, which: 89 })
   expect(fireEvent.keyDown(input, { key: 'Tab', keyCode: 9, which: 9 })).toBe(true)
 })
+
+it('cancels just the reply on empty Backspace outside IME composition', () => {
+  const cancel = vi.fn()
+  const change = vi.fn()
+  const compose = (value: string) => <MessageComposer value={value} send="idle" participants={[]} onChange={change}
+    onSend={vi.fn()} onCancelReply={cancel} hasAttachments attachments={<span>待发文件</span>} />
+  const view = render(compose('正文'))
+  const input = screen.getByPlaceholderText('输入消息')
+  fireEvent.keyDown(input, { key: 'Backspace' })
+  view.rerender(compose(''))
+  fireEvent.keyDown(input, { key: 'Backspace', isComposing: true })
+  expect(cancel).not.toHaveBeenCalled()
+  fireEvent.keyDown(input, { key: 'Backspace' })
+  expect(cancel).toHaveBeenCalledOnce()
+  expect(change).not.toHaveBeenCalled()
+  expect(screen.getByText('待发文件')).toBeInTheDocument()
+})
