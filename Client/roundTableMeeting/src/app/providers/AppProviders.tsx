@@ -1,9 +1,14 @@
-import type { PropsWithChildren } from 'react'
+import { useLayoutEffect, type PropsWithChildren } from 'react'
 import { ConfigProvider } from 'antd'
-import { theme } from '../theme'
+import { appearanceTheme, useAppearance } from '../theme/appearance'
 import { AuthenticationProvider } from '@/features/authentication'
 
-/** 组合全局主题与认证 Provider */
 export function AppProviders({ children }: PropsWithChildren) {
-  return <ConfigProvider theme={theme}><AuthenticationProvider>{children}</AuthenticationProvider></ConfigProvider>
+  const { colors, mode } = useAppearance()
+  useLayoutEffect(() => {
+    const root = document.documentElement
+    root.style.colorScheme = mode
+    for (const [name, value] of Object.entries(colors)) root.style.setProperty('--rt-' + name, value)
+  }, [colors, mode])
+  return <ConfigProvider theme={appearanceTheme(colors, mode)}><AuthenticationProvider>{children}</AuthenticationProvider></ConfigProvider>
 }

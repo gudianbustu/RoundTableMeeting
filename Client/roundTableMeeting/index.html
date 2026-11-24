@@ -3,8 +3,23 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <title>RoundTableMeeting 系统状态</title>
+    <link rel="icon" type="image/png" href="/roundtable-mark.png" />
+    <script>
+      (() => {
+        const palettes = __RT_PALETTES__
+        let value = ''
+        try { value = localStorage.getItem('__RT_APPEARANCE_KEY__') || '' } catch {}
+        const [palette, preference] = value.split(':')
+        const mode = preference === 'light' || preference === 'dark' ? preference
+          : matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+        const colors = (Object.hasOwn(palettes, palette) ? palettes[palette] : palettes.paper)[mode]
+        const style = document.documentElement.style
+        style.colorScheme = mode
+        for (const [name, color] of Object.entries(colors)) style.setProperty('--rt-' + name, color)
+      })()
+    </script>
+    <style>html { background-color: var(--rt-page); color: var(--rt-text) }</style>
+    <title>圆桌会议</title>
   </head>
   <body>
     <div id="root"></div>

@@ -2,9 +2,9 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 const index = readFileSync('index.html', 'utf8')
-const favicon = readFileSync('public/favicon.svg', 'utf8')
-if (!/<link\s+rel="icon"[^>]+href="\/favicon\.svg"/i.test(index)) throw new Error('index.html must reference /favicon.svg.')
-if (!favicon.includes('<svg') || !favicon.includes('RoundTableMeeting')) throw new Error('Project favicon.svg is missing its expected identity.')
+const favicon = readFileSync('public/roundtable-mark.png')
+if (!index.includes('href="/roundtable-mark.png"')) throw new Error('index.html must reference /roundtable-mark.png.')
+if (favicon.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('The project icon must be a PNG.')
 
 const root = 'src/api/generated'
 const files = []

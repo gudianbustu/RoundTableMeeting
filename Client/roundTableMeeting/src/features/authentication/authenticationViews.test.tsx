@@ -10,6 +10,7 @@ import { LoginForm } from './components/LoginForm'
 import { AuthGate } from './components/AuthGate'
 import { CurrentUserBar } from './components/CurrentUserBar'
 import { AuthenticatedHomePage } from './pages/AuthenticatedHomePage'
+import { PersonalSettingsPage } from '@/features/accountSettings/pages/PersonalSettingsPage'
 import { AuthenticatedLayout } from '@/app/layouts/AuthenticatedLayout'
 import type { AuthenticationContextValue } from './types/authentication'
 
@@ -133,6 +134,16 @@ describe('authentication pages and components', () => {
     expect(screen.getAllByText('alice')).toHaveLength(1)
   })
 
+  it.each([true, false])('shows both user management entries only for admins (isAdmin=%s)', async isAdmin => {
+    const context = value({ state: { status: 'authenticated', user: { ...user, isAdmin } } })
+    withContext(context, <MemoryRouter><CurrentUserBar /><PersonalSettingsPage /></MemoryRouter>)
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Alice' }))
+    await screen.findByRole('link', { name: '个人设置' })
+    const entries = screen.queryAllByRole('link', { name: /用户管理/ })
+    expect(entries).toHaveLength(isAdmin ? 2 : 0)
+    entries.forEach(link => expect(link).toHaveAttribute('href', '/users'))
+  })
+
   it('keeps CurrentUserBar visible on logout failure and disables duplicate logout', async () => {
     const logout = vi.fn().mockRejectedValue({ kind: 'network', message: 'network' })
     const context = value({ state: { status: 'authenticated', user }, logout, isLoggingOut: true, operationError: { kind: 'network', message: 'network' } })
@@ -149,7 +160,7 @@ describe('authentication pages and components', () => {
     withContext(context, <MemoryRouter><CurrentUserBar /></MemoryRouter>)
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Alice' }))
-    expect(await screen.findByRole('link', { name: '个人中心' })).toHaveAttribute('href', '/settings/profile')
+    expect(await screen.findByRole('link', { name: '个人设置' })).toHaveAttribute('href', '/settings/profile')
     await userEvent.setup().click(await screen.findByRole('menuitem', { name: '退出' }))
     expect(logout).toHaveBeenCalledOnce()
   })

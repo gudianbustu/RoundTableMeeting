@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Button, Dropdown, Empty, Flex, Popover, Segmented, Skeleton, Typography } from 'antd'
-import { DeleteOutlined, EllipsisOutlined, InfoCircleOutlined, LoginOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons'
+import { DeleteOutlined, EllipsisOutlined, InfoCircleOutlined, LoginOutlined, PlusOutlined } from '@ant-design/icons'
 import type { MeetingDetails, MeetingListItem } from '../types/meetingWorkspace'
 
 export function MeetingNavigation({ meetings, selectedId, details, detailLoading, onDelete, onLeave, onRejoin, onHide, operationLoading, loading, onSelect, onCreate, onJoin, view = 'active', onViewChange }: { details?: MeetingDetails; detailLoading?: boolean; onRejoin?: (id: string) => void; onHide?: (id: string) => void; operationLoading?: boolean; onDelete?: () => void; onLeave?: () => void; view?: 'active' | 'history'; onViewChange?: (view: 'active' | 'history') => void; meetings: MeetingListItem[]; selectedId?: string; loading?: boolean; onSelect: (id: string) => void; onCreate: () => void; onJoin: () => void }) {
@@ -23,7 +23,7 @@ export function MeetingNavigation({ meetings, selectedId, details, detailLoading
           ...(!current.canLeave && !current.canDelete ? [{ key: 'none', label: '暂无可用操作', disabled: true }] : []),
         ]
       return <div key={meeting.meetingId} className={selectedId === meeting.meetingId ? 'meeting-navigation-item selected' : 'meeting-navigation-item'}>
-        <button type="button" className="meeting-navigation-select" onClick={() => { setInfoId(undefined); setMenuId(undefined); onSelect(meeting.meetingId) }}><TeamOutlined /><span><strong>{meeting.name}</strong><small>{meeting.myDisplayName}</small></span></button>
+        <button type="button" className="meeting-navigation-select" onClick={() => { setInfoId(undefined); setMenuId(undefined); onSelect(meeting.meetingId) }}><i aria-hidden="true" className="meeting-chat-icon" /><span><strong>{meeting.name}</strong><small>{meeting.myDisplayName}</small></span></button>
         <div className={`meeting-navigation-actions${infoId === meeting.meetingId || menuId === meeting.meetingId ? ' is-open' : ''}`}>
           <Popover trigger="click" placement="rightTop" open={infoId === meeting.meetingId} onOpenChange={open => { setInfoId(open ? meeting.meetingId : undefined); setMenuId(undefined); if (open) activate(meeting.meetingId) }} title={meeting.name} content={<div className="meeting-description">{current ? current.description || '暂无会议描述' : '会议详情加载中或暂不可用，请稍后重试。'}</div>}>
             <Button type="text" size="small" aria-label={`会议信息 ${meeting.name}`} title="会议信息" icon={<InfoCircleOutlined />} />

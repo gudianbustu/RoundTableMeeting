@@ -1,4 +1,7 @@
-import { Alert, Button, Card, Col, Descriptions, Form, Input, Row, Typography } from 'antd'
+import { Alert, Button, Card, Form, Input } from 'antd'
+import { TeamOutlined } from '@ant-design/icons'
+import { Link } from 'react-router-dom'
+import { AppearanceSettings } from '../components/AppearanceSettings'
 import { useEffect, useRef, useState } from 'react'
 import { useAuthentication } from '@/features/authentication'
 import { toApiError } from '@/api/errors/toApiError'
@@ -77,25 +80,34 @@ export function PersonalSettingsPage() {
     }
   }
   if (state.status !== 'authenticated') return null
-  return <section style={{ width: '100%', maxWidth: 1200, margin: '0 auto' }}>
-    <Typography.Title level={2} style={{ marginTop: 0 }}>个人设置</Typography.Title>
-    <Row gutter={[24, 24]} align="stretch">
-      <Col xs={24} md={12} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        <Card title="基础信息">
-          <Descriptions column={1} items={[{ key: 'username', label: '用户名', children: state.user.username }, { key: 'role', label: '身份', children: state.user.isAdmin ? '管理员' : '普通用户' }]} />
-        </Card>
-      <Card title="修改昵称">
-        <Form form={nicknameForm} layout="vertical" initialValues={{ nickname: state.user.nickname }} onFinish={saveNickname} disabled={nicknameBusy}>
+  return <section className="profile-settings">
+    <aside className="profile-column">
+      <div className="profile-identity">
+        <h1>个人设置</h1>
+        <div className="profile-person">
+          <span className="profile-avatar" aria-hidden="true">{Array.from(state.user.nickname)[0]}</span>
+          <div><strong>{state.user.nickname}</strong><small>{state.user.isAdmin ? '管理员' : '普通用户'}</small></div>
+        </div>
+        <div className="profile-account"><span>用户名</span><strong>{state.user.username}</strong>
+          {state.user.isAdmin && <Link className="profile-admin-link" to="/users"><TeamOutlined /> 用户管理</Link>}
+        </div>
+      </div>
+      <AppearanceSettings />
+    </aside>
+    <div className="profile-column">
+      <Card title="账号昵称">
+        <p>用于账号展示。会议内昵称可在对应会议成员列表中修改。</p>
+        <Form className="nickname-settings" form={nicknameForm} layout="vertical" initialValues={{ nickname: state.user.nickname }} onFinish={saveNickname} disabled={nicknameBusy}>
           <Form.Item name="nickname" label="昵称" rules={[{ required: true, whitespace: true, message: '请输入昵称' }, { max: 64, message: '昵称最多 64 个字符' }]}><Input maxLength={64} autoComplete="nickname" /></Form.Item>
           <Button htmlType="submit" type="primary" loading={nicknameBusy}>保存昵称</Button>
         </Form>
         {nicknameMessage && <Alert style={{ marginTop: 16 }} title={nicknameMessage} type={syncNeeded ? 'warning' : 'info'} />}
         {syncNeeded && <Button onClick={() => void syncProfile()}>重试资料同步</Button>}
       </Card>
-      </Col>
-      <Col xs={24} md={12}>
-      <Card title="修改密码" style={{ height: '100%' }}>
-        <Form form={passwordForm} layout="vertical" onFinish={savePassword} disabled={passwordBusy}>
+
+      <Card title="修改密码">
+        <p>先验证当前密码，再设置并确认新密码。</p>
+        <Form className="password-settings" form={passwordForm} layout="vertical" onFinish={savePassword} disabled={passwordBusy}>
           <Form.Item name="currentPassword" label="当前密码" rules={[{ required: true, message: '请输入当前密码' }, { max: 256 }]}><Input.Password autoComplete="current-password" /></Form.Item>
           <Form.Item name="newPassword" label="新密码" rules={[{ required: true, whitespace: true, message: '请输入新密码' }, { max: 256, message: '密码最多 256 个字符' }]}><Input.Password autoComplete="new-password" /></Form.Item>
           <Form.Item name="confirmPassword" label="确认新密码" dependencies={['newPassword']} rules={[{ required: true, message: '请再次输入新密码' }, ({ getFieldValue }) => ({ validator: (_, value) => value === getFieldValue('newPassword') ? Promise.resolve() : Promise.reject(new Error('两次密码不一致')) })]}><Input.Password autoComplete="new-password" /></Form.Item>
@@ -103,7 +115,6 @@ export function PersonalSettingsPage() {
         </Form>
         {passwordMessage && <Alert style={{ marginTop: 16 }} title={passwordMessage} type="info" />}
       </Card>
-      </Col>
-    </Row>
+    </div>
   </section>
 }

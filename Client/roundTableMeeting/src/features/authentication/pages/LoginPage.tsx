@@ -22,5 +22,5 @@ export function LoginPage() {
   if (state.status === 'authenticated') return <Navigate to={getReturnTo((location.state as { returnTo?: unknown } | null)?.returnTo)} replace />
   if (state.status === 'error') return <ErrorState title="服务暂时不可访问" description="请检查服务端是否已启动，然后重试。" traceId={state.error.traceId} onRetry={() => void retry()} />
   const submit = async (values: LoginInput) => { await login(values.username, values.password) }
-  return <main className="login-page"><section className="login-panel"><Typography.Title level={1}>圆桌会议</Typography.Title><Typography.Paragraph>登录以继续</Typography.Paragraph><LoginForm onSubmit={submit} loading={isLoggingIn} error={operationError} /></section></main>
+  return <main className="login-page"><section className="login-panel"><Typography.Title level={1}><img className="brand-mark" src="/roundtable-mark.png" alt="" />圆桌会议</Typography.Title><Typography.Paragraph>登录以继续</Typography.Paragraph><LoginForm onSubmit={submit} loading={isLoggingIn} error={operationError} /></section></main>
 }
