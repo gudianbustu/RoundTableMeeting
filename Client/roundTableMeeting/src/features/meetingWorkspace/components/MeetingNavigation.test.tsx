@@ -38,7 +38,7 @@ it('routes historical deletion and rejoin to personal membership actions', async
   fireEvent.click(await screen.findByRole('menuitem', { name: /重新入会/ }))
   expect(rejoin).toHaveBeenCalledWith('a')
   fireEvent.click(more)
-  fireEvent.click(await screen.findByRole('menuitem', { name: /删除会议/ }))
+  fireEvent.click(await screen.findByRole('menuitem', { name: /从我的历史移除/ }))
   expect(hide).toHaveBeenCalledWith('a')
   expect(remove).not.toHaveBeenCalled()
 })

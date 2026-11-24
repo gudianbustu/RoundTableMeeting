@@ -330,3 +330,29 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid var(--rt-accent);
 .invite-prompt-title small { color: var(--rt-secondary); }
 @media(min-width: 601px) { .invite-panel > .ant-btn { justify-self: end; width: auto; } }
 @media(max-width: 600px) { .invite-panel > .ant-btn { min-height: 44px; } }
+
+.meeting-directory { max-width: 1280px; margin: 32px auto; }
+.meeting-directory header, .meeting-directory li { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.meeting-directory header { flex-wrap: wrap; }
+.meeting-directory header h1 { font-size: 26px; margin: 0; }
+.meeting-directory header > div { display: flex; gap: 8px; }
+.meeting-directory .ant-tabs { margin-top: 22px; }
+.meeting-directory ul { display: grid; gap: 12px; list-style: none; margin: 0; padding: 0; }
+.meeting-directory li { background: var(--rt-surface); border: 1px solid var(--rt-border); border-radius: 10px; padding: 16px 20px; }
+.meeting-directory li strong, .meeting-directory li small { display: block; overflow-wrap: anywhere; }
+.meeting-directory li small { color: var(--rt-secondary); margin-top: 4px; }
+.directory-actions { display: flex; align-items: center; flex-wrap: wrap; }
+@media(max-width: 600px) {
+  .meeting-directory li { align-items: flex-start; flex-direction: column; gap: 8px; }
+  .directory-actions { align-self: flex-end; }
+}
+
+.directory-entry-actions { display: flex; gap: 8px; }
+.history-home-banner { margin: 24px 0 28px; padding: clamp(18px, 3vw, 36px); border-radius: 14px; background: var(--rt-subtle); }
+.history-home-banner h2 { margin-top: 0; }
+.history-home-banner p { color: var(--rt-secondary); }
+
+.meeting-list-caption { display: flex; justify-content: space-between; align-items: center; color: var(--rt-secondary); font-size: 13px; }
+.meeting-navigation-item.selected { background: var(--rt-subtle); color: var(--rt-text); }
+.meeting-navigation-item.selected .meeting-chat-icon { mask-image: url('/meeting-selected.png'); }
+.meeting-navigation-item.selected .meeting-navigation-actions button { color: inherit; }

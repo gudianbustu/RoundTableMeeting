@@ -2,12 +2,12 @@ import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useMeetingWorkspace } from './useMeetingWorkspace'
 
-const mocks = vi.hoisted(() => ({ details: vi.fn(), join: vi.fn(), preview: vi.fn(), navigate: vi.fn(), location: { pathname: '/meetings/current', state: null } }))
+const mocks = vi.hoisted(() => ({ list: vi.fn(), details: vi.fn(), join: vi.fn(), preview: vi.fn(), navigate: vi.fn(), location: { pathname: '/meetings/current', state: null } }))
 vi.mock('react-router-dom', () => ({ useParams: () => ({ meetingId: mocks.location.pathname.split('/').at(-1) }), useNavigate: () => mocks.navigate, useLocation: () => mocks.location }))
 vi.mock('../api/getMeetingDetails', () => ({ getMeetingDetails: mocks.details }))
 vi.mock('../api/joinMeeting', () => ({ joinMeeting: mocks.join }))
 vi.mock('../api/previewJoinMeeting', () => ({ previewJoinMeeting: mocks.preview }))
-vi.mock('../api/listMeetings', () => ({ listMeetings: async () => [] }))
+vi.mock('../api/listMeetings', () => ({ listMeetings: (...args: unknown[]) => mocks.list(...args) ?? Promise.resolve([]) }))
 
 afterEach(() => { cleanup(); vi.resetAllMocks(); mocks.location.pathname = '/meetings/current' })
 
@@ -81,4 +81,15 @@ it('keeps join preview errors separate from background errors', async () => {
   act(() => view.result.current.clearJoin())
   expect(view.result.current.joinError).toBeUndefined()
   expect(view.result.current.error).toEqual(background)
+})
+
+it('finishes initial loading on list failure and clears its error after retry', async () => {
+  mocks.list.mockRejectedValueOnce({ code: 'server_error', message: '列表加载失败' })
+  mocks.details.mockResolvedValue({ meetingId: 'current', participants: [] })
+  const view = renderHook(() => useMeetingWorkspace())
+  await waitFor(() => expect(view.result.current.listReady).toBe(true))
+  expect(view.result.current.listError?.code).toBe('server_error')
+  expect(view.result.current.lists).toEqual({ active: [], history: [] })
+  act(() => view.result.current.refresh())
+  await waitFor(() => expect(view.result.current.listError).toBeUndefined())
 })
