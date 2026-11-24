@@ -118,10 +118,35 @@ export function useMeetingWorkspace() {
       setView('active'); await loadList(false); setCreateSucceeded(true); navigate(`/meetings/${result.meeting.meetingId}`)
     } catch (value) { setError(value as MeetingWorkspaceApiError); await loadList(false) } finally { setOperationLoading(false) }
   }
-  const previewCode = async (code: string) => { setPreviewLoading(true); try { setPreview(await previewJoinMeeting(code.trim())); setError(undefined) } catch (value) { setPreview(undefined); setError(value as MeetingWorkspaceApiError) } finally { setPreviewLoading(false) } }
-  const clearJoin = () => { setPreview(undefined); setJoinSucceeded(false); setError(undefined) }
+  const previewRequest = useRef<AbortController | undefined>(undefined)
+  const [joinError, setJoinError] = useState<MeetingWorkspaceApiError>()
+  const clearJoin = useCallback(() => {
+    previewRequest.current?.abort()
+    setPreviewLoading(false)
+    setPreview(undefined)
+    setJoinSucceeded(false)
+    setJoinError(undefined)
+  }, [])
+  useEffect(() => {
+    clearJoin()
+    return () => previewRequest.current?.abort()
+  }, [routeId, clearJoin])
+  const previewCode = async (code: string) => {
+    clearJoin()
+    const controller = new AbortController()
+    previewRequest.current = controller
+    setPreviewLoading(true)
+    try {
+      const next = await previewJoinMeeting(code.trim(), controller.signal)
+      if (!controller.signal.aborted) setPreview(next)
+    } catch (value) {
+      if (!controller.signal.aborted) setJoinError(value as MeetingWorkspaceApiError)
+    } finally {
+      if (!controller.signal.aborted) setPreviewLoading(false)
+    }
+  }
   const join = async (code: string, displayName: string) => {
-    setJoinSucceeded(false); setOperationLoading(true)
+    setJoinError(undefined); setJoinSucceeded(false); setOperationLoading(true)
     try {
       if (preview?.alreadyJoined) { const meetingId = preview.meetingId; setPreview(undefined); setView('active'); setJoinSucceeded(true); if (meetingId === routeId) await loadDetails(meetingId); else navigate(`/meetings/${meetingId}`); return }
       let result: MeetingDetails
@@ -131,7 +156,7 @@ export function useMeetingWorkspace() {
         result = await joinMeeting(code.trim(), displayName)
       }
       setDetails(result); setPreview(undefined); setView('active'); await loadList(false); setJoinSucceeded(true); if (result.meetingId === routeId) await loadDetails(result.meetingId); else navigate(`/meetings/${result.meetingId}`)
-    } catch (value) { setError(value as MeetingWorkspaceApiError) } finally { setOperationLoading(false) }
+    } catch (value) { setJoinError(value as MeetingWorkspaceApiError) } finally { setOperationLoading(false) }
   }
   const remove = async (id: string, name: string) => {
     setOperationLoading(true)
@@ -187,5 +212,5 @@ export function useMeetingWorkspace() {
     void loadListRef.current(false)
   }, [navigate])
 
-  return { view, setView, updateHistory, leave, membershipChanged, meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
+  return { view, setView, updateHistory, leave, membershipChanged, meetings, selectedId: routeId, details, invitation, loading, detailLoading, error, joinError, preview, previewLoading, operationLoading, createSucceeded, joinSucceeded, select, refresh, refreshDetails, create, previewCode, clearJoin, join, remove, handleMeetingUnavailable, clearError: () => setError(undefined) }
 }

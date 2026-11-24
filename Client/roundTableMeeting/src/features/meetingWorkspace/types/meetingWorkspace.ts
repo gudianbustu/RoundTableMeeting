@@ -6,5 +6,5 @@ export type Participant = { membershipState?: 'joined' | 'left'; participantId: 
 export type MeetingDetails = { freeDiscussion?: boolean; meetingId: string; name: string; description?: string; createdAt?: Date; currentParticipant?: Participant; membershipState?: 'joined' | 'left'; canLeave?: boolean; canSend?: boolean; canDelete: boolean; canManageInvitation: boolean; participants: Participant[] }
 export type MeetingInvitation = { meetingId: string; meetingCode: string; publicSiteUrl?: string }
 export type JoinPreview = { meetingId: string; meetingName: string; description?: string; defaultDisplayName: string; alreadyJoined: boolean; existingDisplayName?: string }
-export type CreateMeetingInput = { creationRequestId: string; name: string; description?: string }
+export type CreateMeetingInput = { creationRequestId: string; name: string; description?: string; initialDiscussionMode?: 'directed' | 'free' }
 export type MeetingWorkspaceApiError = ApiError & { retryAfterSeconds?: number }

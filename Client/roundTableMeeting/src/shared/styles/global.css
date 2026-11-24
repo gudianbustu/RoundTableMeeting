@@ -298,3 +298,25 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid var(--rt-accent);
 @media (min-width: 741px) {
   .profile-column > .ant-card:last-child { flex: 1; }
 }
+
+.join-meeting-preview { padding: 16px; border: 1px solid var(--rt-border); border-radius: 10px; background: var(--rt-subtle); }
+.join-meeting-preview label { display: block; margin: 12px 0 6px; }
+.discussion-mode-options { display: flex; gap: 8px; }
+.discussion-mode-options label { flex: 1; margin: 0; border: 1px solid var(--rt-border); border-radius: 8px; padding: 12px; }
+.discussion-mode-options .ant-radio-wrapper-checked { background: var(--rt-subtle); border-color: var(--rt-primary); }
+@media(max-width: 600px) { .discussion-mode-options { flex-direction: column; } }
+
+.meeting-form-modal .ant-modal-container { padding: clamp(20px, 3vw, 32px); }
+.meeting-form-modal .ant-modal-title { font-size: 20px; }
+.meeting-form-modal .ant-modal-header { margin-bottom: 24px; }
+.meeting-form-modal .ant-modal-footer { margin-top: 24px; }
+.join-form-modal .ant-modal-body { min-height: 210px; }
+.join-meeting-preview p { margin: 4px 0 0; color: var(--rt-secondary); }
+.join-code-error { color: var(--rt-danger); }
+.discussion-mode-options small { display: block; margin-top: 6px; color: var(--rt-secondary); }
+
+.field-optional { color: var(--rt-secondary); font-weight: 400; margin-inline-start: 8px; }
+@media(max-width: 600px) {
+  .meeting-form-modal .ant-modal-footer { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
+  .meeting-form-modal .ant-modal-footer > button { height: 44px; width: 100%; margin-inline-start: 0; }
+}

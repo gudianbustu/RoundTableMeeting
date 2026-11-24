@@ -13,6 +13,31 @@ public sealed class MeetingWorkspaceContractTests
     private const string Origin = "http://localhost:5173";
 
     [Fact]
+    public async Task CreationReplayChecksInitialModeAndPreservesTheCurrentMode()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient();
+        await LoginAsync(client, "alice", "test-password-alice");
+        client.DefaultRequestHeaders.Add("Origin", Origin);
+        var id = Guid.NewGuid();
+        var payload = new { creationRequestId = id, name = "Modes", initialDiscussionMode = "free" };
+        using var created = await client.PostAsJsonAsync("/api/meetings", payload);
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        var result = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var meeting = result.GetProperty("meeting");
+        Assert.True(meeting.GetProperty("freeDiscussion").GetBoolean());
+        var meetingId = meeting.GetProperty("meetingId").GetGuid();
+        using var changed = await client.PutAsJsonAsync($"/api/meetings/{meetingId}/discussion-mode", new { mode = "directed" });
+        changed.EnsureSuccessStatusCode();
+        using var replay = await client.PostAsJsonAsync("/api/meetings", payload);
+        Assert.Equal(HttpStatusCode.OK, replay.StatusCode);
+        var replayed = await replay.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.False(replayed.GetProperty("meeting").GetProperty("freeDiscussion").GetBoolean());
+        using var conflict = await client.PostAsJsonAsync("/api/meetings", new { creationRequestId = id, name = "Modes", initialDiscussionMode = "directed" });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+    }
+
+    [Fact]
     public async Task TwoAccountsCanCreateJoinAndDeleteMeeting()
     {
         using var factory = new TestApplicationFactory();

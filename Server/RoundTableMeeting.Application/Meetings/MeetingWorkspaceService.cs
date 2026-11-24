@@ -31,6 +31,9 @@ public sealed class MeetingWorkspaceService(
     {
         if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
         if (request.CreationRequestId == Guid.Empty) return Invalid<CreateMeetingResultDto>("creationRequestId");
+        if (request.InitialDiscussionMode is not ("directed" or "free"))
+            return Invalid<CreateMeetingResultDto>("initialDiscussionMode");
+        var initiallyFree = request.InitialDiscussionMode == "free";
         var account = await users.FindByIdAsync(userId, cancellationToken);
         if (account is null) return new(MeetingOperationStatus.Unauthenticated);
         string normalizedName;
@@ -53,7 +56,8 @@ public sealed class MeetingWorkspaceService(
                 if (existing is null || existing.LifecycleState != Domain.Enums.MeetingLifecycleState.Active)
                     return (MeetingOperationStatus.CreationRequestConsumed, (Meeting?)null);
                 if (!string.Equals(existing.Name, normalizedName, StringComparison.Ordinal)
-                    || !string.Equals(existing.Description, normalizedDescription, StringComparison.Ordinal))
+                    || !string.Equals(existing.Description, normalizedDescription, StringComparison.Ordinal)
+                    || await discussion.IsFreeAsync(existing.ID, 0, token) != initiallyFree)
                     return (MeetingOperationStatus.CreationRequestMismatch, (Meeting?)null);
                 return (MeetingOperationStatus.Replayed, existing);
             }
@@ -63,6 +67,7 @@ public sealed class MeetingWorkspaceService(
             var newReceipt = MeetingCreationReceipt.Create(userId, request.CreationRequestId, meeting.ID, UtcNow());
             unitOfWork.RegisterAdd(meeting);
             unitOfWork.RegisterAdd(AgentCollaborationBoundary.Create(meeting.ID));
+            if (initiallyFree) unitOfWork.RegisterAdd(MeetingDiscussionChange.Create(meeting.ID, 0, true));
             unitOfWork.RegisterAdd(owner);
             unitOfWork.RegisterAdd(newReceipt);
             return (MeetingOperationStatus.Created, meeting);

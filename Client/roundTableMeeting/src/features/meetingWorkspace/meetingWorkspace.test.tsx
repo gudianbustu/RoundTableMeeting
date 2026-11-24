@@ -31,10 +31,10 @@ describe('meeting workspace contracts', () => {
     render(<ConfigProvider><JoinMeetingDialog open onCancel={vi.fn()} onPreview={preview} onSubmit={vi.fn()} /></ConfigProvider>)
     const input = screen.getByPlaceholderText('输入标准 GUID 会议码')
     await actor.type(input, 'NOT-A-GUID')
-    expect(screen.getByRole('button', { name: '检查会议码' })).toBeDisabled()
+    expect(preview).not.toHaveBeenCalled()
     await actor.clear(input)
     await actor.type(input, '8F14E45F-EA5E-4F5A-A7E9-2C9D5A02B761')
-    await actor.click(screen.getByRole('button', { name: '检查会议码' }))
+    expect(preview).toHaveBeenCalledTimes(1)
     expect(preview).toHaveBeenCalledWith('8f14e45f-ea5e-4f5a-a7e9-2c9d5a02b761')
   })
 

@@ -357,6 +357,10 @@ export interface CreateMeetingRequest extends AdditionalDataHolder, Parsable {
      */
     description?: string | null;
     /**
+     * The initialDiscussionMode property
+     */
+    initialDiscussionMode?: string | null;
+    /**
      * The name property
      */
     name?: string | null;
@@ -669,6 +673,7 @@ export function deserializeIntoCreateMeetingRequest(createMeetingRequest: Partia
     return {
         "creationRequestId": n => { createMeetingRequest.creationRequestId = n.getGuidValue(); },
         "description": n => { createMeetingRequest.description = n.getStringValue(); },
+        "initialDiscussionMode": n => { createMeetingRequest.initialDiscussionMode = n.getStringValue() ?? "directed"; },
         "name": n => { createMeetingRequest.name = n.getStringValue(); },
     }
 }
@@ -1661,6 +1666,7 @@ export function serializeCreateMeetingRequest(writer: SerializationWriter, creat
     if (!createMeetingRequest || isSerializingDerivedType) { return; }
     writer.writeGuidValue("creationRequestId", createMeetingRequest.creationRequestId);
     writer.writeStringValue("description", createMeetingRequest.description);
+    writer.writeStringValue("initialDiscussionMode", createMeetingRequest.initialDiscussionMode ?? "directed");
     writer.writeStringValue("name", createMeetingRequest.name);
     writer.writeAdditionalData(createMeetingRequest.additionalData);
 }
