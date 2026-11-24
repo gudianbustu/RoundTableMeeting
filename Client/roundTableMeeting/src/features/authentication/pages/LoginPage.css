@@ -1,0 +1,60 @@
+.signin-layout {
+  position: relative;
+  display: grid;
+  grid-template-columns: 44% 56%;
+  min-height: 100dvh;
+  padding: 28px;
+  isolation: isolate;
+  background: var(--rt-page);
+  color: var(--rt-text);
+  font: 16px/1.55 "Microsoft YaHei", sans-serif;
+}
+.signin-entry { position: relative; display: grid; place-items: center; padding-block: 76px; }
+.signin-brand { position: absolute; inset: 12px auto auto 20px; display: flex; align-items: center; gap: 11px; margin: 0; font-size: 22px; }
+.signin-brand img { width: 34px; height: 36px; object-fit: contain; }
+.signin-form { width: min(76%, 400px); }
+.signin-form h2 { margin: 0; font-size: 40px; }
+.signin-form > p { margin: 7px 0 36px; color: var(--rt-secondary); }
+.signin-form .ant-form-item { margin-bottom: 18px; }
+.signin-form .signin-password { margin-bottom: 0; }
+.signin-form .ant-form-item-label > label { color: var(--rt-text); font-size: 16px; font-weight: 700; }
+.signin-form :is(input.ant-input, .ant-input-affix-wrapper) { min-height: 48px; font-size: 16px; }
+.signin-form .ant-input-affix-wrapper input.ant-input { min-height: 0; }
+.signin-feedback { min-height: 22px; margin: 8px 0; color: var(--rt-danger); font-size: 14px; }
+.signin-form button[type="submit"] { height: 46px; margin-top: 10px; font-size: 16px; font-weight: 700; }
+.signin-art {
+  min-width: 0;
+  border-radius: 22px;
+  background: #0a222b url('../assets/login-brand-motion.webp') center / 100% 100% no-repeat;
+}
+.signin-art span, .signin-orbits { display: none; }
+@media (min-width: 1600px) {
+  .signin-layout { grid-template-columns: 46% 54%; padding: 34px; }
+  .signin-form { width: 440px; max-width: 80%; }
+}
+@media (min-width: 601px) and (max-width: 1000px) {
+  .signin-layout { grid-template-columns: 1fr; grid-template-rows: minmax(510px, 57fr) minmax(265px, 43fr); padding: 22px; }
+  .signin-art { position: relative; background-image: url('../assets/login-orbit-motion.webp'); background-size: cover; background-position: center; }
+  .signin-art span { display: block; position: absolute; top: 24px; left: 28px; color: #fff; font-size: 25px; font-weight: 700; }
+}
+@media (max-width: 600px) {
+  .signin-layout { display: grid; grid-template-columns: minmax(0, 1fr); padding: 18px; }
+  .signin-brand { inset: 1px auto auto 2px; font-size: 18px; }
+  .signin-brand img { width: 28px; height: 30px; }
+  .signin-entry { padding: 62px 6px 110px; }
+  .signin-form { width: 100%; }
+  .signin-form h2 { font-size: 30px; }
+  .signin-form > p { margin-bottom: 22px; font-size: 14px; }
+  .signin-orbits { display: block; position: absolute; inset: 0; z-index: -1; width: 100%; height: 100%; color: var(--rt-accent); pointer-events: none; }
+  .signin-art { display: none; }
+  .signin-orbit-node { fill: currentColor; opacity: .5; offset-path: var(--orbit-path); animation: signin-orbit 9s linear infinite; }
+}
+@keyframes signin-orbit { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .signin-orbit-node { animation-play-state: paused; }
+  .signin-art { background-image: url('../assets/login-brand-still.webp'); }
+}
+
+@media (min-width: 601px) and (max-width: 1000px) and (prefers-reduced-motion: reduce) {
+  .signin-art { background-image: url('../assets/login-orbit-still.webp'); }
+}

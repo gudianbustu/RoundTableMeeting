@@ -1,4 +1,4 @@
-import { Alert, Button, Form, Input } from 'antd'
+import { Button, Form, Input } from 'antd'
 import { useEffect } from 'react'
 import type { ApiError } from '@/api/errors/ApiError'
 import type { LoginInput } from '../types/authentication'
@@ -30,13 +30,15 @@ export function LoginForm({ onSubmit, loading, error }: { onSubmit: (values: Log
             : undefined
 
   return <Form form={form} layout="vertical" onFinish={submit} requiredMark={false}>
-    {errorMessage && <Alert type="error" showIcon message={errorMessage} />}
     <Form.Item label="用户名" name="username" rules={[{ required: true, message: '请输入用户名。' }]}>
-      <Input autoComplete="username" maxLength={128} />
+      <Input placeholder="请输入用户名" autoComplete="username" maxLength={128} />
     </Form.Item>
-    <Form.Item label="密码" name="password" rules={[{ required: true, message: '请输入密码。' }]}>
-      <Input.Password autoComplete="current-password" maxLength={256} />
+    <Form.Item className="signin-password" label="密码" name="password" rules={[{ required: true, message: '请输入密码。' }]}>
+      <Input.Password placeholder="请输入密码" status={error?.code === 'invalid_credentials' ? 'error' : undefined} autoComplete="current-password" maxLength={256} />
     </Form.Item>
+    <div className="signin-feedback" aria-live="polite">
+      {errorMessage && <span role="alert">{errorMessage}</span>}
+    </div>
     <Button type="primary" htmlType="submit" loading={loading} disabled={loading} block>登录</Button>
   </Form>
 }
