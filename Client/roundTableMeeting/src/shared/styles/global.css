@@ -315,8 +315,18 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid var(--rt-accent);
 .join-code-error { color: var(--rt-danger); }
 .discussion-mode-options small { display: block; margin-top: 6px; color: var(--rt-secondary); }
 
+.invite-panel { display: grid; gap: 12px; margin-top: 22px; }
+.invite-copy { padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--rt-subtle); border: 1px solid var(--rt-border); border-radius: 8px; }
+.invite-panel > .ant-btn { margin-top: 12px; }
+.agent-prompt { max-height: min(28dvh, 220px); overflow-y: auto; background: #253029; color: #f0f4ef; }
+
 .field-optional { color: var(--rt-secondary); font-weight: 400; margin-inline-start: 8px; }
 @media(max-width: 600px) {
   .meeting-form-modal .ant-modal-footer { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px; }
   .meeting-form-modal .ant-modal-footer > button { height: 44px; width: 100%; margin-inline-start: 0; }
 }
+
+.invite-prompt-title { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.invite-prompt-title small { color: var(--rt-secondary); }
+@media(min-width: 601px) { .invite-panel > .ant-btn { justify-self: end; width: auto; } }
+@media(max-width: 600px) { .invite-panel > .ant-btn { min-height: 44px; } }

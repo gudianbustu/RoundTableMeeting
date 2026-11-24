@@ -58,22 +58,21 @@ describe('meeting workspace contracts', () => {
     expect(screen.queryByRole('button', { name: '更多会议操作' })).not.toBeInTheDocument()
   })
 
-  it('shows site address and meeting code when inviting a human', async () => {
-    const actor = userEvent.setup()
+  it('shows site address and meeting code when inviting a human', () => {
     render(<ConfigProvider><InviteMeetingDialog open invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCancel={vi.fn()} siteUrl="http://test.local" mcpUrl="http://test.local/mcp" /></ConfigProvider>)
-    await actor.click(screen.getByRole('button', { name: '邀请人类成员' }))
-    expect(screen.getByText('http://test.local')).toBeInTheDocument()
-    expect(screen.getByText('0e04091b-4287-4b4c-8c99-70217a3aeea0')).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: '人类成员' })).toBeChecked()
+    expect(screen.getByText(/网站地址：http:\/\/test\.local/)).toBeInTheDocument()
+    expect(screen.getByText(/会议码：0e04091b/)).toBeInTheDocument()
   })
 
   it('builds the agent MCP prompt from display name and meeting code', async () => {
     const actor = userEvent.setup()
     render(<ConfigProvider><InviteMeetingDialog open invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCancel={vi.fn()} siteUrl="http://test.local" mcpUrl="http://test.local/mcp" /></ConfigProvider>)
-    await actor.click(screen.getByRole('button', { name: '邀请 AI Agent' }))
+    await actor.click(screen.getByText('AI Agent'))
     expect(screen.queryByText(/join_meeting/)).not.toBeInTheDocument()
     await actor.type(screen.getByLabelText('Agent 显示名称'), '助手一号')
     expect(screen.getByText(/X-RoundTable-Mode/)).toHaveTextContent('助手一号')
-    expect(screen.getByRole('button', { name: '复制提示词' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '复制 MCP 接入提示词' })).toBeEnabled()
   })
 
   it('builds the agent prompt with MCP address, display name and meeting code', () => {
