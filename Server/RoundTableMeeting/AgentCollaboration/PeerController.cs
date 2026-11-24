@@ -28,6 +28,7 @@ public sealed class PeerController(PeerTransport peers) : ControllerBase
             object value = operation switch
             {
                 "poll" => await room.Poll(ct),
+                "list_participants" => await room.ListParticipants(ct),
                 "history" => await room.History(ct, command.BeforeSequence, command.Limit),
                 "reply" when command.Content is not null => await room.Reply(command.MessageId, command.Content, ct, command.AttachmentIds, command.ReplyToMessageId),
                 "send_public_message" when command.Content is not null => await room.SendPublicMessage(command.ClientSubmissionId,

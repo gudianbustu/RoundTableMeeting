@@ -35,7 +35,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         }
         return online;
     }    public async Task<McpConnection> JoinAsync(McpTransportSessionKey transport, string meetingCode, string displayName,
-        string joinMode, string? address, CancellationToken ct)
+        string joinMode, string? address, CancellationToken ct, Guid? expectedConnection = null)
     {
         if (!Guid.TryParse(meetingCode, out var code) || joinMode is not ("create" or "reconnect" or "takeover")) throw new McpOperationException("validation_failed");
         var name = MeetingParticipant.NormalizeDisplayName(displayName);
@@ -47,6 +47,8 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         await using var participantLock = await joins.AcquireAsync(meeting.ID, name.ToUpperInvariant(), ct);
         if (registry.TryGetRegistration(transport, out var already))
         {
+            if (expectedConnection.HasValue && already.ConnectionSessionId != expectedConnection)
+                throw new McpOperationException("connection_unavailable");
             if (!registry.IsRegistered(already.MeetingId, already.ParticipantId, already.ConnectionSessionId, already.TransportBinding)) throw new McpOperationException("new_transport_required");
             var existing = (await participants.ListAsync(meeting.ID, ct)).SingleOrDefault(p => p.ID == already.ParticipantId);
             if (already.MeetingId != meeting.ID || existing?.NormalizedDisplayName != name.ToUpperInvariant()) throw new McpOperationException("transport_already_bound");
@@ -63,6 +65,11 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
             if (p is null && joinMode != "create") throw new McpOperationException("participant_not_found");
             if (p is null) { p = MeetingParticipant.CreateAgent(meeting.ID, name, time.GetUtcNow()); unitOfWork.RegisterAdd(p); }
             var cursor = await agents.FindCursorAsync(meeting.ID, p.ID, token);
+            if (expectedConnection.HasValue)
+            {
+                if (p.MembershipState != MeetingMembershipState.Joined) throw new McpOperationException("membership_left");
+                if (cursor?.CurrentConnectionId != expectedConnection) throw new McpOperationException("connection_unavailable");
+            }
             if (cursor is null) { cursor = AgentContextCursor.Create(meeting.ID, p.ID, 0, time.GetUtcNow()); unitOfWork.RegisterAdd(cursor); }
             previous = registry.ListRegistrations(meeting.ID).SingleOrDefault(r => r.ParticipantId == p.ID);
             var old = cursor.CurrentConnectionId is Guid oldId ? await agents.FindConnectionAsync(meeting.ID, oldId, token) : null;

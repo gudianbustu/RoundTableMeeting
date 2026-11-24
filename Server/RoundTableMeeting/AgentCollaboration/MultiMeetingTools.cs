@@ -106,6 +106,11 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
         return SimpleMeetingTools.WaitForMessage(Poll, host, progress, ct);
     }
 
+    [McpServerTool(Name = "list_participants", ReadOnly = true)]
+    [Description("List all participants in this room, including silent members. Membership and online connection state are separate snapshots.")]
+    public Task<McpMeetingInfo> ListParticipants(string room, CancellationToken ct)
+        => Route(room, "list_participants", new(), tool => tool.ListParticipants(ct), ct);
+
     [McpServerTool(Name = "history")]
     [Description("On demand, read earlier context in this room. Omit beforeSequence for the latest page. This does not consume pending messages.")]
     public Task<Abstraction.Contracts.RealtimeChat.MessagePageDto> History(string room, CancellationToken ct, long? beforeSequence = null, int limit = 5)

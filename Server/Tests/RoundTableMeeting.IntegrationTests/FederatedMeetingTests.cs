@@ -49,6 +49,42 @@ public sealed class FederatedMeetingTests
         var recipientJoin = await resumed.CallToolAsync("attend", args);
         var recipientRoom = JsonDocument.Parse(Assert.Single(recipientJoin.Content.OfType<TextContentBlock>()).Text)
             .RootElement.GetProperty("room").GetString();
+        Assert.Contains(await resumed.ListToolsAsync(), tool => tool.Name == "list_participants");
+        async Task<JsonElement[]> Members(string? handle)
+        {
+            var result = await resumed.CallToolAsync("list_participants", new Dictionary<string, object?> { ["room"] = handle });
+            var payload = Assert.Single(result.Content.OfType<TextContentBlock>()).Text;
+            Assert.False(result.IsError == true, payload);
+            using var json = JsonDocument.Parse(payload);
+            return json.RootElement.GetProperty("participants").EnumerateArray().Select(p => p.Clone()).ToArray();
+        }
+        var remoteMembers = await Members(room);
+        var silentAgent = Assert.Single(remoteMembers, p => p.GetProperty("displayName").GetString() == "收信助手");
+        Assert.Equal("agent", silentAgent.GetProperty("type").GetString());
+        Assert.Equal("online", silentAgent.GetProperty("connectionState").GetString());
+        Assert.NotEqual(Guid.Empty, silentAgent.GetProperty("participantId").GetGuid());
+        var silentHuman = Assert.Single(remoteMembers, p => p.GetProperty("type").GetString() == "human");
+        Assert.Equal("joined", silentHuman.GetProperty("membershipState").GetString());
+        Assert.Equal("offline", silentHuman.GetProperty("connectionState").GetString());
+
+        using var localHuman = entry.CreateClient();
+        localHuman.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+        using var localLogin = await localHuman.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" });
+        localLogin.EnsureSuccessStatusCode();
+        using var localCreate = await localHuman.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Local" });
+        localCreate.EnsureSuccessStatusCode();
+        var localData = await localCreate.Content.ReadFromJsonAsync<JsonElement>();
+        var localJoin = await resumed.CallToolAsync("attend", new Dictionary<string, object?>
+        {
+            ["meetingCode"] = localData.GetProperty("invitation").GetProperty("meetingCode").GetString(),
+            ["displayName"] = "Local agent", ["invitationKey"] = Guid.NewGuid().ToString()
+        });
+        var localRoom = JsonDocument.Parse(Assert.Single(localJoin.Content.OfType<TextContentBlock>()).Text).RootElement.GetProperty("room").GetString();
+        var localMembers = await Members(localRoom);
+        Assert.Contains(localMembers, p => p.GetProperty("displayName").GetString() == "Local agent");
+        Assert.Empty(localMembers.Select(p => p.GetProperty("participantId").GetGuid())
+            .Intersect(remoteMembers.Select(p => p.GetProperty("participantId").GetGuid())));
+        Assert.True((await resumed.CallToolAsync("list_participants", new Dictionary<string, object?> { ["room"] = "invalid" })).IsError);
         using var opened = await human.PutAsJsonAsync($"/api/meetings/{meetingId}/discussion-mode", new { mode = "free" });
         opened.EnsureSuccessStatusCode();
         using var closed = await human.PutAsJsonAsync($"/api/meetings/{meetingId}/discussion-mode", new { mode = "directed" });
@@ -99,6 +135,10 @@ public sealed class FederatedMeetingTests
 
         var leave = await resumed.CallToolAsync("leave", new Dictionary<string, object?> { ["room"] = room });
         Assert.Equal("left", Assert.Single(leave.Content.OfType<TextContentBlock>()).Text);
+        Assert.True((await resumed.CallToolAsync("list_participants", new Dictionary<string, object?> { ["room"] = room })).IsError);
+        var departed = Assert.Single(await Members(recipientRoom), p => p.GetProperty("displayName").GetString() == "跨站助手");
+        Assert.Equal("left", departed.GetProperty("membershipState").GetString());
+        Assert.Equal("offline", departed.GetProperty("connectionState").GetString());
         args["siteUrl"] = "http://localhost:1/";
         Assert.True((await resumed.CallToolAsync("attend", args)).IsError);
     }

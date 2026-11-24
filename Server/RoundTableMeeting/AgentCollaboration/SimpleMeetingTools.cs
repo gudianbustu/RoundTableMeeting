@@ -115,9 +115,10 @@ public sealed class SimpleMeetingTools
 
     private static McpTransportSessionKey Key(State state) => McpTransportSessionKey.FromDigest(state.Binding.ToByteArray());
 
-    private async Task Connect(State s, IServiceProvider sp, CancellationToken ct)
+    private async Task Connect(State s, IServiceProvider sp, CancellationToken ct, bool resumeOnly = false)
     {
         var service = sp.GetRequiredService<CurrentMcpSessionService>();
+        if (resumeOnly && s.Connection == Guid.Empty) throw new McpOperationException("connection_unavailable");
         var now = sp.GetRequiredService<TimeProvider>().GetUtcNow();
         if (s.Connection != Guid.Empty)
         {
@@ -148,8 +149,8 @@ public sealed class SimpleMeetingTools
                 s.Cursor = await sp.GetRequiredService<IMessageVisibilityRepository>().HighWatermarkAsync(meeting!.ID, participant.ID, ct);
         }
         McpConnection joined;
-        try { joined = await service.JoinAsync(key, code, name, "reconnect", address, ct); }
-        catch (McpOperationException e) when (e.Message == "participant_not_found")
+        try { joined = await service.JoinAsync(key, code, name, "reconnect", address, ct, resumeOnly ? s.Connection : null); }
+        catch (McpOperationException e) when (!resumeOnly && e.Message == "participant_not_found")
         { joined = await service.JoinAsync(key, code, name, "create", address, ct); }
         if (s.Binding != Guid.Empty) sp.GetRequiredService<IAgentConnectionRegistry>().RemoveRegistrations(Key(s));
         s.Binding = binding;
@@ -265,6 +266,15 @@ public sealed class SimpleMeetingTools
         } while (elapsed.Elapsed < TimeSpan.FromMinutes(12));
         return new Delivery("idle");
     }
+
+    internal Task<McpMeetingInfo> ListParticipants(CancellationToken ct)
+        => Locked(async (state, services) =>
+        {
+            RequireActive(state);
+            await Connect(state, services, ct, resumeOnly: true);
+            var session = services.GetRequiredService<CurrentMcpSessionService>();
+            return await session.ExecuteAsync(Key(state), state.Connection, session.InfoAsync, ct);
+        }, ct);
 
     [McpServerTool(Name = "history")]
     [Description("Read recent messages visible to you only when earlier context is needed. This leaves next and its pending decision untouched. Use nextBeforeSequence for an older page.")]
