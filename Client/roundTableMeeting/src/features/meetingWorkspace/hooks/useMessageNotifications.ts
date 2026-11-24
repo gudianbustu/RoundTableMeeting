@@ -38,7 +38,7 @@ export function useMessageNotifications(meetingId: string, participantId: string
         const target = current.target
         const page = await listMessages(meetingId, { scope: 'all', afterSequence: tracker.state.after, throughSequence: target, limit: 100 }, current.controller.signal)
         if (current.controller.signal.aborted) return
-        for (const message of page.items) tracker.receive(message, visibleScope())
+        for (const message of page.items) tracker.receive(message, visibleScope(), activeScope.current)
         const next = page.hasMoreAfter ? page.nextAfterSequence ?? page.lastSequence : target
         if (next === undefined || next <= tracker.state.after) throw new Error('notification_cursor_not_advanced')
         tracker.state.after = next; tracker.save(); refresh()
@@ -49,10 +49,10 @@ export function useMessageNotifications(meetingId: string, participantId: string
   }, [enabled, participantId, tracker, meetingId, visibleScope, refresh])
   const receive = useCallback((message: ChatMessage) => {
     if (!enabled || !participantId || message.meetingId !== meetingId) return
-    tracker.receive(message, visibleScope()); refresh()
+    tracker.receive(message, visibleScope(), activeScope.current); refresh()
     // A live event cannot advance past a missing page; catch up the full visible stream.
     if (tracker.state.after !== undefined) void synchronize(message.sequence)
   }, [enabled, participantId, meetingId, tracker, visibleScope, refresh, synchronize])
   const remove = useCallback(() => { runtime.current.controller.abort(); tracker.remove(); refresh() }, [tracker, refresh])
-  return { pending: enabled ? tracker.state.pending : {}, failed, receive, synchronize, remove, retry: () => void synchronize(runtime.current.target) }
+  return { publicUnread: enabled ? tracker.unreadPublic.size : 0, pending: enabled ? tracker.state.pending : {}, failed, receive, synchronize, remove, retry: () => void synchronize(runtime.current.target) }
 }

@@ -365,3 +365,22 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .meeting-navigation-item.selected { background: var(--rt-subtle); color: var(--rt-text); }
 .meeting-navigation-item.selected .meeting-chat-icon { mask-image: url('/meeting-selected.png'); }
 .meeting-navigation-item.selected .meeting-navigation-actions button { color: inherit; }
+
+.conversation-tabs { flex: none; min-width: 0; }
+.conversation-tabs .ant-tabs-nav { margin-bottom: 0; }
+.conversation-tabs .ant-tabs-tab { border-radius: 8px 8px 0 0; }
+.conversation-tabs .ant-tabs-tab-active { background: var(--rt-subtle) !important; }
+.scoped-chat .chat-private > .message-timeline { box-shadow: none; border-color: var(--rt-border); }
+.composer-context-toolbar { color: var(--rt-secondary); font-size: 13px; }
+.message-composer .message-reply-context { min-width: 0; background: var(--rt-subtle); border-inline-start: 3px solid var(--rt-accent); }
+
+.scoped-chat { --private-ink: light-dark(#6941a5, #cdb3eb); --private-bg: light-dark(#f2edf8, #34293f); }
+.scoped-chat .conversation-tabs .ant-tabs-tab-active:has(.private-tab-name) { background: var(--private-bg) !important; }
+.scoped-chat .conversation-tabs .ant-tabs-tab-active .private-tab-name, .chat-private .composer-context-toolbar > span { color: var(--private-ink); }
+.scoped-chat .chat-private > .message-composer { border-color: var(--private-ink); box-shadow: none; }
+.scoped-chat .chat-private > .message-composer:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb,var(--private-ink) 18%,transparent); }
+.chat-private .message-composer-actions .ant-btn-primary:not(:disabled) { color: var(--rt-surface); background: var(--private-ink); border-color: var(--private-ink); }
+.chat-private .message-reply-context { border-inline-start-color: var(--private-ink); background: var(--private-bg); }
+
+.conversation-tabs .ant-tabs-tab-active { box-shadow: inset 0 -3px var(--rt-primary); }
+.conversation-tabs .ant-tabs-tab-active:has(.private-tab-name) { box-shadow: inset 0 -3px var(--private-ink); }

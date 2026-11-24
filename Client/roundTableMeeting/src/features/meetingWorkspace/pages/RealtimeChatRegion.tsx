@@ -1,7 +1,7 @@
 import type { ReactNode, Ref } from 'react'
 import { useMessageNotifications } from '../hooks/useMessageNotifications'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
-import { Alert, Button, Select, Tag } from 'antd'
+import { Alert, Badge, Button, Tabs, Tag } from 'antd'
 import { createUuid } from '@/shared/utils/createUuid'
 import { listMessages, type MessagePageRequest } from '../api/listMessages'
 import { sendMessage } from '../api/sendMessage'
@@ -19,30 +19,59 @@ import type { AgentActivity, ChatMessage, ChatScrollPosition, ChatState, FailedS
 import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates } from '../chat/mentionCandidates'
 
-export type ChatSessionCache = { states: Map<string, ChatState>; selection: Record<string, string | undefined> }
-type ChatProps = { sessionCache?: ChatSessionCache; composerRef?: Ref<MessageComposerHandle>; composerTools?: ReactNode; meetingId: string; participants: Participant[]; readOnly?: boolean; onMeetingUnavailable?: () => void; onMeetingDetailsChanged?: () => void; onMembershipChanged?: () => void; onPresenceChanged?: (presence: Record<string, 'online' | 'offline'>) => void; onAgentActivitiesChanged?: (activities: Record<string, AgentActivity>) => void }
+export type ChatSessionCache = { states: Map<string, ChatState>; selection: Record<string, string | undefined>; tabs?: Record<string, string[]> }
+type ChatProps = { onPeerChanged?: (peerId?: string) => void; sessionCache?: ChatSessionCache; composerRef?: Ref<MessageComposerHandle>; composerTools?: ReactNode; meetingId: string; participants: Participant[]; readOnly?: boolean; onMeetingUnavailable?: () => void; onMeetingDetailsChanged?: () => void; onMembershipChanged?: () => void; onPresenceChanged?: (presence: Record<string, 'online' | 'offline'>) => void; onAgentActivitiesChanged?: (activities: Record<string, AgentActivity>) => void }
 export function RealtimeChatRegion(props: ChatProps) {
   const [selection, setSelection] = useState<Record<string, string | undefined>>(props.sessionCache?.selection ?? {})
+  const [tabs, setTabs] = useState<Record<string, string[]>>(props.sessionCache?.tabs ?? {})
   const cache = useRef(props.sessionCache?.states ?? new Map<string, ChatState>())
   const editor = useRef<MessageComposerHandle>(null)
   const peerId = selection[props.meetingId]
+  useLayoutEffect(() => { props.onPeerChanged?.(peerId) }, [props.onPeerChanged, peerId])
   const peer = props.participants.find(p => p.participantId === peerId)
   const notices = useMessageNotifications(props.meetingId, props.participants.find(p => p.isCurrentUser)?.participantId, peerId ?? 'public', !props.readOnly)
   const key = `${props.meetingId}:${peerId ?? 'public'}`
-  const selectPeer = useCallback((id?: string) => setSelection(previous => { const next = { ...previous, [props.meetingId]: id }; if (props.sessionCache) props.sessionCache.selection = next; return next }), [props.meetingId, props.sessionCache])
+  const { meetingId, sessionCache } = props
+  const updateTabs = useCallback((update: (current: string[]) => string[]) => {
+    setTabs(previous => {
+      const next = { ...previous, [meetingId]: update(previous[meetingId] ?? []) }
+      if (sessionCache) sessionCache.tabs = next
+      return next
+    })
+  }, [meetingId, sessionCache])
+  const selectPeer = useCallback((id?: string) => {
+    if (id) updateTabs(current => current.includes(id) ? current : [...current, id])
+    setSelection(previous => {
+      const next = { ...previous, [meetingId]: id }
+      if (sessionCache) sessionCache.selection = next
+      return next
+    })
+  }, [meetingId, sessionCache, updateTabs])
+  const closePeer = (id: string) => {
+    if (peerId === id) selectPeer()
+    updateTabs(current => current.filter(item => item !== id))
+  }
   useImperativeHandle(props.composerRef, () => ({ mention: name => editor.current?.mention(name), privateChat: id => selectPeer(id) }), [selectPeer])
   const retain = useCallback((state: ChatState) => { cache.current.set(key, state) }, [key])
   const unavailable = useCallback(() => {
     notices.remove()
     for (const savedKey of cache.current.keys()) if (savedKey.startsWith(props.meetingId + ':')) cache.current.delete(savedKey)
     if (props.sessionCache) delete props.sessionCache.selection[props.meetingId]
+    if (props.sessionCache?.tabs) delete props.sessionCache.tabs[props.meetingId]
     props.onMeetingUnavailable?.()
   }, [props.meetingId, props.onMeetingUnavailable, props.sessionCache, notices.remove])
   return <div className="scoped-chat">
+    {Boolean(tabs[meetingId]?.length) && <Tabs className="conversation-tabs" aria-label="会话" type="editable-card" hideAdd activeKey={peerId ?? 'public'}
+      onChange={id => selectPeer(id === 'public' ? undefined : id)}
+      onEdit={(id, action) => { if (action === 'remove' && typeof id === 'string') closePeer(id) }}
+      items={[
+        { key: 'public', label: <span>公开讨论 {notices.publicUnread > 0 && <Badge count={notices.publicUnread} overflowCount={999} title={`公屏未读 ${notices.publicUnread >= 1000 ? "999+" : notices.publicUnread} 条`} />}</span>, closable: false },
+        ...(tabs[meetingId] ?? []).map(id => ({ key: id, label: <span className="private-tab-name">私聊 · {props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}</span> })),
+      ]} />}
     <ScopedChat key={`${key}:${props.readOnly ? 'history' : 'active'}`}  {...props} notificationControl={<div aria-live="polite" className="chat-message-notifications">
       {Object.keys(notices.pending).map(id => <Button key={id} size="small" onClick={() => selectPeer(id === 'public' ? undefined : id)}>{id === 'public' ? '公开讨论有新消息' : `${props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}发来新私聊`}</Button>)}
       {notices.failed && <Button size="small" onClick={notices.retry}>新消息提醒同步失败，重试</Button>}
-    </div>} onNotificationMessage={notices.receive} onNotificationSnapshot={notices.synchronize} composerRef={editor} peerId={peerId} scopeControl={<Select aria-label="交流范围" className={peerId ? 'chat-scope-select chat-scope-private' : 'chat-scope-select'} value={peerId ?? 'public'} onChange={value => selectPeer(value === 'public' ? undefined : value)} options={[{ value: 'public', label: `公开讨论${notices.pending.public ? ' · 有新消息' : ''}` }, ...props.participants.filter(p => !p.isCurrentUser).map(p => ({ value: p.participantId, label: `私聊 · ${p.displayName}${notices.pending[p.participantId] ? ' · 有新消息' : ''}` }))]} placeholder={peer ? `私聊 · ${peer.displayName}` : '公开讨论'} />} initialState={cache.current.get(key)} onStateChanged={retain} onPrivateChat={selectPeer} onMeetingUnavailable={unavailable} />
+    </div>} onNotificationMessage={notices.receive} onNotificationSnapshot={notices.synchronize} composerRef={editor} peerId={peerId} scopeControl={<span>{peerId ? '私聊 · 仅你与' + (peer?.displayName ?? '对方') + '可见' : '公开讨论 · 所有成员可见'}</span>} initialState={cache.current.get(key)} onStateChanged={retain} onPrivateChat={selectPeer} onMeetingUnavailable={unavailable} />
   </div>
 }
 

@@ -37,3 +37,34 @@ it('ignores foreign meeting events and corrupt persisted state', () => {
   tracker.receive({ ...message(1), meetingId: 'other' }, 'public')
   expect(tracker.state.pending).toEqual({})
 })
+
+it('counts distinct public events in private chats including replay and clears on return', () => {
+  const tracker = new MessageNotifications('meeting', 'me', localStorage)
+  tracker.state.after = 6
+  tracker.receive(message(5, 'public'), 'bob')
+  tracker.receive(message(7, 'public'), 'bob')
+  tracker.receive(message(9, 'public'), undefined, 'alice')
+  tracker.receive(message(8, 'public'), 'bob')
+  tracker.receive(message(7, 'public'), 'bob')
+  tracker.receive(message(10, 'private'), 'alice')
+  expect(tracker.unreadPublic.size).toBe(3)
+  const restored = new MessageNotifications('meeting', 'me', localStorage)
+  expect(restored.unreadPublic.size).toBe(3)
+  const otherDevice = new MessageNotifications('meeting', 'me')
+  otherDevice.clear('public')
+  expect(restored.unreadPublic.size).toBe(3)
+  restored.clear('public')
+  restored.receive(message(8, 'public'), 'alice')
+  restored.receive(message(11, 'public'), undefined, 'public')
+  expect(restored.unreadPublic.size).toBe(0)
+})
+
+it('bounds the displayed public unread counter and clears through the latest sequence', () => {
+  const tracker = new MessageNotifications('meeting', 'me', localStorage)
+  tracker.state.after = 0
+  for (let sequence = 1; sequence <= 1020; sequence++) tracker.receive(message(sequence, 'public'), 'bob')
+  expect(new MessageNotifications('meeting', 'me', localStorage).unreadPublic.size).toBe(1000)
+  tracker.clear('public')
+  tracker.receive(message(1019, 'public'), 'bob')
+  expect(tracker.unreadPublic.size).toBe(0)
+})

@@ -34,6 +34,7 @@ export function MeetingWorkspacePage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const [mentionPeerId, setMentionPeerId] = useState<string>()
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [hideId, setHideId] = useState<string>()
@@ -83,10 +84,10 @@ export function MeetingWorkspacePage() {
       {listError}
       {workspace.error && <Alert closable type="error" showIcon title={workspace.error.code === 'meeting_not_found' ? '会议已不可访问' : '操作未能完成'} description={workspace.error.message} onClose={workspace.clearError} />}
       {workspace.detailLoading ? <Typography.Text>正在加载会议...</Typography.Text> : workspace.details ? <>
-        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={workspace.details.membershipState === 'left' || workspace.details.canSend === false} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} composerTools={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onModeChanged={workspace.refreshDetails} onRefresh={workspace.refresh} />} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        <RealtimeChatRegion onPeerChanged={setMentionPeerId} sessionCache={chatCache.current} readOnly={workspace.details.membershipState === 'left' || workspace.details.canSend === false} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} composerTools={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onModeChanged={workspace.refreshDetails} onRefresh={workspace.refresh} />} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
-    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList onInvite={workspace.details.canManageInvitation ? openInvite : undefined} onPrivateChat={participant => composerRef.current?.privateChat?.(participant.participantId)} onMention={workspace.details.membershipState === 'left' ? undefined : participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
+    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList mentionPeerId={mentionPeerId} onInvite={workspace.details.canManageInvitation ? openInvite : undefined} onPrivateChat={participant => composerRef.current?.privateChat?.(participant.participantId)} onMention={workspace.details.membershipState === 'left' ? undefined : participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
     </>}
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />
     <InviteMeetingDialog meetingName={workspace.details?.name} open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />
