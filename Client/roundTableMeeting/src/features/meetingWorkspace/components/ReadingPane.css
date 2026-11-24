@@ -1,0 +1,44 @@
+.message-timeline > .reading-pane {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  justify-content: center;
+}
+.reading-frame {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+}
+.reading-resizer { display: none; }
+@media (min-width: 1101px) {
+  .reading-frame { padding-inline: 8px; }
+  .reading-resizer {
+    position: absolute;
+    inset-block: 0;
+    right: 0;
+    display: grid;
+    align-items: center;
+    justify-items: center;
+    width: 12px;
+    z-index: 1;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+  .reading-resizer::after {
+    content: '';
+    width: 3px;
+    height: 36px;
+    background: var(--rt-border);
+    border-radius: 2px;
+  }
+  .reading-resizer:hover::after, .reading-resizer:focus-visible::after,
+  .reading-pane-dragging .reading-resizer::after { background: var(--rt-secondary); }
+  .reading-pane-dragging { user-select: none; }
+}
+@media (max-width: 1100px) {
+  .reading-frame { max-width: none !important; }
+}

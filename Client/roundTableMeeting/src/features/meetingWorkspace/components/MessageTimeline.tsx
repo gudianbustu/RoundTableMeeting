@@ -1,3 +1,4 @@
+import { ReadingPane } from './ReadingPane'
 import { EllipsisOutlined } from '@ant-design/icons'
 import { MessageBody } from './MessageBody'
 import type { ReactNode } from 'react'
@@ -92,7 +93,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
       {hasEarlierMessages && <Button size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>}
       {!atBottom && <Button type="link" size="small" onClick={jumpToLatest}>回到最新</Button>}
     </div>}
-    <div ref={scrollRef} className="message-timeline-scroll" role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
+    <ReadingPane><div ref={scrollRef} className="message-timeline-scroll" role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
       {messages.length === 0 && !pendingMessage && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" />}
       {messages.map(message => <article key={message.messageId} data-message-id={message.messageId} tabIndex={0}
         onContextMenu={event => {
@@ -137,7 +138,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
         {!!message.attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={message.attachments} />}
       </article>)}
       {pendingMessage}
-    </div></div>
+    </div></div></ReadingPane>
   </section>
 }
 
