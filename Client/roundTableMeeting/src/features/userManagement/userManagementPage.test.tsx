@@ -17,17 +17,20 @@ beforeEach(() => { listUsers.mockReset().mockResolvedValue([user]); updateAdmin.
 afterEach(cleanup)
 it('keeps last administrator visible on conflict', async () => {
  updateAdmin.mockRejectedValue({ kind: 'problemDetails', code: 'last_admin_required' }); setup(); const actor = userEvent.setup()
+ await actor.click(await screen.findByRole('tab', { name: '管理员' }))
  await actor.click(await screen.findByRole('button', { name: '取消管理员' })); await actor.click(screen.getByRole('button', { name: /确.*认/ }))
  expect(await screen.findByText('至少需要保留一名管理员。')).toBeInTheDocument(); expect(invalidateAdminAccess).not.toHaveBeenCalled()
 })
 it('clears directory and dialogs on forbidden even when profile refresh fails', async () => {
  updateAdmin.mockRejectedValue({ kind: 'problemDetails', code: 'forbidden' }); setup(); const actor = userEvent.setup()
+ await actor.click(await screen.findByRole('tab', { name: '管理员' }))
  await actor.click(await screen.findByRole('button', { name: '取消管理员' })); await actor.click(screen.getByRole('button', { name: /确.*认/ }))
  expect(await screen.findByText(/无管理权限/)).toBeInTheDocument(); expect(screen.queryByRole('table')).not.toBeInTheDocument(); expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
  expect(invalidateAdminAccess).toHaveBeenCalledOnce(); await waitFor(() => expect(refreshCurrentUser).toHaveBeenCalledOnce())
 })
 it('does not interpret Origin rejection as role revocation', async () => {
  updateAdmin.mockRejectedValue({ kind: 'problemDetails', code: 'origin_not_allowed' }); setup(); const actor = userEvent.setup()
+ await actor.click(await screen.findByRole('tab', { name: '管理员' }))
  await actor.click(await screen.findByRole('button', { name: '取消管理员' })); await actor.click(screen.getByRole('button', { name: /确.*认/ }))
  await screen.findByText('身份更新失败，请重试。'); expect(invalidateAdminAccess).not.toHaveBeenCalled(); expect(screen.getByRole('table')).toBeInTheDocument()
 })

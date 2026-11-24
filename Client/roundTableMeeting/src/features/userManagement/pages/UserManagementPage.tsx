@@ -1,4 +1,5 @@
-import { Alert, Button, Space, Typography, message, Modal } from 'antd'
+import { Alert, Button, Input, Tabs, Typography, message, Modal } from 'antd'
+import './UserManagementPage.css'
 import { useNavigate } from 'react-router-dom'
 import { updateAdmin } from '../api/updateAdmin'
 import { PlusOutlined } from '@ant-design/icons'
@@ -25,6 +26,8 @@ export function UserManagementPage() {
   const [adminError, setAdminError] = useState('')
   const adminController = useRef<AbortController | undefined>(undefined)
   const [forbidden, setForbidden] = useState(false)
+  const [role, setRole] = useState('member')
+  const [query, setQuery] = useState('')
   const [users, setUsers] = useState<UserSummaryViewModel[]>([])
   const [loadState, setLoadState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [loadError, setLoadError] = useState<ApiError>()
@@ -104,6 +107,8 @@ export function UserManagementPage() {
       await createUser(input, controller.signal)
       if (controller.signal.aborted || version !== createVersion.current) return
       setCreateOpen(false)
+      setRole('member')
+      setQuery('')
       message.success('账号已创建')
       void load()
     } catch (error) {
@@ -215,5 +220,40 @@ export function UserManagementPage() {
   if (forbidden) return <div role="alert">无管理权限：管理权限已失效。</div>
   if (loadState === 'loading') return <LoadingState />
   if (loadState === 'error') return <section className="user-management-page"><ErrorState title="用户列表加载失败" description="请稍后重试。" traceId={loadError?.traceId} onRetry={() => void load()} /></section>
-  return <section className="user-management-page"><Space direction="vertical" size="large" style={{ width: '100%' }}><Space align="center" wrap style={{ justifyContent: 'space-between', width: '100%' }}><Typography.Title level={2} style={{ margin: 0 }}>用户管理</Typography.Title><Button type="primary" icon={<PlusOutlined />} onClick={() => { setCreateError(undefined); setCreateOpen(true) }}>添加账号</Button></Space>{loadError && <Alert type="warning" message="列表刷新失败，当前显示可能已过期。" />}{users.length === 0 ? <Typography.Text type="secondary">暂无账号</Typography.Text> : <UserListTable onAdmin={(user) => { setAdminError(''); setAdminUser(user) }} users={users} editingUserId={editingUserId} resettingUserId={resettingUserId} onEdit={(user) => { setEditError(undefined); setEditUser(user) }} onReset={(user) => { setResetError(undefined); setResetUser(user) }} />}</Space><CreateUserForm open={createOpen} loading={createLoading} error={createError} onCancel={() => setCreateOpen(false)} onSubmit={handleCreate} /><EditNicknameForm user={editUser} loading={Boolean(editingUserId)} error={editError} onCancel={() => setEditUser(undefined)} onSubmit={handleEdit} /><ResetPasswordDialog user={resetUser} loading={Boolean(resettingUserId)} error={resetError} onCancel={() => setResetUser(undefined)} onConfirm={handleReset} /><Modal okText="确认" cancelText="取消" title={adminUser?.isAdmin ? '取消管理员' : '设为管理员'} open={Boolean(adminUser)} onCancel={() => { if (!adminLoading) setAdminUser(undefined) }} onOk={() => void handleAdmin()} confirmLoading={adminLoading} cancelButtonProps={{ disabled: adminLoading }}><Typography.Paragraph>确认修改 {adminUser?.username} 的管理员身份？</Typography.Paragraph>{adminError && <Alert title={adminError} type="error" />}</Modal></section>
+  const keyword = query.trim().toLowerCase()
+  const roleTabs = [{ key: 'member', label: '普通用户' }, { key: 'admin', label: '管理员' }]
+  return <section className="user-directory">
+    <div className="user-directory-heading">
+      <h1>用户管理</h1>
+      <Button type="primary" icon={<PlusOutlined />} onClick={() => { setCreateError(undefined); setCreateOpen(true) }}>创建账号</Button>
+    </div>
+    <div className="user-directory-card">
+      <Tabs activeKey={role} onChange={key => { setRole(key); setQuery('') }} destroyOnHidden items={roleTabs.map(tab => ({
+        ...tab,
+        children: <>
+          <Input className="user-directory-search" value={query} onChange={event => setQuery(event.target.value)}
+            allowClear placeholder="按昵称或登录账号查找" aria-label="按昵称或登录账号查找" />
+          <UserListTable users={users.filter(user => user.isAdmin === (tab.key === 'admin')
+            && [user.nickname, user.username].some(value => value.toLowerCase().includes(keyword)))}
+            emptyText={keyword ? `没有找到匹配的${tab.label}` : `暂无${tab.label}`}
+            editingUserId={editingUserId} resettingUserId={resettingUserId}
+            onEdit={user => { setEditError(undefined); setEditUser(user) }}
+            onAdmin={user => { setAdminError(''); setAdminUser(user) }}
+            onReset={user => { setResetError(undefined); setResetUser(user) }} />
+        </>,
+      }))} />
+    </div>
+    <CreateUserForm open={createOpen} loading={createLoading} error={createError} onCancel={() => setCreateOpen(false)} onSubmit={handleCreate} />
+    <EditNicknameForm user={editUser} loading={Boolean(editingUserId)} error={editError} onCancel={() => setEditUser(undefined)} onSubmit={handleEdit} />
+    <ResetPasswordDialog user={resetUser} loading={Boolean(resettingUserId)} error={resetError} onCancel={() => setResetUser(undefined)} onConfirm={handleReset} />
+    <Modal centered className="user-directory-dialog" okText="确认" cancelText="取消" title={adminUser?.isAdmin ? '取消管理员' : '设为管理员'}
+      open={Boolean(adminUser)} onCancel={() => { if (!adminLoading) setAdminUser(undefined) }} onOk={() => void handleAdmin()}
+      confirmLoading={adminLoading} cancelButtonProps={{ disabled: adminLoading }}>
+      {adminUser && <>
+        <dl className="user-directory-target"><dt>登录账号</dt><dd>{adminUser.username}</dd><dt>昵称</dt><dd>{adminUser.nickname}</dd></dl>
+        <Typography.Paragraph>{adminUser.isAdmin ? '确认后，此用户将变为普通用户。' : '确认后，此用户将获得管理员权限。'}</Typography.Paragraph>
+      </>}
+      {adminError && <Alert title={adminError} type="error" />}
+    </Modal>
+  </section>
 }

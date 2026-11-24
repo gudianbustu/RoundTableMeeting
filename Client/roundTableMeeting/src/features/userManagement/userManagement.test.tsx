@@ -15,14 +15,14 @@ describe('user management components', () => {
     const onSubmit = vi.fn()
     const actor = userEvent.setup()
     const view = render(<ConfigProvider><CreateUserForm open loading={false} onCancel={vi.fn()} onSubmit={onSubmit} /></ConfigProvider>)
-    await actor.type(screen.getByLabelText('用户名'), 'alice')
+    await actor.type(screen.getByLabelText('登录账号'), 'alice')
     await actor.type(screen.getByLabelText('昵称'), 'Alice')
     await actor.type(screen.getByLabelText('初始密码'), 'secret')
 
     view.rerender(<ConfigProvider><CreateUserForm open loading={false} error={{ kind: 'problemDetails', code: 'username_conflict', message: 'conflict' }} onCancel={vi.fn()} onSubmit={onSubmit} /></ConfigProvider>)
 
-    await waitFor(() => expect(screen.getByText('用户名已存在')).toBeInTheDocument())
-    expect(screen.getByLabelText('用户名')).toHaveValue('alice')
+    await waitFor(() => expect(screen.getByText('这个登录账号已被使用，请换一个。')).toBeInTheDocument())
+    expect(screen.getByLabelText('登录账号')).toHaveValue('alice')
     expect(screen.getByLabelText('昵称')).toHaveValue('Alice')
     expect(screen.getByLabelText('初始密码')).toHaveValue('')
   })
@@ -32,7 +32,7 @@ describe('user management components', () => {
     render(<ConfigProvider><CreateUserForm open loading={false} onCancel={vi.fn()} onSubmit={submit} /></ConfigProvider>)
 
     expect(submit).not.toHaveBeenCalled()
-    expect(screen.getByLabelText('用户名')).toHaveAttribute('maxlength', '128')
+    expect(screen.getByLabelText('登录账号')).toHaveAttribute('maxlength', '128')
     expect(screen.getByLabelText('昵称')).toHaveAttribute('maxlength', '64')
     expect(screen.getByLabelText('初始密码')).toHaveAttribute('maxlength', '256')
   })
