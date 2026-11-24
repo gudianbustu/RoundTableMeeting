@@ -1,0 +1,242 @@
+.app-shell:has(.first-home) {
+  padding: 0;
+}
+.authenticated-shell:has(.first-home) > .top-navigation {
+  min-height: 72px;
+  margin: 0;
+  padding-inline: 36px;
+  background: var(--rt-surface);
+}
+.first-home {
+  color: var(--rt-text);
+  font: 16px/1.55 "Microsoft YaHei", sans-serif;
+}
+.first-home :where(h1, h2, h3, p) {
+  margin: 0;
+}
+.first-home p {
+  color: var(--rt-secondary);
+}
+.first-home-buttons button {
+  cursor: pointer;
+  font: 700 16px "Microsoft YaHei", sans-serif;
+  padding: 0 24px;
+  height: 46px;
+  background: var(--rt-primary);
+  color: var(--rt-page);
+  border: 1px solid transparent;
+  border-radius: 8px;
+}
+.first-home-buttons button + button {
+  color: var(--rt-text);
+  background: var(--rt-surface);
+  border-color: var(--rt-border);
+}
+.first-home-buttons button:hover {
+  border-color: var(--rt-primary);
+}
+.first-home-buttons button:first-child:hover {
+  background: var(--rt-hover);
+}
+.first-home-buttons button:focus-visible {
+  outline: 2px solid var(--rt-accent);
+  outline-offset: 3px;
+}
+.first-home-orbit { fill: var(--rt-accent); }
+.first-home-orbit path, .first-home-ring {
+  fill: none;
+  stroke: var(--rt-border);
+  stroke-width: 1.5;
+}
+.first-home-ring[r="13"] { stroke: var(--rt-accent); }
+.first-home-node { offset-path: var(--home-orbit); animation: first-home-travel 28s linear infinite; }
+@keyframes first-home-travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  .first-home-node { animation-play-state: paused; }
+}
+.first-home {
+  width: min(100%, calc(100vw - 100px));
+  max-width: 1450px;
+  margin: clamp(36px, 5vh, 70px) auto;
+}
+.first-home-intro h1 {
+  font-size: 36px;
+}
+.first-home-intro p {
+  margin-top: 10px;
+}
+.first-home-hero,
+.first-home-band {
+  background: var(--rt-subtle);
+  border-radius: 20px;
+}
+.first-home-hero {
+  padding: clamp(26px, 3vw, 50px);
+  margin: 36px 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.first-home-hero > div:first-child {
+  flex: 1;
+}
+.first-home-hero > div:first-child::before {
+  content: "";
+  display: block;
+  width: 43px;
+  height: 4px;
+  background: var(--rt-accent);
+  margin-bottom: 19px;
+}
+.first-home-hero h2 {
+  font-size: 38px;
+}
+.first-home-hero p {
+  margin: 12px 0 30px;
+  font-size: 17px;
+}
+.first-home-buttons {
+  display: flex;
+  gap: 12px;
+}
+.first-home-buttons button {
+  min-width: 137px;
+}
+.first-home-orbit {
+  width: 38%;
+  aspect-ratio: 2.16;
+  position: relative;
+}
+.first-home-bandtitle {
+  font-size: 24px;
+  margin: 0 0 20px;
+}
+.first-home-band {
+  display: flex;
+  padding: 26px 0;
+  border-radius: 16px;
+}
+.first-home-feature {
+  flex: 1;
+  padding: 0 30px;
+}
+.first-home-feature + .first-home-feature {
+  border-left: 1px solid var(--rt-border);
+}
+.first-home-feature h3 {
+  font-size: 20px;
+  margin: 7px 0;
+}
+.first-home-feature p {
+  font-size: 14px;
+}
+.first-home-icon {
+  width: 30px;
+  height: 30px;
+  background: var(--rt-accent);
+  display: block;
+  mask: var(--mask) center/contain no-repeat;
+}
+@media (max-width: 1000px) {
+  .first-home {
+    width: min(100%, calc(100vw - 56px));
+  }
+  .first-home-hero h2 {
+    font-size: 30px;
+  }
+  .first-home-feature {
+    padding: 0 20px;
+  }
+}
+@media (max-width: 600px) {
+  .authenticated-shell:has(.first-home) > .top-navigation {
+    min-height: 54px;
+    padding-inline: 17px;
+  }
+  .first-home {
+    width: min(100%, calc(100vw - 32px));
+    margin: 22px auto;
+  }
+  .first-home-intro h1 {
+    font-size: 27px;
+  }
+  .first-home-intro p {
+    font-size: 14px;
+    margin-top: 3px;
+  }
+  .first-home-hero {
+    display: block;
+    position: relative;
+    padding: 20px;
+    margin: 20px 0 21px;
+    border-radius: 14px;
+  }
+  .first-home-hero > div:first-child::before {
+    width: 30px;
+    margin-bottom: 10px;
+  }
+  .first-home-hero h2 {
+    font-size: 25px;
+    position: relative;
+    z-index: 1;
+  }
+  .first-home-hero p {
+    font-size: 14px;
+    margin: 9px 0 18px;
+    max-width: 255px;
+  }
+  .first-home-buttons {
+    gap: 9px;
+  }
+  .first-home-buttons button {
+    flex: 1;
+    min-width: 0;
+    height: 44px;
+  }
+  .first-home-orbit {
+    position: absolute;
+    right: 11px;
+    top: 10px;
+    width: 78px;
+    opacity: .65;
+  }
+  .first-home-bandtitle {
+    font-size: 20px;
+    margin-bottom: 10px;
+  }
+  .first-home-band {
+    display: block;
+    padding: 0 16px;
+  }
+  .first-home-feature {
+    position: relative;
+    padding: 15px 0 15px 40px;
+  }
+  .first-home-feature + .first-home-feature {
+    border-left: 0;
+    border-top: 1px solid var(--rt-border);
+  }
+  .first-home-feature h3 {
+    font-size: 17px;
+    margin: 0 0 4px;
+  }
+  .first-home-feature p {
+    font-size: 13px;
+  }
+  .first-home-icon {
+    position: absolute;
+    top: 18px;
+    left: 0;
+    width: 25px;
+    height: 25px;
+  }
+}
+.first-home-icon-invite {
+  --mask: url('./first-home-assets/invite.png');
+}
+.first-home-icon-public {
+  --mask: url('./first-home-assets/public.png');
+}
+.first-home-icon-private {
+  --mask: url('./first-home-assets/private.png');
+}
