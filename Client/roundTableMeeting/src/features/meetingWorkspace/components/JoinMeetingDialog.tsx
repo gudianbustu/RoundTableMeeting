@@ -30,7 +30,7 @@ export function JoinMeetingDialog({ open, loading, succeeded, previewLoading, pr
     onCodeChange?.()
     if (guidD.test(next)) onPreview(next)
   }
-  return <Modal centered className="meeting-form-modal join-form-modal" open={open} title="加入会议" okText={preview?.alreadyJoined ? '打开会议' : '加入会议'} cancelText="取消"
+  return <Modal width={600} centered className="meeting-form-modal join-form-modal" open={open} title="加入会议" okText={preview?.alreadyJoined ? '打开会议' : '加入会议'} cancelText="取消"
     confirmLoading={loading} okButtonProps={{ disabled: !guidD.test(normalizedCode) || !preview || retryBlocked || previewLoading || (!preview.alreadyJoined && !name.trim()) }}
     onCancel={onCancel} onOk={() => onSubmit({ code: normalizedCode, displayName: name })}>
     <Flex vertical gap="small">

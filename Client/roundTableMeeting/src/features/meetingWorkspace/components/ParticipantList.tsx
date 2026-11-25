@@ -16,7 +16,7 @@ export function ParticipantList({ onEditNickname, onInvite, mentionPeerId, onMen
     <div className="participant-list-item-actions">
       {participant.isCurrentUser && onEditNickname && <Button aria-label="修改会议昵称" title="修改会议昵称" size="small" icon={<EditOutlined />} onClick={onEditNickname}>修改会议昵称</Button>}
       {onMention && (!mentionPeerId || participant.isCurrentUser || participant.participantId === mentionPeerId) && <Tooltip title={`提及 ${participant.displayName}`}><Button type="text" size="small" aria-label={`提及 ${participant.displayName}`} icon={<span className="participant-mention-icon" aria-hidden="true">@</span>} onClick={() => onMention(participant)} /></Tooltip>}
-      {!participant.isCurrentUser && onPrivateChat && <Tooltip title={`私聊 ${participant.displayName}`}><Button type="text" size="small" aria-label={`私聊 ${participant.displayName}`} icon={<MessageOutlined />} onClick={() => onPrivateChat(participant)} /></Tooltip>}
+      {!participant.isCurrentUser && onPrivateChat && <Tooltip title={`私聊 ${participant.displayName}`}><Button type="text" size="small" aria-label={`私聊 ${participant.displayName}`} icon={<MessageOutlined />} onClick={() => onPrivateChat(participant)}>私聊</Button></Tooltip>}
     </div>
   </div>)}</div>
   return <section className="participant-list"><div className="participant-list-heading"><Typography.Title level={4}>参与者</Typography.Title>{onInvite && <Button type="text" aria-label="邀请入会" title="邀请入会" icon={<UserAddOutlined />} onClick={onInvite} />}</div>
