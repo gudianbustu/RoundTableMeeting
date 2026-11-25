@@ -14,7 +14,13 @@ public sealed class MeetingMembershipService(IMeetingRepository meetings, IMeeti
     IUnitOfWork unitOfWork, IMeetingRealtimeGate gate, IMeetingRealtimeTermination termination, RealtimeChatOptions options)
     : IMeetingMembershipService, IScopedDependency<IMeetingMembershipService>
 {
-    public async Task<MeetingOperationResult<MeetingMembershipDto>> LeaveAsync(Guid meetingId, Guid participantId, Guid operationId, CancellationToken cancellationToken = default)
+    public Task<MeetingOperationResult<MeetingMembershipDto>> LeaveAsync(Guid meetingId, Guid participantId, Guid operationId, CancellationToken cancellationToken = default)
+        => EndMembershipAsync(meetingId, participantId, operationId, null, cancellationToken);
+
+    public Task<MeetingOperationResult<MeetingMembershipDto>> RemoveAsync(Guid meetingId, Guid requesterUserId, Guid participantId, Guid operationId, CancellationToken ct)
+        => EndMembershipAsync(meetingId, participantId, operationId, requesterUserId, ct);
+
+    private async Task<MeetingOperationResult<MeetingMembershipDto>> EndMembershipAsync(Guid meetingId, Guid participantId, Guid operationId, Guid? requesterUserId, CancellationToken cancellationToken)
     {
         if (operationId == Guid.Empty) return new(MeetingOperationStatus.ValidationFailed,
             Errors: new Dictionary<string, string[]> { ["operationId"] = ["A non-empty operation ID is required."] });
@@ -25,12 +31,19 @@ public sealed class MeetingMembershipService(IMeetingRepository meetings, IMeeti
             var meeting = await meetings.FindActiveByIdAsync(meetingId, token);
             var participant = (await participants.ListAsync(meetingId, token)).SingleOrDefault(p => p.ID == participantId);
             if (meeting is null || participant is null) return (new MeetingOperationResult<MeetingMembershipDto>(MeetingOperationStatus.MeetingNotFound), false);
+            if (requesterUserId.HasValue && meeting.CreatorUserId != requesterUserId.Value)
+            {
+                var requester = await participants.FindByUserAsync(meetingId, requesterUserId.Value, token);
+                return (new MeetingOperationResult<MeetingMembershipDto>(requester?.MembershipState == MeetingMembershipState.Joined
+                    ? MeetingOperationStatus.CreatorRequired : MeetingOperationStatus.MeetingNotFound), false);
+            }
             if (participant.UserId == meeting.CreatorUserId) return (new MeetingOperationResult<MeetingMembershipDto>(MeetingOperationStatus.CreatorCannotLeave), false);
             var previous = await lifecycle.FindLeaveAsync(meetingId, participantId, operationId, token);
             if (previous is not null) return (new MeetingOperationResult<MeetingMembershipDto>(MeetingOperationStatus.Success,
                 new(participantId, "left", previous.VisibleThroughSequence, previous.MembershipRevision)), participant.MembershipState == MeetingMembershipState.Left);
             var sequence = await visibility.HighWatermarkAsync(meetingId, participantId, token);
-            participant.Leave(sequence);
+            if (requesterUserId.HasValue) participant.Remove(sequence);
+            else participant.Leave(sequence);
             unitOfWork.RegisterEdit(participant);
             unitOfWork.RegisterAdd(MeetingLeaveOperation.Create(participant, operationId));
             return (new MeetingOperationResult<MeetingMembershipDto>(MeetingOperationStatus.Success,

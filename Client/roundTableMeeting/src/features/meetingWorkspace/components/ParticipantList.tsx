@@ -1,10 +1,10 @@
 import { Avatar, Button, Collapse, Empty, Tag, Tooltip, Typography } from 'antd'
-import { EditOutlined, MessageOutlined, UserAddOutlined } from '@ant-design/icons'
+import { EditOutlined, UserDeleteOutlined, MessageOutlined, UserAddOutlined } from '@ant-design/icons'
 import './ParticipantList.css'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 
-export function ParticipantList({ onEditNickname, onInvite, mentionPeerId, onMention, onPrivateChat, participants, presence = {} }: { onEditNickname?: () => void; onInvite?: () => void; mentionPeerId?: string; onMention?: (participant: Participant) => void; onPrivateChat?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
+export function ParticipantList({ onRemove, onEditNickname, onInvite, mentionPeerId, onMention, onPrivateChat, participants, presence = {} }: { onRemove?: (participant: Participant) => void; onEditNickname?: () => void; onInvite?: () => void; mentionPeerId?: string; onMention?: (participant: Participant) => void; onPrivateChat?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
   const members = participants.filter(p => p.membershipState !== 'left')
   const online = members.filter(p => presence[p.participantId] === 'online')
   const offline = members.filter(p => presence[p.participantId] !== 'online')
@@ -15,6 +15,8 @@ export function ParticipantList({ onEditNickname, onInvite, mentionPeerId, onMen
       <Typography.Text type="secondary">{participant.type === 'agent' ? 'AI Agent' : '人类参与者'}</Typography.Text>
     </div></div>
     <div className="participant-list-item-actions">
+      {onRemove && !participant.isCurrentUser && !participant.isCreator && <Button type="text" danger size="small" aria-label={`移除 ${participant.displayName}`}
+        icon={<UserDeleteOutlined />} onClick={() => onRemove(participant)}>移除</Button>}
       {participant.isCurrentUser && onEditNickname && <Button type="text" aria-label="修改会议昵称" title="修改会议昵称" size="small" icon={<EditOutlined />} onClick={onEditNickname}>改昵称</Button>}
       {onMention && (!mentionPeerId || participant.isCurrentUser || participant.participantId === mentionPeerId) && <Tooltip title={`提及 ${participant.displayName}`}><Button type="text" size="small" aria-label={`提及 ${participant.displayName}`} icon={<span className="participant-mention-icon" aria-hidden="true">@</span>} onClick={() => onMention(participant)}>提及</Button></Tooltip>}
       {!participant.isCurrentUser && onPrivateChat && <Tooltip title={`私聊 ${participant.displayName}`}><Button type="text" size="small" aria-label={`私聊 ${participant.displayName}`} icon={<MessageOutlined />} onClick={() => onPrivateChat(participant)}>私聊</Button></Tooltip>}

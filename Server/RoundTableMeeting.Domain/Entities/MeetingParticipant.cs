@@ -13,6 +13,7 @@ public sealed class MeetingParticipant : BaseEntity
     public DateTimeOffset JoinedAtUtc { get; private set; }
     public MeetingMembershipState MembershipState { get; private set; } = MeetingMembershipState.Joined;
     public long? LeftThroughSequence { get; private set; }
+    public long RemovalEpoch { get; private set; }
     public long MembershipRevision { get; private set; } = 1;
 
     public bool HiddenFromHistory { get; private set; }
@@ -30,6 +31,13 @@ public sealed class MeetingParticipant : BaseEntity
         MembershipState = MeetingMembershipState.Left;
         LeftThroughSequence = visibleThroughSequence;
         MembershipRevision++;
+    }
+
+    public void Remove(long visibleThroughSequence)
+    {
+        if (MembershipState == MeetingMembershipState.Left) return;
+        Leave(visibleThroughSequence);
+        RemovalEpoch++;
     }
 
     public void Rejoin()

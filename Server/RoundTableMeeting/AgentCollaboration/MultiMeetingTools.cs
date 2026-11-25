@@ -43,9 +43,9 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
             : local(Resolve(room));
 
 
-    private sealed record Identity(Guid Code, string Name, Guid Key);
+    private sealed record Identity(Guid Code, string Name, Guid Key, long RemovalEpoch = 0);
 
-    private SimpleMeetingTools Bind(Identity id) => new(scopes, directory, address, id.Code.ToString(), id.Name, id.Key);
+    private SimpleMeetingTools Bind(Identity id) => new(scopes, directory, address, id.Code.ToString(), id.Name, id.Key, id.RemovalEpoch);
 
     private SimpleMeetingTools Resolve(string room)
     {
@@ -79,8 +79,9 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
                 return new("joined", "f1." + routes.Protect(JsonSerializer.Serialize(new RemoteRoom(site.AbsoluteUri, admitted.Room))));
             }
         }
-        await Bind(id).Attend(ct);
-        return new("joined", handles.Protect(JsonSerializer.Serialize(id)));
+        var session = Bind(id);
+        await session.Attend(ct);
+        return new("joined", handles.Protect(JsonSerializer.Serialize(id with { RemovalEpoch = session.AdmissionEpoch })));
     }
 
     [McpServerTool(Name = "next")]

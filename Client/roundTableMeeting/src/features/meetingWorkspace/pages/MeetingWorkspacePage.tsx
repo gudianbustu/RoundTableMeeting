@@ -7,6 +7,9 @@ import { MeetingDirectory } from '../components/MeetingDirectory'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
+import { getApiClient } from '@/api/client/apiClient'
+import { createUuid } from '@/shared/utils/createUuid'
+import { meetingError } from '../api/helpers'
 import { MeetingInformationDialog } from '../components/MeetingInformationDialog'
 import { MeetingNicknameDialog } from '../components/MeetingNicknameDialog'
 import { MeetingNavigation } from '../components/MeetingNavigation'
@@ -48,6 +51,20 @@ export function MeetingWorkspacePage() {
   const [inviteOpen, setInviteOpen] = useState(false)
   const [mentionPeerId, setMentionPeerId] = useState<string>()
   const [nicknameOpen, setNicknameOpen] = useState(false)
+  const [removal, setRemoval] = useState<{ member: Participant; meetingId: string; operationId: string }>()
+  const [removing, setRemoving] = useState(false)
+  const [removalError, setRemovalError] = useState('')
+  const removeMember = async () => {
+    if (!removal || removing) return
+    setRemoving(true)
+    try {
+      await getApiClient().api.meetings.byMeetingId(removal.meetingId as never).participants
+        .byParticipantId(removal.member.participantId as never).remove.post({ operationId: removal.operationId as never })
+      setRemoval(undefined)
+      workspace.membershipChanged()
+    } catch (reason) { setRemovalError(meetingError(reason).message) }
+    finally { setRemoving(false) }
+  }
   const [membersOpen, setMembersOpen] = useState(false)
   const [navigationOpen, setNavigationOpen] = useState(false)
   const [navigationTrigger, setNavigationTrigger] = useState<HTMLElement | null>(null)
@@ -61,7 +78,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
-    setInformationId(undefined); setMembersOpen(false); setNicknameOpen(false); setNavigationOpen(false)
+    setRemoval(undefined); setInformationId(undefined); setMembersOpen(false); setNicknameOpen(false); setNavigationOpen(false)
     setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
@@ -136,11 +153,19 @@ export function MeetingWorkspacePage() {
     {workspace.details && <Drawer title={<span>会议成员 <small className="drawer-member-count">{members.length} 人</small></span>} closable={false}
       extra={<Button type="text" aria-label="关闭成员列表" icon={<CloseOutlined />} onClick={() => setMembersOpen(false)} />} placement="right" size="min(450px, calc(100vw - 18px))"
       open={membersOpen} onClose={() => setMembersOpen(false)} rootClassName="workspace-member-drawer">
-      <ParticipantList participants={workspace.details.participants} presence={presence} agentActivities={agentActivities}
+      <ParticipantList onRemove={!historical && workspace.details.currentParticipant?.isCreator ? member => {
+        setRemovalError('')
+        setRemoval({ member, operationId: createUuid(), meetingId: workspace.details!.meetingId })
+      } : undefined} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities}
         mentionPeerId={mentionPeerId} onEditNickname={historical ? undefined : () => { setMembersOpen(false); setNicknameOpen(true) }}
         onPrivateChat={participant => { setMembersOpen(false); composerRef.current?.privateChat?.(participant.participantId) }}
         onMention={historical ? undefined : participant => { setMembersOpen(false); composerRef.current?.mention(participant.displayName) }} />
     </Drawer>}
+    <Modal open={!!removal} title="移除会议成员" okText="移除" cancelText="取消" okButtonProps={{ danger: true }}
+      confirmLoading={removing} onOk={() => void removeMember()} onCancel={() => { if (!removing) setRemoval(undefined) }}>
+      <p>确定将「{removal?.member.displayName}」移出本场会议？对方可以重新加入。</p>
+      {removalError && <Alert type="error" showIcon title={removalError} />}
+    </Modal>
     {nicknameOpen && workspace.details?.currentParticipant && <MeetingNicknameDialog meetingId={workspace.details.meetingId}
       meetingName={workspace.details.name} name={workspace.details.currentParticipant.displayName} onSaved={workspace.refresh} onClose={() => setNicknameOpen(false)} />}
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />

@@ -47,7 +47,7 @@ export function MessageComposer({ placeholder = '输入消息', composerRef, att
     <Mentions
       placement="top"
       popupRender={menu => <div ref={mentionPopupRef}>{menu}</div>}
-      options={participants.map(participant => ({
+      options={participants.filter(person => person.membershipState !== 'left').map(participant => ({
         key: participant.participantId,
         value: participant.displayName.normalize('NFC'),
         label: <span className="mention-option"><span>{participant.displayName}</span><Tag color={participant.type === 'agent' ? 'cyan' : 'blue'}>{participant.type === 'agent' ? 'Agent' : '人类'}</Tag></span>,

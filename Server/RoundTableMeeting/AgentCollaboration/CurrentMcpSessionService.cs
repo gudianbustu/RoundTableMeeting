@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.SignalR;
 using RoundTableMeeting.Abstraction.Contracts.Meetings;
 using RoundTableMeeting.Domain.AgentCollaboration;
 using RoundTableMeeting.Abstraction.Contracts.RealtimeChat;
@@ -16,7 +17,8 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
     IAgentConnectionRegistry registry, IAgentJoinCoordinator joins, IMeetingRealtimeGate gate,
     MeetingAgentContext actor, IMeetingLifecycleService lifecycle, IAgentActivityNotifier notifier,
     IAgentActivityService activity, TimeProvider time, IAgentJoinRateLimiter rateLimiter,
-    IAgentRecoveryRepository recovery, IMeetingLifecycleRepository membershipLifecycle, IMessageVisibilityRepository visibility, IMeetingRealtimeTermination termination, RoundTableMeeting.RealtimeChat.MeetingPresenceRegistry presence)
+    IAgentRecoveryRepository recovery, IMeetingLifecycleRepository membershipLifecycle, IMessageVisibilityRepository visibility, IMeetingRealtimeTermination termination, RoundTableMeeting.RealtimeChat.MeetingPresenceRegistry presence,
+    Microsoft.AspNetCore.SignalR.IHubContext<RoundTableMeeting.RealtimeChat.MeetingChatHub> hub)
 {
     public const int LeaseSeconds = 300;
     private bool notifyAfterOperation;
@@ -35,7 +37,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         }
         return online;
     }    public async Task<McpConnection> JoinAsync(McpTransportSessionKey transport, string meetingCode, string displayName,
-        string joinMode, string? address, CancellationToken ct, Guid? expectedConnection = null)
+        string joinMode, string? address, CancellationToken ct, Guid? expectedConnection = null, long? expectedRemovalEpoch = null)
     {
         if (!Guid.TryParse(meetingCode, out var code) || joinMode is not ("create" or "reconnect" or "takeover")) throw new McpOperationException("validation_failed");
         var name = MeetingParticipant.NormalizeDisplayName(displayName);
@@ -61,6 +63,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         {
             if (await meetings.FindActiveByIdAsync(meeting.ID, token) is null) throw new McpOperationException("meeting_not_found");
             var p = await participants.FindByNormalizedNameAsync(meeting.ID, name.ToUpperInvariant(), token);
+            if (expectedRemovalEpoch.HasValue && (p?.RemovalEpoch ?? 0) != expectedRemovalEpoch) throw new McpOperationException("membership_left");
             if (p is not null && (p.ParticipantType != ParticipantType.Agent || joinMode == "create")) throw new McpOperationException("display_name_taken");
             if (p is null && joinMode != "create") throw new McpOperationException("participant_not_found");
             if (p is null) { p = MeetingParticipant.CreateAgent(meeting.ID, name, time.GetUtcNow()); unitOfWork.RegisterAdd(p); }
@@ -88,6 +91,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         if (!registry.TryActivate(transport, registration, previous)) throw new McpOperationException("new_transport_required");
         await participantLock.DisposeAsync(); shared.Dispose();
         await NotifyAsync(meeting.ID, joined.Participant.ID);
+        await hub.Clients.Group(RoundTableMeeting.RealtimeChat.MeetingChatHub.Group(meeting.ID)).SendAsync("membershipChanged", ct);
         return await DescribeAsync(joined.Connection, joined.Participant, ct);
     }
 

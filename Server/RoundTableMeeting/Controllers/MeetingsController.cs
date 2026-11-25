@@ -168,9 +168,11 @@ public sealed class MeetingsController(IMeetingWorkspaceService service) : Contr
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status429TooManyRequests, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status500InternalServerError, "application/problem+json")]
-    public async Task<IActionResult> Join(JoinMeetingRequest request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Join(JoinMeetingRequest request, [FromServices] IHubContext<MeetingChatHub> hub, CancellationToken cancellationToken)
     {
         var result = await service.JoinAsync(request, cancellationToken);
+        if (result.Status == MeetingOperationStatus.Success && result.Data is not null)
+            await hub.Clients.Group(MeetingChatHub.Group(result.Data.MeetingId)).SendAsync("membershipChanged", cancellationToken);
         return result.Status switch
         {
             MeetingOperationStatus.Success => Ok(result.Data),
@@ -214,7 +216,12 @@ public sealed class MeetingsController(IMeetingWorkspaceService service) : Contr
     [HttpPost("{meetingId:guid}/rejoin")]
     [RequireBrowserOrigin(false)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public Task<IActionResult> Rejoin(Guid meetingId, CancellationToken ct) => UpdateHistory(meetingId, true, ct);
+    public async Task<IActionResult> Rejoin(Guid meetingId, [FromServices] IHubContext<MeetingChatHub> hub, CancellationToken ct)
+    {
+        var result = await UpdateHistory(meetingId, true, ct);
+        if (result is NoContentResult) await hub.Clients.Group(MeetingChatHub.Group(meetingId)).SendAsync("membershipChanged", ct);
+        return result;
+    }
 
     [HttpDelete("{meetingId:guid}/history")]
     [RequireBrowserOrigin(false)]
@@ -229,6 +236,25 @@ public sealed class MeetingsController(IMeetingWorkspaceService service) : Contr
             MeetingOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
             _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
         };
+
+    [HttpPost("{meetingId:guid}/participants/{participantId:guid}/remove")]
+    [RequireBrowserOrigin(true)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> RemoveParticipant(Guid meetingId, Guid participantId, LeaveMeetingRequest request,
+        [FromServices] ICurrentUserContext currentUser, [FromServices] IMeetingMembershipService membership, CancellationToken ct)
+    {
+        if (currentUser.UserId is not Guid userId) return Unauthorized();
+        var result = await membership.RemoveAsync(meetingId, userId, participantId, request.OperationId, ct);
+        return result.Status switch
+        {
+            MeetingOperationStatus.Success => NoContent(),
+            MeetingOperationStatus.CreatorRequired => ApiProblemDetailsWriter.CreateResult(HttpContext, 403, "meeting_creator_required"),
+            MeetingOperationStatus.CreatorCannotLeave => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "creator_cannot_leave"),
+            MeetingOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed"),
+            MeetingOperationStatus.DeleteBusy => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "meeting_busy"),
+            _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
+        };
+    }
 
     [HttpPost("{meetingId:guid}/leave")]
     [RequireBrowserOrigin(true)]

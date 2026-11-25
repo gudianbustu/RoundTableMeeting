@@ -24,6 +24,8 @@ public sealed class SimpleMeetingTools
     private readonly string code, name, checkpoint, owner;
     private readonly string memberDirectory, invitationAlias;
     private readonly string? address;
+    private readonly long? roomEpoch;
+    internal long AdmissionEpoch { get; private set; }
     private readonly SemaphoreSlim gate;
 
     private sealed class State
@@ -42,11 +44,13 @@ public sealed class SimpleMeetingTools
         public Guid? LastHandled { get; set; }
         public string? LastDecision { get; set; }
         public Guid? Leaving { get; set; }
+        public long RemovalEpoch { get; set; }
         public bool Left { get; set; }
     }
 
-    internal SimpleMeetingTools(IServiceScopeFactory scopes, string databaseDirectory, string? address, string code, string name, Guid invitationKey)
+    internal SimpleMeetingTools(IServiceScopeFactory scopes, string databaseDirectory, string? address, string code, string name, Guid invitationKey, long? roomEpoch = null)
     {
+        this.roomEpoch = roomEpoch;
         this.scopes = scopes;
         this.address = address;
         owner = Convert.ToHexString(SHA256.HashData(invitationKey.ToByteArray()));
@@ -131,6 +135,28 @@ public sealed class SimpleMeetingTools
                 // A fresh invitation must pass the ordinary offline-only reconnect check.
                 state.Connection = Guid.Empty;
             }
+            var services = scope.ServiceProvider;
+            var meeting = await services.GetRequiredService<IMeetingRepository>().FindActiveByCodeAsync(Guid.Parse(code), ct);
+            if (meeting is not null)
+            {
+                var members = services.GetRequiredService<IMeetingParticipantRepository>();
+                var participant = state.PinnedParticipantId is Guid pinned
+                    ? (await members.ListAsync(meeting.ID, ct)).SingleOrDefault(p => p.ID == pinned)
+                    : await members.FindByNormalizedNameAsync(meeting.ID, name.ToUpperInvariant(), ct);
+                var epoch = participant?.RemovalEpoch ?? 0;
+                if (!invited && (state.RemovalEpoch != epoch || roomEpoch.HasValue && roomEpoch != epoch))
+                    throw new McpOperationException("membership_left");
+                if (invited && participant is not null && state.RemovalEpoch != epoch)
+                {
+                    state = new State
+                    {
+                        PinnedParticipantId = state.PinnedParticipantId,
+                        RemovalEpoch = epoch,
+                        Cursor = await services.GetRequiredService<IMessageVisibilityRepository>().HighWatermarkAsync(meeting.ID, participant.ID, ct)
+                    };
+                }
+                AdmissionEpoch = epoch;
+            }
             state.Owner = owner;
             var result = await work(state, scope.ServiceProvider);
             if (invited && state.PinnedParticipantId is Guid id) RememberInvitation(id);
@@ -186,9 +212,9 @@ public sealed class SimpleMeetingTools
                 s.Cursor = await sp.GetRequiredService<IMessageVisibilityRepository>().HighWatermarkAsync(meeting!.ID, participant.ID, ct);
         }
         McpConnection joined;
-        try { joined = await service.JoinAsync(key, code, currentName, "reconnect", address, ct, resumeOnly ? s.Connection : null); }
+        try { joined = await service.JoinAsync(key, code, currentName, "reconnect", address, ct, resumeOnly ? s.Connection : null, s.RemovalEpoch); }
         catch (McpOperationException e) when (!resumeOnly && e.Message == "participant_not_found" && !s.PinnedParticipantId.HasValue)
-        { joined = await service.JoinAsync(key, code, name, "create", address, ct); }
+        { joined = await service.JoinAsync(key, code, name, "create", address, ct, expectedRemovalEpoch: s.RemovalEpoch); }
         if (s.Binding != Guid.Empty) sp.GetRequiredService<IAgentConnectionRegistry>().RemoveRegistrations(Key(s));
         s.Binding = binding;
         s.Connection = joined.ConnectionSessionId;

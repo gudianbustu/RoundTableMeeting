@@ -1064,6 +1064,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
+                    b.Property<long>("RemovalEpoch")
+                        .HasColumnType("INTEGER");
+
                     b.Property<Guid?>("UserId")
                         .HasColumnType("TEXT");
 
