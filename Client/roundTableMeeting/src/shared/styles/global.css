@@ -316,7 +316,7 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .profile-admin-link:hover { border-color: var(--rt-accent); }
 
 @media (min-width: 741px) {
-  .profile-column > .ant-card:last-child { flex: 1; }
+  .profile-column { display: grid; grid-row: span 3; grid-template-rows: subgrid; row-gap: inherit; }
 }
 
 .join-meeting-preview { padding: 16px; border: 1px solid var(--rt-border); border-radius: 10px; background: var(--rt-subtle); }
