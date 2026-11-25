@@ -1,4 +1,5 @@
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthenticationContext } from '@/features/authentication/context/AuthenticationContext'
@@ -12,7 +13,7 @@ const user = { userId: 'b', username: 'bob', nickname: 'Bob', isAdmin: false }
 const refresh = vi.fn()
 function setup() {
  const context: AuthenticationContextValue = { state: { status: 'authenticated', user }, identityRevision: 1, refreshRevision: 0, invalidateAdminAccess: vi.fn(), login: vi.fn(), logout: vi.fn(), retry: vi.fn(), refreshCurrentUser: refresh, isLoggingIn: false, isLoggingOut: false }
- return render(<AuthenticationContext.Provider value={context}><PersonalSettingsPage /></AuthenticationContext.Provider>)
+ return render(<AuthenticationContext.Provider value={context}><MemoryRouter><PersonalSettingsPage /></MemoryRouter></AuthenticationContext.Provider>)
 }
 beforeEach(() => { updateMyNickname.mockReset().mockResolvedValue(user); changeMyPassword.mockReset().mockResolvedValue(undefined); refresh.mockReset().mockResolvedValue({ status: 'refreshed', user, identityRevision: 1, refreshRevision: 1 }) })
 afterEach(cleanup)

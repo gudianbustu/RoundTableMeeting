@@ -1,6 +1,6 @@
 import { Alert, Button, Input, Tabs, Typography, message, Modal } from 'antd'
 import './UserManagementPage.css'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { updateAdmin } from '../api/updateAdmin'
 import { PlusOutlined } from '@ant-design/icons'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -21,6 +21,7 @@ import type { CreateUserInput, UpdateNicknameInput, UserSummaryViewModel } from 
 export function UserManagementPage() {
   const { state, refreshCurrentUser, invalidateAdminAccess } = useAuthentication()
   const navigate = useNavigate()
+  const location = useLocation()
   const [adminUser, setAdminUser] = useState<UserSummaryViewModel>()
   const [adminLoading, setAdminLoading] = useState(false)
   const [adminError, setAdminError] = useState('')
@@ -208,7 +209,7 @@ export function UserManagementPage() {
       setAdminUser(undefined)
       if (state.status === 'authenticated' && state.user.userId === target.userId && target.isAdmin) {
         invalidateAdminAccess()
-        navigate('/settings/profile', { replace: true })
+        navigate('/settings/profile', { replace: true, state: location.state })
         void refreshCurrentUser().catch(() => undefined)
       } else { message.success('管理员身份已更新'); void load() }
     } catch (error) {

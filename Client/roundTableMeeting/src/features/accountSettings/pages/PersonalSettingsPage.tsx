@@ -1,6 +1,6 @@
 import { Alert, Button, Card, Form, Input } from 'antd'
 import { TeamOutlined } from '@ant-design/icons'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { AppearanceSettings } from '../components/AppearanceSettings'
 import { useEffect, useRef, useState } from 'react'
 import { useAuthentication } from '@/features/authentication'
@@ -10,6 +10,7 @@ import { changeMyPassword } from '../api/changeMyPassword'
 import type { ChangeMyPasswordInput, UpdateMyNicknameInput } from '../types/accountSettings'
 
 export function PersonalSettingsPage() {
+  const location = useLocation()
   const { state, identityRevision, refreshCurrentUser } = useAuthentication()
   const [nicknameForm] = Form.useForm<UpdateMyNicknameInput>()
   const [passwordForm] = Form.useForm<ChangeMyPasswordInput & { confirmPassword: string }>()
@@ -89,7 +90,7 @@ export function PersonalSettingsPage() {
           <div><strong>{state.user.nickname}</strong><small>{state.user.isAdmin ? '管理员' : '普通用户'}</small></div>
         </div>
         <div className="profile-account"><span>用户名</span><strong>{state.user.username}</strong>
-          {state.user.isAdmin && <Link className="profile-admin-link" to="/users"><TeamOutlined /> 用户管理</Link>}
+          {state.user.isAdmin && <Link className="profile-admin-link" to="/users" state={location.state}><TeamOutlined /> 用户管理</Link>}
         </div>
       </div>
       <AppearanceSettings />
