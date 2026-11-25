@@ -4,7 +4,7 @@ import './ReadingPane.css'
 const minimum = 480
 const initial = 1060
 
-export function ReadingPane({ children }: { children: ReactNode }) {
+export function ReadingPane({ children, onWidthChange }: { children: ReactNode; onWidthChange?: (width: number) => void }) {
   const container = useRef<HTMLDivElement>(null)
   const frame = useRef<HTMLDivElement>(null)
   const drag = useRef<{ pointer: number; start: number; width: number } | undefined>(undefined)
@@ -14,6 +14,8 @@ export function ReadingPane({ children }: { children: ReactNode }) {
   const lower = Math.min(minimum, available)
   const clamp = (value: number) => Math.max(lower, Math.min(Math.round(value), available))
   const width = clamp(preferred)
+
+  useLayoutEffect(() => { onWidthChange?.(width) }, [onWidthChange, width])
 
   useLayoutEffect(() => {
     const element = container.current
