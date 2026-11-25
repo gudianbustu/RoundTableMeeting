@@ -2,8 +2,8 @@ import { ReadingPane } from './ReadingPane'
 import './WorkspaceMessages.css'
 import { RobotOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { MessageBody } from './MessageBody'
-import type { ReactNode } from 'react'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { Dispatch, ReactNode, SetStateAction } from 'react'
+import { memo, useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button, Dropdown, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
 import { getMessage } from '../api/messageResources'
@@ -37,7 +37,7 @@ function ReplyQuote({ meetingId, id, loaded, onLocate }: {
 type Props = { onWidthChange?: (width: number) => void; onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
 export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
   const [previewId, setPreviewId] = useState<string>()
-  const originals = new Map(messages.map(message => [message.messageId, message]))
+  const originals = useMemo(() => new Map(messages.map(message => [message.messageId, message])), [messages])
   const scrollRef = useRef<HTMLDivElement>(null)
   const processedFocus = useRef<string | undefined>(undefined)
   const itemsRef = useRef<HTMLDivElement>(null)
@@ -52,9 +52,21 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
       element.scrollTop = element.scrollHeight
     }
     const bottom = element.scrollHeight - element.scrollTop - element.clientHeight <= 2
-    const top = element.getBoundingClientRect().top
-    const first = Array.from(element.querySelectorAll<HTMLElement>('[data-message-id]')).find(row => row.getBoundingClientRect().bottom > top)
-    position.current = bottom ? { atBottom: true } : { atBottom: false, messageId: first?.dataset.messageId, offset: first ? first.getBoundingClientRect().top - top : 0 }
+    if (bottom) {
+      position.current = { atBottom: true }
+    } else {
+      const top = element.getBoundingClientRect().top
+      const rows = element.querySelectorAll<HTMLElement>('[data-message-id]')
+      let low = 0
+      let high = rows.length
+      while (low < high) {
+        const middle = Math.floor((low + high) / 2)
+        if (rows[middle].getBoundingClientRect().bottom <= top) low = middle + 1
+        else high = middle
+      }
+      const first = rows[low]
+      position.current = { atBottom: false, messageId: first?.dataset.messageId, offset: first ? first.getBoundingClientRect().top - top : 0 }
+    }
     setAtBottom(bottom); onScrollPositionChanged?.(position.current)
   }, [onScrollPositionChanged])
   const restore = useCallback(() => {
@@ -86,19 +98,6 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
     return () => { element.removeEventListener('scroll', capture); observer?.disconnect() }
   }, [capture, restore])
   const [actionMessageId, setActionMessageId] = useState<string>()
-  const longPress = useRef<{ timer: number; x: number; y: number } | undefined>(undefined)
-  const clearLongPress = () => {
-    if (longPress.current) window.clearTimeout(longPress.current.timer)
-    longPress.current = undefined
-  }
-  useEffect(() => clearLongPress, [])
-  const openActions = (row: HTMLElement) => {
-    const button = row.querySelector<HTMLButtonElement>('.message-inline-actions button')
-    if (!button || getComputedStyle(button).display === 'none') return false
-    button.focus({ preventScroll: true })
-    setActionMessageId(row.dataset.messageId)
-    return true
-  }
   const interruptJump = () => {
     const element = scrollRef.current
     if (jumpTarget.current === undefined || !element) return
@@ -119,64 +118,89 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
     {hasEarlierMessages && <div className="message-timeline-toolbar">
       <Button size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>
     </div>}
-    <ReadingPane onWidthChange={onWidthChange}><div ref={scrollRef} className="message-timeline-scroll" tabIndex={0} onWheelCapture={interruptJump} onPointerDownCapture={interruptJump} onKeyDownCapture={interruptJump} role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
+    <ReadingPane onWidthChange={onWidthChange}><div ref={scrollRef} className="message-timeline-scroll" tabIndex={0}
+      onWheelCapture={interruptJump} onPointerDownCapture={interruptJump} onKeyDownCapture={interruptJump} role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
       {messages.length === 0 && !pendingMessage && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" />}
-      {messages.map(message => {
-        const original = message.originalTextAttachmentId
-          ? message.attachments?.find(file => file.attachmentId === message.originalTextAttachmentId) : undefined
-        const attachments = original ? message.attachments?.filter(file => file !== original) : message.attachments
-        return <article key={message.messageId} data-message-id={message.messageId} tabIndex={0}
-        onContextMenu={event => {
-          clearLongPress()
-          if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)
-            || event.target.closest('a,button,input,textarea') || window.getSelection()?.toString()) return
-          if (!openActions(event.currentTarget)) return
-          event.preventDefault()
-        }}
-        onKeyDown={event => {
-          if (event.target !== event.currentTarget) return
-          if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
-            if (openActions(event.currentTarget)) event.preventDefault()
-          }
-        }}
-        onPointerDown={event => {
-          clearLongPress()
-          if (event.pointerType !== 'touch' || (event.target as Element).closest('button,a,input')) return
-          const row = event.currentTarget
-          longPress.current = { x: event.clientX, y: event.clientY, timer: window.setTimeout(() => {
-            longPress.current = undefined
-            if (!window.getSelection()?.toString()) openActions(row)
-          }, 500) }
-        }}
-        onPointerMove={event => {
-          const start = longPress.current
-          if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) clearLongPress()
-        }}
-        onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress}
-        className={'message-item message-' + message.author.kind + (currentParticipantId && message.author.participantId === currentParticipantId ? ' message-own' : '')}>
-        <span className="chat-author-avatar" aria-hidden="true">{message.author.kind === 'agent' ? <RobotOutlined /> : message.author.kind === 'system' ? <InfoCircleOutlined /> : Array.from(message.author.displayName.trim())[0]}</span>
-        <div className="chat-message-column">
-          <header className="message-meta">
-            <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>
-            <Tag className="message-kind">{message.author.kind === 'agent' ? 'AI Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Tag>
-            <time className="message-time" dateTime={message.createdAt.toISOString()} title={message.createdAt.toLocaleString()}>{message.createdAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
-            <MessageActions open={actionMessageId === message.messageId} onOpenChange={open =>
-              setActionMessageId(current => open ? message.messageId : current === message.messageId ? undefined : current)} message={message} onReply={canReply ? onReply : undefined}
-              onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined} />
-            {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
-          </header>
-          {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
-          {message.content && <MessageBody diagrams content={message.content} mentions={message.mentions} />}
-          {original && <OriginalMessageText key={original.attachmentId} meetingId={message.meetingId} source={original} />}
-          {!!attachments?.length && <AttachmentLinks compact meetingId={message.meetingId} attachments={attachments} onOpenViewer={setPreviewId} />}
-        </div>
-      </article>})}
+      {messages.map(message => <MessageRow key={message.messageId} message={message}
+        quoted={message.replyToMessageId ? originals.get(message.replyToMessageId) : undefined}
+        currentParticipantId={currentParticipantId} open={actionMessageId === message.messageId}
+        setActionMessageId={setActionMessageId} onReply={canReply ? onReply : undefined}
+        onPrivateChat={onPrivateChat} onLocate={onLocate} onPreview={setPreviewId} />)}
       {pendingMessage}
     </div></div></ReadingPane>
     {!atBottom && <Button className="timeline-jump-latest" shape="round" size="small" onClick={jumpToLatest}>回到最新</Button>}
     {previewId && <ConversationAttachmentViewer selectedId={previewId} messages={messages} currentParticipantId={currentParticipantId} hasEarlierMessages={hasEarlierMessages} onSelect={setPreviewId} />}
   </section>
 }
+
+const MessageRow = memo(function MessageRow({ message, quoted, currentParticipantId, open, setActionMessageId, onReply, onPrivateChat, onLocate, onPreview }:
+  Pick<Props, 'currentParticipantId' | 'onReply' | 'onPrivateChat' | 'onLocate'> & {
+    message: ChatMessage; quoted?: ChatMessage; open: boolean
+    setActionMessageId: Dispatch<SetStateAction<string | undefined>>; onPreview: (id: string) => void
+  }) {
+  const longPress = useRef<{ timer: number; x: number; y: number } | undefined>(undefined)
+  const clearLongPress = () => {
+    if (longPress.current) window.clearTimeout(longPress.current.timer)
+    longPress.current = undefined
+  }
+  useEffect(() => clearLongPress, [])
+  const openActions = (row: HTMLElement) => {
+    const button = row.querySelector<HTMLButtonElement>('.message-inline-actions button')
+    if (!button || getComputedStyle(button).display === 'none') return false
+    button.focus({ preventScroll: true })
+    setActionMessageId(row.dataset.messageId)
+    return true
+  }
+  const original = message.originalTextAttachmentId
+    ? message.attachments?.find(file => file.attachmentId === message.originalTextAttachmentId) : undefined
+  const attachments = original ? message.attachments?.filter(file => file !== original) : message.attachments
+  return <article data-message-id={message.messageId} tabIndex={0}
+    onContextMenu={event => {
+      clearLongPress()
+      if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)
+        || event.target.closest('a,button,input,textarea') || window.getSelection()?.toString()) return
+      if (!openActions(event.currentTarget)) return
+      event.preventDefault()
+    }}
+    onKeyDown={event => {
+      if (event.target !== event.currentTarget) return
+      if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+        if (openActions(event.currentTarget)) event.preventDefault()
+      }
+    }}
+    onPointerDown={event => {
+      clearLongPress()
+      if (event.pointerType !== 'touch' || (event.target as Element).closest('button,a,input')) return
+      const row = event.currentTarget
+      longPress.current = { x: event.clientX, y: event.clientY, timer: window.setTimeout(() => {
+        longPress.current = undefined
+        if (!window.getSelection()?.toString()) openActions(row)
+      }, 500) }
+    }}
+    onPointerMove={event => {
+      const start = longPress.current
+      if (start && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) clearLongPress()
+    }}
+    onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress}
+    className={'message-item message-' + message.author.kind + (currentParticipantId && message.author.participantId === currentParticipantId ? ' message-own' : '')}>
+    <span className="chat-author-avatar" aria-hidden="true">{message.author.kind === 'agent' ? <RobotOutlined /> : message.author.kind === 'system' ? <InfoCircleOutlined /> : Array.from(message.author.displayName.trim())[0]}</span>
+    <div className="chat-message-column">
+      <header className="message-meta">
+        <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>
+        <Tag className="message-kind">{message.author.kind === 'agent' ? 'AI Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Tag>
+        <time className="message-time" dateTime={message.createdAt.toISOString()} title={message.createdAt.toLocaleString()}>{message.createdAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
+        <MessageActions open={open} onOpenChange={open =>
+          setActionMessageId(current => open ? message.messageId : current === message.messageId ? undefined : current)} message={message} onReply={onReply}
+          onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined} />
+        {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
+      </header>
+      {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={quoted} onLocate={onLocate} />}
+      {message.content && <MessageBody diagrams content={message.content} mentions={message.mentions} />}
+      {original && <OriginalMessageText key={original.attachmentId} meetingId={message.meetingId} source={original} />}
+      {!!attachments?.length && <AttachmentLinks compact meetingId={message.meetingId} attachments={attachments} onOpenViewer={onPreview} />}
+    </div>
+  </article>
+})
 
 function MessageActions({ message, onReply, onPrivateChat, open, onOpenChange }: Pick<Props, 'onReply' | 'onPrivateChat'> & { message: ChatMessage; open: boolean; onOpenChange: (open: boolean) => void }) {
   const authorId = message.author.participantId
