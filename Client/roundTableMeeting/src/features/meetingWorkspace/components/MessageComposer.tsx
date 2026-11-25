@@ -4,9 +4,9 @@ import { Button, Mentions, Tag } from 'antd'
 import { SendOutlined } from '@ant-design/icons'
 import type { MentionCandidate, SendState } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
-import { getMentionCandidates } from '../chat/mentionCandidates'
+import { getMentionCandidates, groupMentionNames, mentionableParticipants } from '../chat/mentionCandidates'
 export interface MessageComposerHandle { mention: (displayName: string) => void; privateChat?: (participantId: string) => void }
-export function MessageComposer({ placeholder = '输入消息', composerRef, attachments, onCancelReply, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { placeholder?: string; composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onCancelReply?: () => void; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
+export function MessageComposer({ publicChat = false, placeholder = '输入消息', composerRef, attachments, onCancelReply, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { publicChat?: boolean; placeholder?: string; composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onCancelReply?: () => void; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
   const inputRef = useRef<MentionsRef>(null)
   const focusPending = useRef(false)
   const mentionPopupRef = useRef<HTMLDivElement>(null)
@@ -25,7 +25,7 @@ export function MessageComposer({ placeholder = '输入消息', composerRef, att
     textarea?.focus({ preventScroll: true })
     textarea?.setSelectionRange(value.length, value.length)
   }, [value])
-  const candidates = getMentionCandidates(value, participants)
+  const candidates = getMentionCandidates(value, participants, publicChat)
   return <div className="message-composer"
     onPaste={event => {
       const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
@@ -47,11 +47,17 @@ export function MessageComposer({ placeholder = '输入消息', composerRef, att
     <Mentions
       placement="top"
       popupRender={menu => <div ref={mentionPopupRef}>{menu}</div>}
-      options={participants.filter(person => person.membershipState !== 'left').map(participant => ({
-        key: participant.participantId,
-        value: participant.displayName.normalize('NFC'),
-        label: <span className="mention-option"><span>{participant.displayName}</span><Tag color={participant.type === 'agent' ? 'cyan' : 'blue'}>{participant.type === 'agent' ? 'Agent' : '人类'}</Tag></span>,
-      }))}
+      options={[
+        ...(publicChat ? groupMentionNames.map(name => ({
+          key: 'group:' + name, value: name,
+          label: <span className="mention-option"><span>{name}</span><Tag>群体</Tag></span>,
+        })) : []),
+        ...mentionableParticipants(participants, publicChat).map(participant => ({
+          key: participant.participantId,
+          value: participant.displayName.normalize('NFC'),
+          label: <span className="mention-option"><span>{participant.displayName}</span><Tag color={participant.type === 'agent' ? 'cyan' : 'blue'}>{participant.type === 'agent' ? 'Agent' : '人类'}</Tag></span>,
+        })),
+      ]}
       filterOption={(query, option) => (option.value ?? '').normalize('NFC').toLocaleLowerCase().includes(query.normalize('NFC').toLocaleLowerCase())}
       notFoundContent="没有匹配的参与者"
       className="composer-mentions"

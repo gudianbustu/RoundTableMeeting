@@ -1,9 +1,16 @@
 import type { MentionCandidate } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
-export function getMentionCandidates(value: string, participants: Participant[]): MentionCandidate[] {
+export const groupMentionNames = ['所有人', '所有人类', '所有Agent'] as const
+
+export function mentionableParticipants(participants: Participant[], publicChat: boolean) {
+  return participants.filter(person => person.membershipState !== 'left' &&
+    !(publicChat && groupMentionNames.some(name => name.toUpperCase() === person.displayName.normalize('NFC').toUpperCase())))
+}
+
+export function getMentionCandidates(value: string, participants: Participant[], publicChat = false): MentionCandidate[] {
   const normalizedContent = value.normalize('NFC').trim()
   const result: MentionCandidate[] = []
-  const ordered = participants.filter(person => person.membershipState !== 'left').sort((a, b) => b.displayName.length - a.displayName.length)
+  const ordered = mentionableParticipants(participants, publicChat).sort((a, b) => b.displayName.length - a.displayName.length)
   for (let index = 0; index < normalizedContent.length; index++) {
     if (normalizedContent[index] !== '@') continue
     for (const participant of ordered) {

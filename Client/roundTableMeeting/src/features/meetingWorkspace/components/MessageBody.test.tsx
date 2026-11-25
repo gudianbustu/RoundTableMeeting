@@ -39,3 +39,11 @@ it('recognizes a standalone diagram declaration and preserves prose about syntax
   view.rerender(<MessageBody diagrams content="sequenceDiagram describes a conversation." mentions={[]} />)
   expect(view.queryByRole('button')).toBeNull()
 })
+
+it('highlights a group once when several members share the same UTF-16 range', () => {
+  const content = '😀 @所有Agent 与 @小明'
+  const mentions = ['甲', '乙'].map(displayName => ({ participantId: displayName, displayName, startOffset: 3, length: 8 }))
+  mentions.push({ participantId: '人', displayName: '小明', startOffset: content.indexOf('@小明'), length: 3 })
+  const view = render(<MessageBody content={content} mentions={mentions} />)
+  expect(Array.from(view.container.querySelectorAll('mark')).map(mark => mark.textContent)).toEqual(['@所有Agent', '@小明'])
+})
