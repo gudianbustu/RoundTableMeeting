@@ -54,5 +54,6 @@ export function useMessageNotifications(meetingId: string, participantId: string
     if (tracker.state.after !== undefined) void synchronize(message.sequence)
   }, [enabled, participantId, meetingId, tracker, visibleScope, refresh, synchronize])
   const remove = useCallback(() => { runtime.current.controller.abort(); tracker.remove(); refresh() }, [tracker, refresh])
-  return { publicUnread: enabled ? tracker.unreadPublic.size : 0, pending: enabled ? tracker.state.pending : {}, failed, receive, synchronize, remove, retry: () => void synchronize(runtime.current.target) }
+  const privateUnread = (peer: string) => enabled ? tracker.unreadPrivate.get(peer)?.size ?? 0 : 0
+  return { privateUnread, publicUnread: enabled ? tracker.unreadPublic.size : 0, pending: enabled ? tracker.state.pending : {}, failed, receive, synchronize, remove, retry: () => void synchronize(runtime.current.target) }
 }

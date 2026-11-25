@@ -3,7 +3,7 @@ import { MessageNotifications } from './messageNotifications'
 import type { ChatMessage } from '../types/realtimeChat'
 const message = (sequence: number, visibility: 'public' | 'private' = 'private', sender = 'bob', recipient = 'me'): ChatMessage => ({ meetingId: 'meeting', messageId: `m${sequence}`, sequence, visibility, recipient: { participantId: recipient, displayName: recipient }, author: { participantId: sender, displayName: sender, kind: 'human' }, content: 'secret body', mentions: [], createdAt: new Date() })
 beforeEach(() => localStorage.clear())
-it('notifies other scopes without counting, and never exposes another pair or own sends', () => {
+it('notifies other scopes, and never exposes another pair or own sends', () => {
   const tracker = new MessageNotifications('meeting', 'me')
   tracker.receive(message(1), 'public')
   tracker.receive(message(2, 'private', 'alice', 'charlie'), 'public')
@@ -67,4 +67,32 @@ it('bounds the displayed public unread counter and clears through the latest seq
   tracker.clear('public')
   tracker.receive(message(1019, 'public'), 'bob')
   expect(tracker.unreadPublic.size).toBe(0)
+})
+
+it('keeps two private peers and public unread independent across replay, reload and clearing', () => {
+  const tracker = new MessageNotifications('meeting', 'me', localStorage)
+  tracker.state.after = 1
+  for (const [seq, peer] of [[2, 'alice'], [4, 'bob'], [3, 'alice'], [4, 'bob']] as const)
+    tracker.receive(message(seq, 'private', peer), 'charlie')
+  tracker.receive(message(5, 'public'), 'charlie')
+  const restored = new MessageNotifications('meeting', 'me', localStorage)
+  expect(restored.unreadPrivate.get('alice')?.size).toBe(2)
+  expect(restored.unreadPrivate.get('bob')?.size).toBe(1)
+  restored.clear('alice')
+  restored.receive(message(3, 'private', 'alice'), 'bob')
+  expect(restored.unreadPrivate.has('alice')).toBe(false)
+  expect(restored.unreadPrivate.get('bob')?.size).toBe(1)
+  expect(restored.unreadPublic.size).toBe(1)
+})
+
+it('restores one known pending event from older storage and bounds each peer separately', () => {
+  const initial = new MessageNotifications('meeting', 'me', localStorage)
+  localStorage.setItem(initial.key, JSON.stringify({ after: 7, pending: { bob: 7 }, cleared: {} }))
+  const tracker = new MessageNotifications('meeting', 'me', localStorage)
+  expect(tracker.unreadPrivate.get('bob')?.size).toBe(1)
+  for (let sequence = 8; sequence <= 1010; sequence++) tracker.receive(message(sequence), 'public')
+  tracker.receive(message(1011, 'private', 'alice'), 'public')
+  const restored = new MessageNotifications('meeting', 'me', localStorage)
+  expect(restored.unreadPrivate.get('bob')?.size).toBe(1000)
+  expect(restored.unreadPrivate.get('alice')?.size).toBe(1)
 })

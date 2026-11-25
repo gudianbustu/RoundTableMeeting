@@ -61,16 +61,20 @@ export function RealtimeChatRegion(props: ChatProps) {
     if (props.sessionCache?.tabs) delete props.sessionCache.tabs[props.meetingId]
     props.onMeetingUnavailable?.()
   }, [props.meetingId, props.onMeetingUnavailable, props.sessionCache, notices.remove])
+  const privateBadge = (id: string) => {
+    const count = notices.privateUnread(id)
+    return count > 0 && <Badge count={count} overflowCount={999} title={`私聊未读 ${count >= 1000 ? '999+' : count} 条`} />
+  }
   return <div className="scoped-chat">
     {Boolean(tabs[meetingId]?.length) && <Tabs className="conversation-tabs" aria-label="会话" type="editable-card" hideAdd activeKey={peerId ?? 'public'}
       onChange={id => selectPeer(id === 'public' ? undefined : id)}
       onEdit={(id, action) => { if (action === 'remove' && typeof id === 'string') closePeer(id) }}
       items={[
         { key: 'public', label: <span>公开讨论 {notices.publicUnread > 0 && <Badge count={notices.publicUnread} overflowCount={999} title={`公屏未读 ${notices.publicUnread >= 1000 ? "999+" : notices.publicUnread} 条`} />}</span>, closable: false },
-        ...(tabs[meetingId] ?? []).map(id => ({ key: id, label: <span className="private-tab-name">私聊 · {props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}</span> })),
+        ...(tabs[meetingId] ?? []).map(id => ({ key: id, label: <span className="private-tab-name">{props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'} {privateBadge(id)}</span> })),
       ]} />}
     <ScopedChat key={`${key}:${props.readOnly ? 'history' : 'active'}`}  {...props} notificationControl={<div aria-live="polite" className="chat-message-notifications">
-      {Object.keys(notices.pending).map(id => <Button key={id} size="small" onClick={() => selectPeer(id === 'public' ? undefined : id)}>{id === 'public' ? '公开讨论有新消息' : `${props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}发来新私聊`}</Button>)}
+      {Object.keys(notices.pending).map(id => <Button key={id} size="small" onClick={() => selectPeer(id === 'public' ? undefined : id)}>{id === 'public' ? '公开讨论有新消息' : `${props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}发来新私聊`}{id !== 'public' && privateBadge(id)}</Button>)}
       {notices.failed && <Button size="small" onClick={notices.retry}>新消息提醒同步失败，重试</Button>}
     </div>} onNotificationMessage={notices.receive} onNotificationSnapshot={notices.synchronize} composerRef={editor} peerId={peerId} scopeControl={peerId && <span>私聊 · 仅你与{peer?.displayName ?? '对方'}可见</span>} initialState={cache.current.get(key)} onStateChanged={retain} onPrivateChat={selectPeer} onMeetingUnavailable={unavailable} />
   </div>
