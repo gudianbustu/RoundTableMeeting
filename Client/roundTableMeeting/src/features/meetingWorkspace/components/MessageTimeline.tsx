@@ -119,7 +119,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
     {hasEarlierMessages && <div className="message-timeline-toolbar">
       <Button size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>
     </div>}
-    <ReadingPane onWidthChange={onWidthChange}><div ref={scrollRef} className="message-timeline-scroll" onWheelCapture={interruptJump} onPointerDownCapture={interruptJump} onKeyDownCapture={interruptJump} role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
+    <ReadingPane onWidthChange={onWidthChange}><div ref={scrollRef} className="message-timeline-scroll" tabIndex={0} onWheelCapture={interruptJump} onPointerDownCapture={interruptJump} onKeyDownCapture={interruptJump} role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
       {messages.length === 0 && !pendingMessage && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" />}
       {messages.map(message => {
         const original = message.originalTextAttachmentId

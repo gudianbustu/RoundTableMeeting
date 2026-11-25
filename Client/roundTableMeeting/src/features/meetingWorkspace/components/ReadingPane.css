@@ -13,6 +13,33 @@
   min-width: 0;
   width: 100%;
 }
+@property --rt-scroll-thumb {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: transparent;
+}
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+  .message-timeline-scroll { --rt-scroll-thumb: transparent; }
+  .reading-frame:hover .message-timeline-scroll,
+  .reading-pane-dragging .message-timeline-scroll,
+  .message-timeline-scroll:focus-visible { --rt-scroll-thumb: var(--rt-secondary); }
+  @supports not selector(::-webkit-scrollbar-thumb) {
+    .message-timeline-scroll { scrollbar-color: var(--rt-scroll-thumb) transparent; }
+    .message-timeline-scroll:active { scrollbar-color: var(--rt-secondary) transparent; }
+  }
+  .message-timeline-scroll::-webkit-scrollbar { width: 12px; background: transparent; }
+  .message-timeline-scroll::-webkit-scrollbar-thumb {
+    background: var(--rt-scroll-thumb);
+    border: 2px solid transparent;
+    border-radius: 6px;
+    background-clip: padding-box;
+  }
+  .message-timeline-scroll::-webkit-scrollbar-thumb:active { background-color: var(--rt-secondary); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .message-timeline-scroll { transition: --rt-scroll-thumb 160ms ease; }
+  .reading-resizer::after { transition: background-color 160ms ease; }
+}
 .reading-resizer { display: none; }
 @media (min-width: 1101px) {
   .message-timeline > .reading-pane { margin-inline: 12px; }
@@ -32,10 +59,10 @@
     content: '';
     width: 3px;
     height: 36px;
-    background: var(--rt-border);
+    background: transparent;
     border-radius: 2px;
   }
-  .reading-resizer:hover::after, .reading-resizer:focus-visible::after,
+  .reading-frame:hover .reading-resizer::after, .reading-resizer:hover::after, .reading-resizer:focus-visible::after,
   .reading-pane-dragging .reading-resizer::after { background: var(--rt-secondary); }
   .reading-pane-dragging { user-select: none; }
 }
