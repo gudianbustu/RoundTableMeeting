@@ -9,6 +9,7 @@ namespace RoundTableMeeting.RealtimeChat;
 public sealed class RealtimeMessageBroadcastConsumer(
     IMessageRepository messages,
     IHubContext<MeetingChatHub> hub,
+    IHubContext<MentionNotificationHub> notificationHub,
     IMeetingRealtimeGate realtimeGate,
     IMeetingRepository meetings,
     IMeetingParticipantRepository participants,
@@ -22,14 +23,24 @@ public sealed class RealtimeMessageBroadcastConsumer(
         var message = await messages.FindByIdAsync(envelope.MeetingId, envelope.MessageId, cancellationToken);
         if (message is null) return;
         var eligible = (await participants.ListAsync(envelope.MeetingId, cancellationToken))
-            .Where(p => p.MembershipState == Domain.Enums.MeetingMembershipState.Joined).Select(p => p.ID).ToHashSet();
-        foreach (var projection in await visibility.RecipientsAsync(envelope.MeetingId, message.ID, cancellationToken))
+            .Where(p => p.MembershipState == Domain.Enums.MeetingMembershipState.Joined).ToDictionary(p => p.ID);
+        var recipients = await visibility.RecipientsAsync(envelope.MeetingId, message.ID, cancellationToken);
+        var mentions = await messages.ListMentionsAsync(envelope.MeetingId, message.ID, cancellationToken);
+        var targets = mentions.Select(m => m.TargetParticipantId).ToHashSet();
+        var accountGroups = new HashSet<string>();
+        foreach (var projection in recipients)
         {
-            if (!eligible.Contains(projection.ParticipantId)) continue;
+            if (!eligible.TryGetValue(projection.ParticipantId, out var participant)) continue;
+            if (targets.Contains(participant.ID) && participant.ID != message.AuthorParticipantId &&
+                participant.ParticipantType == Domain.Enums.ParticipantType.Human && participant.UserId is Guid userId)
+                accountGroups.Add(MentionNotificationHub.AccountGroup(userId));
             var connections = presence.GetConnections(envelope.MeetingId, new HashSet<Guid> { projection.ParticipantId });
             if (connections.Count == 0) continue;
             var dto = await mapper.MapAsync(new(message, projection.Sequence), cancellationToken);
             await hub.Clients.Clients(connections).SendAsync("messageAppended", dto, cancellationToken);
         }
+        if (accountGroups.Count > 0)
+            await notificationHub.Clients.Groups(accountGroups.ToArray()).SendAsync("humanMentioned",
+                new HumanMentionNotification(message.MeetingId, message.ID), cancellationToken);
     }
 }

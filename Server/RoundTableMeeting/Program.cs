@@ -95,6 +95,9 @@ try
     app.MapGet(RoundTableMeeting.AgentCollaboration.NativeMeetingGuide.Path, () => Results.Text(RoundTableMeeting.AgentCollaboration.NativeMeetingGuide.Text, "text/plain; charset=utf-8")).AllowAnonymous();
     app.MapControllers();
     app.MapMcp("/mcp").AllowAnonymous();
+    app.MapHub<MentionNotificationHub>("/hubs/mention-notifications", options => options.CloseOnAuthenticationExpiration = true)
+        .RequireAuthorization()
+        .WithMetadata(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true), new NoStoreResponseAttribute());
     app.MapHub<MeetingChatHub>("/hubs/meeting-chat")
         .RequireAuthorization()
         .WithMetadata(new RequireBrowserOriginAttribute(allowMissingOriginForGet: true), new NoStoreResponseAttribute());
