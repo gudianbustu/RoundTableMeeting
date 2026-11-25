@@ -1,3 +1,4 @@
+import { avatarColorSlot, avatarUrl } from '@/features/avatars/avatar'
 import type { MeetingDetailsDto, ParticipantDto } from '@/api/generated/models'
 import type { MeetingDetails, Participant } from '../types/meetingWorkspace'
 import { guid } from './helpers'
@@ -8,6 +9,8 @@ export function mapParticipant(value: Partial<ParticipantDto>): Participant {
   return {
     participantId: guid(value.participantId),
     displayName: value.displayName,
+    avatarColorSlot: avatarColorSlot(value.avatarColorSlot ?? value.additionalData?.avatarColorSlot),
+    avatarUrl: avatarUrl(value.avatarUrl ?? value.additionalData?.avatarUrl),
     type,
     membershipState: value.membershipState === 'left' ? 'left' : 'joined',
     isCurrentUser: Boolean(value.isCurrentUser),

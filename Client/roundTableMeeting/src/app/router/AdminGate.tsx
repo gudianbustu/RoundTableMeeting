@@ -26,7 +26,7 @@ export function AdminGate() {
     }
   }, [candidate, identityRevision, refreshRevision])
   if (state.status === 'authenticated' && !state.user.isAdmin)
-    return <div role="alert">无管理权限：仅管理员可以管理用户。</div>
+    return <div role="alert">无管理权限：仅管理员可以访问此页面。</div>
   if (admitted === identityRevision) return <Outlet />
   if (failed || candidate || admitted !== undefined)
     return <ErrorState title="无法确认管理权限" description="请重新确认后继续。" onRetry={() => setAttempt(value => value + 1)} />

@@ -1,20 +1,17 @@
 import { CopyOutlined } from '@ant-design/icons'
-import { Button, Flex, Input, message, Modal, Segmented, Spin, Typography } from 'antd'
+import { Button, Flex, message, Modal, Segmented, Spin, Typography } from 'antd'
 import { useEffect, useState } from 'react'
 import { copyText } from '@/shared/utils/copyText'
-import { buildAgentInvitePrompt } from '../invitePrompts'
+import { AgentAvatarInvitation } from '@/features/avatars/AgentAvatarInvitation'
 import type { MeetingInvitation } from '../types/meetingWorkspace'
 
 export function InviteMeetingDialog({ open, invitation, meetingName, loading, onCancel, siteUrl: siteOverride, mcpUrl: mcpOverride }: { open: boolean; invitation?: MeetingInvitation; meetingName?: string; loading?: boolean; onCancel: () => void; siteUrl?: string; mcpUrl?: string }) {
   const siteUrl = invitation?.publicSiteUrl ?? siteOverride ?? window.location.origin
   const mcpUrl = mcpOverride ?? new URL('mcp', siteUrl.replace(/\/?$/, '/')).href
   const [step, setStep] = useState<'human' | 'agent'>('human')
-  const [invitationKey, setInvitationKey] = useState('')
-  const [agentName, setAgentName] = useState('')
   const [messageApi, contextHolder] = message.useMessage()
-  useEffect(() => { if (open) { setStep('human'); setAgentName(''); setInvitationKey(Array.from(crypto.getRandomValues(new Uint8Array(16)), byte => byte.toString(16).padStart(2, '0')).join('')) } }, [open])
+  useEffect(() => { if (open) setStep('human') }, [open])
   const meetingCode = invitation?.meetingCode ?? ''
-  const prompt = buildAgentInvitePrompt(agentName.trim(), meetingCode, mcpUrl, invitationKey)
   const copyValue = async (value: string, success: string) => {
     try {
       await copyText(value)
@@ -33,12 +30,7 @@ export function InviteMeetingDialog({ open, invitation, meetingName, loading, on
         <strong>邀请文案</strong>
         <div className="invite-copy">{humanCopy}</div>
         <Button block type="primary" icon={<CopyOutlined aria-hidden="true" />} onClick={() => void copyValue(humanCopy, '邀请文案已复制')}>复制完整邀请文案</Button>
-      </div> : <div className="invite-panel">
-        <label htmlFor="invite-agent-name">Agent 显示名称</label>
-        <Input id="invite-agent-name" placeholder="输入 Agent 显示名称" value={agentName} maxLength={64} allowClear onChange={event => setAgentName(event.target.value)} />
-        <div className="invite-prompt-title"><strong>接入提示词</strong><small>Streamable HTTP</small></div>
-        <div className="invite-copy agent-prompt" role="region" aria-label="Agent 接入提示词" tabIndex={0}>{agentName.trim() ? prompt : '输入名称后生成 MCP 接入提示词。'}</div>
-        <Button block type="primary" icon={<CopyOutlined aria-hidden="true" />} disabled={!agentName.trim()} onClick={() => void copyValue(prompt, '提示词已复制')}>复制 MCP 接入提示词</Button>
-      </div>}
+      </div> : open && <AgentAvatarInvitation key={invitation.meetingId} meetingId={invitation.meetingId} meetingCode={meetingCode} mcpUrl={mcpUrl}
+        onCopy={value => copyValue(value, '提示词已复制')} />}
   </Modal>
 }

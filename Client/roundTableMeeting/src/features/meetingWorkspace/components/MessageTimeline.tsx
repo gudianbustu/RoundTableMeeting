@@ -1,3 +1,4 @@
+import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { ReadingPane } from './ReadingPane'
 import './WorkspaceMessages.css'
 import { RobotOutlined, InfoCircleOutlined } from '@ant-design/icons'
@@ -199,7 +200,7 @@ const MessageRow = memo(function MessageRow({ message, quoted, currentParticipan
     }}
     onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress}
     className={'message-item message-' + message.author.kind + (currentParticipantId && message.author.participantId === currentParticipantId ? ' message-own' : '')}>
-    <span className="chat-author-avatar" aria-hidden="true">{message.author.kind === 'agent' ? <RobotOutlined /> : message.author.kind === 'system' ? <InfoCircleOutlined /> : Array.from(message.author.displayName.trim())[0]}</span>
+    <span className="chat-author-avatar" aria-hidden="true"><AvatarImage src={message.author.avatarUrl} colorSlot={message.author.avatarColorSlot} fallback={message.author.kind === 'agent' ? <RobotOutlined /> : message.author.kind === 'system' ? <InfoCircleOutlined /> : Array.from(message.author.displayName.trim())[0]} /></span>
     <div className="chat-message-column">
       <header className="message-meta">
         <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>

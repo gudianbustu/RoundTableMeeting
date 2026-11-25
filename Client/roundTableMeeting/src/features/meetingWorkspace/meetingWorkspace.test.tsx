@@ -1,3 +1,4 @@
+import * as avatarApi from '@/features/avatars/avatarApi'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ConfigProvider } from 'antd'
@@ -62,12 +63,17 @@ describe('meeting workspace contracts', () => {
   })
 
   it('builds the agent MCP prompt from display name and meeting code', async () => {
+    vi.spyOn(avatarApi, 'listAvatars').mockResolvedValue([{ id: 'fox', name: '狐狸', imageUrl: '/fox.png' }])
+    const bind = vi.spyOn(avatarApi, 'bindAgentAvatar').mockResolvedValue('0123456789abcdef0123456789abcdef')
     const actor = userEvent.setup()
     render(<ConfigProvider><InviteMeetingDialog open invitation={{ meetingId: 'm', meetingCode: '0e04091b-4287-4b4c-8c99-70217a3aeea0' }} onCancel={vi.fn()} siteUrl="http://test.local" mcpUrl="http://test.local/mcp" /></ConfigProvider>)
     await actor.click(screen.getByText('AI Agent'))
     expect(screen.queryByText(/join_meeting/)).not.toBeInTheDocument()
     await actor.type(screen.getByLabelText('Agent 显示名称'), '助手一号')
-    expect(screen.getByText(/X-RoundTable-Mode/)).toHaveTextContent('助手一号')
+    await actor.click(await screen.findByRole('radio', { name: '狐狸' }))
+    await actor.click(screen.getByRole('button', { name: '生成邀请' }))
+    expect(bind).toHaveBeenCalledWith('m', '助手一号', 'fox')
+    expect(await screen.findByText(/X-RoundTable-Mode/)).toHaveTextContent('助手一号')
     expect(screen.getByRole('button', { name: '复制 MCP 接入提示词' })).toBeEnabled()
   })
 

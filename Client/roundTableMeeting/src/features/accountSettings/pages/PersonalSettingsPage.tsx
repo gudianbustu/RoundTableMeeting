@@ -1,3 +1,5 @@
+import { PersonalAvatarDialog } from '@/features/avatars/PersonalAvatarDialog'
+import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { MentionNotificationSettings } from '../components/MentionNotificationSettings'
 import { Alert, Button, Card, Form, Input } from 'antd'
 import { TeamOutlined } from '@ant-design/icons'
@@ -13,6 +15,7 @@ import type { ChangeMyPasswordInput, UpdateMyNicknameInput } from '../types/acco
 export function PersonalSettingsPage() {
   const location = useLocation()
   const { state, identityRevision, refreshCurrentUser } = useAuthentication()
+  const [changingAvatar, setChangingAvatar] = useState(false)
   const [nicknameForm] = Form.useForm<UpdateMyNicknameInput>()
   const [passwordForm] = Form.useForm<ChangeMyPasswordInput & { confirmPassword: string }>()
   const [nicknameBusy, setNicknameBusy] = useState(false)
@@ -87,13 +90,14 @@ export function PersonalSettingsPage() {
       <div className="profile-identity">
         <h1>个人设置</h1>
         <div className="profile-person">
-          <span className="profile-avatar" aria-hidden="true">{Array.from(state.user.nickname)[0]}</span>
+          <button type="button" className="profile-avatar profile-avatar-button" aria-label="更换个人头像" title="更换个人头像" onClick={() => setChangingAvatar(true)}><AvatarImage src={state.user.avatarUrl} fallback={Array.from(state.user.nickname)[0]} /></button>
           <div><strong>{state.user.nickname}</strong><small>{state.user.isAdmin ? '管理员' : '普通用户'}</small></div>
         </div>
         <div className="profile-account"><span>用户名</span><strong>{state.user.username}</strong>
           {state.user.isAdmin && <Link className="profile-admin-link" to="/users" state={location.state}><TeamOutlined /> 用户管理</Link>}
         </div>
       </div>
+      {changingAvatar && <PersonalAvatarDialog currentUrl={state.user.avatarUrl} onClose={() => setChangingAvatar(false)} onSaved={() => { setChangingAvatar(false); void refreshCurrentUser() }} />}
       <AppearanceSettings />
       <MentionNotificationSettings />
     </aside>

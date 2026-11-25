@@ -6,7 +6,7 @@ export type PresenceState = 'online' | 'offline'
 export type AgentActivityState = 'waiting' | 'processing' | 'blocked' | 'disconnected' | 'unknown'
 
 export type MessageMention = { participantId: string; displayName: string; startOffset: number; length: number }
-export type MessageAuthor = { participantId?: string; kind: MessageAuthorKind; displayName: string }
+export type MessageAuthor = { avatarUrl?: string; avatarColorSlot?: number; participantId?: string; kind: MessageAuthorKind; displayName: string }
 export type MessageVisibility = 'public' | 'private'
 export type ChatAttachment = { attachmentId: string; name: string; sizeBytes: number; mediaType: string; state: string; localPreviewFile?: File; uploadRequestId?: string; uploadedAttachmentId?: string }
 export type MessageTarget = { visibility?: MessageVisibility; recipientParticipantId?: string; attachmentIds?: string[]; replyToMessageId?: string }

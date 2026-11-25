@@ -1,3 +1,4 @@
+import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
@@ -119,7 +120,7 @@ export function MeetingWorkspacePage() {
     <div className="workspace-member-tools">
       <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员，${onlineCount} 位在线`}>
         <span className="workspace-member-faces" aria-hidden="true">{members.slice(0, 3).map(person =>
-          <i key={person.participantId}>{Array.from(person.displayName)[0]}</i>)}</span>{onlineCount}/{members.length} 在线
+          <i key={person.participantId}><AvatarImage src={person.avatarUrl} colorSlot={person.avatarColorSlot} fallback={Array.from(person.displayName)[0]} /></i>)}</span>{onlineCount}/{members.length} 在线
       </button>
       {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
     </div>

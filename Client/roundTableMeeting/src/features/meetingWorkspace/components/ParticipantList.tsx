@@ -1,3 +1,4 @@
+import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { Avatar, Button, Collapse, Empty, Tag, Tooltip, Typography } from 'antd'
 import { EditOutlined, UserDeleteOutlined, MessageOutlined, UserAddOutlined } from '@ant-design/icons'
 import './ParticipantList.css'
@@ -9,7 +10,9 @@ export function ParticipantList({ onRemove, onEditNickname, onInvite, onMention,
   const online = members.filter(p => presence[p.participantId] === 'online')
   const offline = members.filter(p => presence[p.participantId] !== 'online')
   const rows = (items: Participant[]) => <div className="participant-list-items">{items.map(participant => <div key={participant.participantId} className="participant-list-item">
-    <Avatar>{participant.displayName.slice(0, 1)}</Avatar>
+    {participant.avatarUrl && participant.avatarColorSlot !== undefined
+      ? <span className="rt-member-avatar"><AvatarImage src={participant.avatarUrl} colorSlot={participant.avatarColorSlot} fallback={Array.from(participant.displayName)[0]} /></span>
+      : <Avatar src={participant.avatarUrl}>{Array.from(participant.displayName)[0]}</Avatar>}
     <div className="participant-list-item-content"><Typography.Text strong>{participant.displayName}</Typography.Text><div>
       {participant.isCurrentUser && <Tag>我</Tag>}{participant.isCreator && <Tag color="gold">创建者</Tag>}
       <Typography.Text type="secondary">{participant.type === 'agent' ? 'AI Agent' : '人类参与者'}</Typography.Text>

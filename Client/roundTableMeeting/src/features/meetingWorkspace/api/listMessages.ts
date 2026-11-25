@@ -1,3 +1,4 @@
+import { avatarColorSlot, avatarUrl } from '@/features/avatars/avatar'
 import type { MessagePageDto } from '@/api/generated/models'
 import { getApiClient } from '@/api/client/apiClient'
 import { meetingError, options, guid } from './helpers'
@@ -14,7 +15,7 @@ export function mapMessage(value: any): ChatMessage {
   const visibility = value.visibility ?? 'public'
   if (!['public', 'private'].includes(visibility) || (visibility === 'private' && (!value.recipient?.participantId || typeof value.recipient.displayName !== 'string'))) throw new RealtimeChatApiError('invalid_message_response')
   const originalId = value.originalTextAttachmentId ?? value.additionalData?.originalTextAttachmentId
-  return { originalTextAttachmentId: originalId ? guid(originalId) : undefined, visibility, recipient: visibility === 'private' ? { participantId: guid(value.recipient.participantId), displayName: value.recipient.displayName } : undefined, attachments: (value.attachments ?? []).map(mapAttachment), replyToMessageId: value.replyToMessageId ? guid(value.replyToMessageId) : undefined, messageId: guid(value.messageId), meetingId: guid(value.meetingId), sequence, author: { participantId: author.participantId == null ? undefined : guid(author.participantId), kind, displayName: author.displayName }, content: value.content, mentions, createdAt }
+  return { originalTextAttachmentId: originalId ? guid(originalId) : undefined, visibility, recipient: visibility === 'private' ? { participantId: guid(value.recipient.participantId), displayName: value.recipient.displayName } : undefined, attachments: (value.attachments ?? []).map(mapAttachment), replyToMessageId: value.replyToMessageId ? guid(value.replyToMessageId) : undefined, messageId: guid(value.messageId), meetingId: guid(value.meetingId), sequence, author: { participantId: author.participantId == null ? undefined : guid(author.participantId), kind, avatarColorSlot: avatarColorSlot(author.avatarColorSlot ?? author.additionalData?.avatarColorSlot), avatarUrl: avatarUrl(author.avatarUrl ?? author.additionalData?.avatarUrl), displayName: author.displayName }, content: value.content, mentions, createdAt }
 }
 
 export async function listMessages(meetingId: string, request: MessagePageRequest = {}, signal?: AbortSignal): Promise<MessagePage> {

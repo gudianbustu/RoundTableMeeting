@@ -1,3 +1,4 @@
+import * as avatarApi from '@/features/avatars/avatarApi'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { InviteMeetingDialog } from './InviteMeetingDialog'
@@ -24,10 +25,15 @@ it('copies human invitation address and code on HTTP', async () => {
   await waitFor(() => expect(copied).toEqual(['邀请你加入「设计 评审」。\n\n网站地址：http://test.local\n\n会议码：copy-code']))
 })
 it('copies the complete multiline Agent prompt on HTTP', async () => {
+  vi.spyOn(avatarApi, 'listAvatars').mockResolvedValue([{ id: 'fox', name: '狐狸', imageUrl: '/fox.png' }])
+  const bind = vi.spyOn(avatarApi, 'bindAgentAvatar').mockResolvedValue('0123456789abcdef0123456789abcdef')
   render(<InviteMeetingDialog open invitation={invitation} onCancel={() => {}} mcpUrl="http://test.local/mcp" />)
   fireEvent.click(screen.getByRole('radio', { name: 'AI Agent' }))
   fireEvent.change(screen.getByLabelText('Agent 显示名称'), { target: { value: '助手😀' } })
-  fireEvent.click(screen.getByRole('button', { name: '复制 MCP 接入提示词' }))
+  fireEvent.click(await screen.findByRole('radio', { name: '狐狸' }))
+  fireEvent.click(screen.getByRole('button', { name: '生成邀请' }))
+  expect(bind).toHaveBeenCalledWith(invitation.meetingId, '助手😀', 'fox')
+  fireEvent.click(await screen.findByRole('button', { name: '复制 MCP 接入提示词' }))
   await waitFor(() => expect(copied).toHaveLength(1))
   const payload = copied[0].match(/\{"meetingCode":[^\n]+\}/)?.[0]
   expect(payload).toBeDefined()
