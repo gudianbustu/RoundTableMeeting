@@ -15,7 +15,11 @@ public sealed record SubmitMessageRequest(Guid ClientSubmissionId, string Conten
     [System.Text.Json.Serialization.JsonIgnore]
     public McpRecipientSelector? SourceRecipient { get; init; }
 }
-public sealed record MessageAuthorDto(Guid? ParticipantId, MessageAuthorKind Kind, string DisplayName);
+public sealed record MessageAuthorDto(Guid? ParticipantId, MessageAuthorKind Kind, string DisplayName)
+{
+    public string? AvatarUrl { get; init; }
+    public int? AvatarColorSlot { get; init; }
+}
 public sealed record MessageMentionDto(Guid ParticipantId, string DisplayName, int StartOffset, int Length)
 {
     [System.Text.Json.Serialization.JsonIgnore]

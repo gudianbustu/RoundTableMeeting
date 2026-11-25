@@ -19,7 +19,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
     IAgentActivityService activity, TimeProvider time, IAgentJoinRateLimiter rateLimiter,
     IAgentRecoveryRepository recovery, IMeetingLifecycleRepository membershipLifecycle, IMessageVisibilityRepository visibility, IMeetingRealtimeTermination termination, RoundTableMeeting.RealtimeChat.MeetingPresenceRegistry presence,
     RoundTableMeeting.RealtimeChat.HumanAccountPresence accounts,
-    Microsoft.AspNetCore.SignalR.IHubContext<RoundTableMeeting.RealtimeChat.MeetingChatHub> hub)
+    Microsoft.AspNetCore.SignalR.IHubContext<RoundTableMeeting.RealtimeChat.MeetingChatHub> hub, IAvatarRepository avatars)
 {
     public const int LeaseSeconds = 300;
     private bool notifyAfterOperation;
@@ -38,7 +38,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         }
         return online;
     }    public async Task<McpConnection> JoinAsync(McpTransportSessionKey transport, string meetingCode, string displayName,
-        string joinMode, string? address, CancellationToken ct, Guid? expectedConnection = null, long? expectedRemovalEpoch = null)
+        string joinMode, string? address, CancellationToken ct, Guid? expectedConnection = null, long? expectedRemovalEpoch = null, string? invitationDigest = null, string? previousInvitationBinding = null)
     {
         if (!Guid.TryParse(meetingCode, out var code) || joinMode is not ("create" or "reconnect" or "takeover")) throw new McpOperationException("validation_failed");
         var name = MeetingParticipant.NormalizeDisplayName(displayName);
@@ -68,6 +68,8 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
             if (p is not null && (p.ParticipantType != ParticipantType.Agent || joinMode == "create")) throw new McpOperationException("display_name_taken");
             if (p is null && joinMode != "create") throw new McpOperationException("participant_not_found");
             if (p is null) { p = MeetingParticipant.CreateAgent(meeting.ID, name, time.GetUtcNow()); unitOfWork.RegisterAdd(p); }
+            if (invitationDigest is not null && !await avatars.BindInvitationAsync(meeting.ID, p.NormalizedDisplayName, invitationDigest, p.ID, joinMode == "create", previousInvitationBinding, token))
+                throw new McpOperationException("invalid_invitation");
             var cursor = await agents.FindCursorAsync(meeting.ID, p.ID, token);
             if (expectedConnection.HasValue)
             {

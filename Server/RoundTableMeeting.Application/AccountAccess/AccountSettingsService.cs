@@ -10,7 +10,7 @@ namespace RoundTableMeeting.Application.AccountAccess;
 
 public sealed class AccountSettingsService(IUserAccountRepository repository, ICurrentUserContext currentUser,
     IAccountTransactionRunner transactionRunner, IPasswordHasher<UserAccount> passwordHasher,
-    PasswordVerificationService passwordVerification)
+    PasswordVerificationService passwordVerification, IAvatarRepository? avatars = null)
     : IAccountSettingsService, IScopedDependency<IAccountSettingsService>
 {
     public Task<AccountSettingsResult> UpdateMyNicknameAsync(UpdateNicknameRequest request, CancellationToken cancellationToken = default)
@@ -22,7 +22,8 @@ public sealed class AccountSettingsService(IUserAccountRepository repository, IC
             catch (ArgumentException) { return Invalid("nickname"); }
             await repository.UpdateNicknameAsync(account.ID, account.Nickname, token);
             return new AccountSettingsResult(AccountSettingsStatus.Success,
-                new(account.ID, account.Username, account.Nickname, account.IsAdmin));
+                new(account.ID, account.Username, account.Nickname, account.IsAdmin)
+                { AvatarUrl = avatars is null ? null : await avatars.GetAccountAsync(account.ID, token) });
         }, cancellationToken);
 
     public Task<AccountSettingsResult> ChangeMyPasswordAsync(ChangePasswordRequest request, CancellationToken cancellationToken = default)

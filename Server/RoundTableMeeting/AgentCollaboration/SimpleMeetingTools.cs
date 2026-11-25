@@ -31,6 +31,8 @@ public sealed class SimpleMeetingTools
     private sealed class State
     {
         public string? Owner { get; set; }
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string? PreviousInvitationBinding { get; set; }
         public Guid? PinnedParticipantId { get; set; }
         public Guid Binding { get; set; }
         public Guid Connection { get; set; }
@@ -158,6 +160,8 @@ public sealed class SimpleMeetingTools
                 }
                 AdmissionEpoch = epoch;
             }
+            // Only a checkpoint written for this invitation can identify its previous database connection.
+            state.PreviousInvitationBinding = state.Owner == owner && state.Binding != Guid.Empty ? Key(state).ToStorageBinding() : null;
             state.Owner = owner;
             var result = await work(state, scope.ServiceProvider);
             if (invited && state.PinnedParticipantId is Guid id) RememberInvitation(id);
@@ -213,9 +217,9 @@ public sealed class SimpleMeetingTools
                 s.Cursor = await sp.GetRequiredService<IMessageVisibilityRepository>().HighWatermarkAsync(meeting!.ID, participant.ID, ct);
         }
         McpConnection joined;
-        try { joined = await service.JoinAsync(key, code, currentName, "reconnect", address, ct, resumeOnly ? s.Connection : null, s.RemovalEpoch); }
+        try { joined = await service.JoinAsync(key, code, currentName, "reconnect", address, ct, resumeOnly ? s.Connection : null, s.RemovalEpoch, owner, s.PreviousInvitationBinding); }
         catch (McpOperationException e) when (!resumeOnly && e.Message == "participant_not_found" && !s.PinnedParticipantId.HasValue)
-        { joined = await service.JoinAsync(key, code, name, "create", address, ct, expectedRemovalEpoch: s.RemovalEpoch); }
+        { joined = await service.JoinAsync(key, code, name, "create", address, ct, expectedRemovalEpoch: s.RemovalEpoch, invitationDigest: owner); }
         if (s.Binding != Guid.Empty) sp.GetRequiredService<IAgentConnectionRegistry>().RemoveRegistrations(Key(s));
         s.Binding = binding;
         s.Connection = joined.ConnectionSessionId;

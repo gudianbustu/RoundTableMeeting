@@ -13,7 +13,7 @@ namespace RoundTableMeeting.Application.AccountAccess;
 public sealed class AuthenticationService(
     IUserAccountRepository userAccountRepository,
     ICurrentUserContext currentUserContext,
-    PasswordVerificationService passwordVerificationService)
+    PasswordVerificationService passwordVerificationService, IAvatarRepository? avatars = null)
     : IAuthenticationService, IScopedDependency<IAuthenticationService>
 {
     /// <summary>
@@ -44,7 +44,7 @@ public sealed class AuthenticationService(
             return new AuthenticateResult(AuthenticateStatus.InvalidCredentials);
         }
 
-        return new AuthenticateResult(AuthenticateStatus.Success, ToDto(account));
+        return new AuthenticateResult(AuthenticateStatus.Success, await ToDtoAsync(account, cancellationToken));
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public sealed class AuthenticationService(
         var account = await userAccountRepository.FindByIdAsync(userId, cancellationToken);
         return account is null
             ? new CurrentUserResult(CurrentUserStatus.Unauthenticated)
-            : new CurrentUserResult(CurrentUserStatus.Success, ToDto(account));
+            : new CurrentUserResult(CurrentUserStatus.Success, await ToDtoAsync(account, cancellationToken));
     }
 
     /// <summary>
@@ -90,5 +90,7 @@ public sealed class AuthenticationService(
     /// <summary>
     /// 将领域账号映射为客户端用户资料
     /// </summary>
-    private static CurrentUserDto ToDto(UserAccount account) => new(account.ID, account.Username, account.Nickname, account.IsAdmin);
+    private async Task<CurrentUserDto> ToDtoAsync(UserAccount account, CancellationToken ct) =>
+        new(account.ID, account.Username, account.Nickname, account.IsAdmin)
+        { AvatarUrl = avatars is null ? null : await avatars.GetAccountAsync(account.ID, ct) };
 }

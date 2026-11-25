@@ -25,7 +25,7 @@ public sealed class MeetingWorkspaceService(
     IMeetingLifecycleService lifecycleService,
     IMeetingDiscussionRepository discussion,
     IResolvedMessageAppendCore appendCore,
-    MeetingSiteAddress? site = null) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
+    MeetingSiteAddress? site = null, IAvatarRepository? avatars = null) : IMeetingWorkspaceService, IScopedDependency<IMeetingWorkspaceService>
 {
     public async Task<MeetingOperationResult<CreateMeetingResultDto>> CreateAsync(CreateMeetingRequest request, CancellationToken cancellationToken = default)
     {
@@ -308,7 +308,8 @@ public sealed class MeetingWorkspaceService(
     private async Task<MeetingDetailsDto> BuildDetails(Meeting meeting, Guid userId, CancellationToken cancellationToken)
     {
         var all = await participants.ListAsync(meeting.ID, cancellationToken);
-        var mapped = all.Select(p => new ParticipantDto(p.ID, p.DisplayName, p.ParticipantType == Domain.Enums.ParticipantType.Human ? ParticipantKind.Human : ParticipantKind.Agent, p.UserId == userId, p.UserId == meeting.CreatorUserId, p.JoinedAtUtc) { MembershipState = MembershipName(p) }).ToArray();
+        var photos = avatars is null ? null : await avatars.GetMeetingAsync(meeting.ID, cancellationToken);
+        var mapped = all.Select(p => new ParticipantDto(p.ID, p.DisplayName, p.ParticipantType == Domain.Enums.ParticipantType.Human ? ParticipantKind.Human : ParticipantKind.Agent, p.UserId == userId, p.UserId == meeting.CreatorUserId, p.JoinedAtUtc) { MembershipState = MembershipName(p), AvatarUrl = photos?.GetValueOrDefault(p.ID)?.Url, AvatarColorSlot = photos?.GetValueOrDefault(p.ID)?.ColorSlot }).ToArray();
         var current = all.Single(p => p.UserId == userId);
         var permissions = Permissions(meeting, current);
         return new(meeting.ID, meeting.Name, meeting.Description, meeting.CreatedAtUtc, mapped.FirstOrDefault(p => p.IsCurrentUser), permissions.CanDelete, permissions.CanInvite, mapped)
