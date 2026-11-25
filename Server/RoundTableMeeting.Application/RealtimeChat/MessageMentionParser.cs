@@ -3,7 +3,7 @@ using System.Text;
 using RoundTableMeeting.Domain.Entities;
 namespace RoundTableMeeting.Application.RealtimeChat;
 public sealed record MentionParticipant(Guid Id, string DisplayName, string NormalizedDisplayName);
-public sealed record ParsedMention(Guid ParticipantId, string DisplayName, int StartOffset, int Length);
+public sealed record ParsedMention(Guid ParticipantId, string DisplayName, int StartOffset, int Length, bool IsGroup = false);
 public interface IMessageMentionParser
 {
     IReadOnlyList<ParsedMention> Parse(string content, IReadOnlyList<MentionParticipant> participants, IReadOnlyList<RoundTableMeeting.Abstraction.Contracts.RealtimeChat.MentionCandidateDto>? candidates = null);

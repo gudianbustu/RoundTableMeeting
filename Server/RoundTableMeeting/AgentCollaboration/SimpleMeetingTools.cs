@@ -38,6 +38,7 @@ public sealed class SimpleMeetingTools
         public long Cursor { get; set; }
         public Guid? Pending { get; set; }
         public long PendingSequence { get; set; }
+        public bool PendingGroupReplyRequired { get; set; }
         public Guid Submission { get; set; }
         public string? Decision { get; set; }
         public Guid? LastInterrupted { get; set; }
@@ -288,6 +289,7 @@ public sealed class SimpleMeetingTools
                     {
                         s.Pending = found.MessageId;
                         s.PendingSequence = found.Sequence;
+                        s.PendingGroupReplyRequired = !found.OptionalAgentResponse && found.Mentions.Any(m => m.IsGroup && m.ParticipantId == c.ParticipantId);
                         s.Submission = Guid.NewGuid();
                         s.Decision = null;
                         Save(s);
@@ -503,6 +505,7 @@ public sealed class SimpleMeetingTools
                 return replay.Data?.MessageId.ToString() ?? throw new McpOperationException(JsonNamingPolicy.SnakeCaseLower.ConvertName(replay.Status.ToString()));
             }, ct);
         }
+        if (content is null && s.PendingGroupReplyRequired) throw new McpOperationException("group_reply_required");
         Guid? publishedId = null;
         if (s.Decision is not null && s.Decision != digest) throw new McpOperationException("decision_already_in_progress");
         await Connect(s, sp, ct, resumeOnly: draftId.HasValue);

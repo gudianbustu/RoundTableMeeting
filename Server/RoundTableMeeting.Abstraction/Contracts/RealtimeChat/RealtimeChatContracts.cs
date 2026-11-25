@@ -16,7 +16,11 @@ public sealed record SubmitMessageRequest(Guid ClientSubmissionId, string Conten
     public McpRecipientSelector? SourceRecipient { get; init; }
 }
 public sealed record MessageAuthorDto(Guid? ParticipantId, MessageAuthorKind Kind, string DisplayName);
-public sealed record MessageMentionDto(Guid ParticipantId, string DisplayName, int StartOffset, int Length);
+public sealed record MessageMentionDto(Guid ParticipantId, string DisplayName, int StartOffset, int Length)
+{
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsGroup { get; init; }
+}
 public sealed record MessageDto(Guid MessageId, Guid MeetingId, long Sequence, MessageAuthorDto Author, string Content, IReadOnlyList<MessageMentionDto> Mentions, DateTimeOffset CreatedAt)
 {
     public string Visibility { get; init; } = "public";
@@ -33,7 +37,8 @@ public sealed record MessageDto(Guid MessageId, Guid MeetingId, long Sequence, M
     {
         if (Author.ParticipantId == participantId || Author.Kind == MessageAuthorKind.System) return false;
         if (Visibility == "private") return Recipient?.ParticipantId == participantId;
-        return OptionalAgentResponse || Mentions.Any(m => m.ParticipantId == participantId);
+        if (DiscussionInterrupted) return false;
+        return OptionalAgentResponse && Mentions.Count == 0 || Mentions.Any(m => m.ParticipantId == participantId);
     }
     public string OffsetUnit => "utf16";
 }

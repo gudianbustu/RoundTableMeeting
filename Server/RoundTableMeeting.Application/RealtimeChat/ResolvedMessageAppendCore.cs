@@ -90,11 +90,14 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
             && await discussion.WasInterruptedAsync(meetingId, parent.Sequence, ct))
             throw new MeetingMessageAccessException("discussion_ended");
         IReadOnlyList<ParsedMention> mentions = [];
+        var hasGroupMention = false;
         if (sender is not null)
         {
             var people = roster.Where(p => p.MembershipState == MeetingMembershipState.Joined && (scope == "public" || p.ID == sender.ID || p.ID == recipient))
                 .Select(p => new MentionParticipant(p.ID, p.DisplayName, p.NormalizedDisplayName)).ToArray();
             mentions = parser.Parse(content, people, request.MentionCandidates);
+            if (scope == "public")
+                mentions = PublicGroupMentions.Expand(content, mentions, roster, out hasGroupMention);
         }
         if (author.Kind == TransportAuthorKind.Agent && scope == "public" && mentions.Count == 0 && request.ReplyToMessageId is null
             && !request.StartsPublicTopic && await discussion.WasInterruptedAsync(meetingId, 0, ct))
@@ -119,10 +122,10 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
         }
         if (sender is not null)
         {
-            if (scope == "public" && await discussion.ClassifyAsync(message, mentions.Count != 0, request.StartsPublicTopic, ct) is { } turn)
+            if (scope == "public" && await discussion.ClassifyAsync(message, mentions.Count != 0 || hasGroupMention, request.StartsPublicTopic, ct, hasGroupMention && mentions.Count > 0) is { } turn)
                 unitOfWork.RegisterAdd(turn);
             foreach (var mention in mentions)
-                unitOfWork.RegisterAdd(MessageMention.Create(meetingId, message.ID, mention.ParticipantId, mention.DisplayName, mention.StartOffset, mention.Length));
+                unitOfWork.RegisterAdd(MessageMention.Create(meetingId, message.ID, mention.ParticipantId, mention.DisplayName, mention.StartOffset, mention.Length, mention.IsGroup));
         }
         var evt = MessageAppendedEvent.Create(meetingId, message.ID, sequence, message.CreatedAtUtc);
         unitOfWork.RegisterAdd(evt);

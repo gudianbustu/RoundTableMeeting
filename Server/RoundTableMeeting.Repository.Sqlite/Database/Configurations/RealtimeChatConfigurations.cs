@@ -41,7 +41,7 @@ public sealed class MessageMentionConfiguration : IEntityTypeConfiguration<Messa
         builder.ToTable("MessageMentions", table => table.HasCheckConstraint("CK_MessageMentions_Range", "StartOffset >= 0 AND Length > 1"));
         builder.HasKey(x => x.ID);
         builder.Property(x => x.TargetDisplayName).HasMaxLength(128).IsRequired();
-        builder.HasIndex(x => new { x.MessageId, x.MeetingId, x.StartOffset }).IsUnique();
+        builder.HasIndex(x => new { x.MessageId, x.MeetingId, x.StartOffset, x.TargetParticipantId }).IsUnique();
         builder.HasOne<Meeting>().WithMany().HasForeignKey(x => x.MeetingId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MeetingMessage>().WithMany().HasForeignKey(x => new { x.MessageId, x.MeetingId }).HasPrincipalKey(x => new { x.ID, x.MeetingId }).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<MeetingParticipant>().WithMany().HasForeignKey(x => new { x.TargetParticipantId, x.MeetingId }).HasPrincipalKey(x => new { x.ID, x.MeetingId }).OnDelete(DeleteBehavior.Restrict);

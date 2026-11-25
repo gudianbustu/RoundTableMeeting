@@ -1168,6 +1168,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("IsGroup")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Length")
                         .HasColumnType("INTEGER");
 
@@ -1194,7 +1197,7 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
 
                     b.HasIndex("TargetParticipantId", "MeetingId");
 
-                    b.HasIndex("MessageId", "MeetingId", "StartOffset")
+                    b.HasIndex("MessageId", "MeetingId", "StartOffset", "TargetParticipantId")
                         .IsUnique();
 
                     b.ToTable("MessageMentions", null, t =>

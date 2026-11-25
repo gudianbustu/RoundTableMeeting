@@ -10,8 +10,9 @@ public sealed class MessageMention : BaseEntity
     public string TargetDisplayName { get; private set; } = string.Empty;
     public int StartOffset { get; private set; }
     public int Length { get; private set; }
+    public bool IsGroup { get; private set; }
     public MessageMention() { }
-    private MessageMention(Guid meetingId, Guid messageId, Guid targetParticipantId, string targetDisplayName, int startOffset, int length)
+    private MessageMention(Guid meetingId, Guid messageId, Guid targetParticipantId, string targetDisplayName, int startOffset, int length, bool isGroup)
     {
         if (meetingId == Guid.Empty || messageId == Guid.Empty || targetParticipantId == Guid.Empty) throw new ArgumentException("Mention identity is required.");
         if (startOffset < 0) throw new ArgumentOutOfRangeException(nameof(startOffset));
@@ -19,8 +20,8 @@ public sealed class MessageMention : BaseEntity
         var normalizedDisplayName = (targetDisplayName ?? string.Empty).Normalize(NormalizationForm.FormC).Trim();
         if (normalizedDisplayName.Length is < 1 or > 128) throw new ArgumentException("Target display name is invalid.", nameof(targetDisplayName));
         MeetingId = meetingId; MessageId = messageId; TargetParticipantId = targetParticipantId;
-        TargetDisplayName = normalizedDisplayName; StartOffset = startOffset; Length = length;
+        TargetDisplayName = normalizedDisplayName; StartOffset = startOffset; Length = length; IsGroup = isGroup;
     }
-    public static MessageMention Create(Guid meetingId, Guid messageId, Guid targetParticipantId, string targetDisplayName, int startOffset, int length)
-        => new(meetingId, messageId, targetParticipantId, targetDisplayName, startOffset, length);
+    public static MessageMention Create(Guid meetingId, Guid messageId, Guid targetParticipantId, string targetDisplayName, int startOffset, int length, bool isGroup = false)
+        => new(meetingId, messageId, targetParticipantId, targetDisplayName, startOffset, length, isGroup);
 }
