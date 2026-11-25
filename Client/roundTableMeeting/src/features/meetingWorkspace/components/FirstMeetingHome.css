@@ -50,9 +50,6 @@
 .first-home-intro h1 {
   font-size: 36px;
 }
-.first-home-intro p {
-  margin-top: 10px;
-}
 .first-home-hero,
 .first-home-band {
   background: var(--rt-subtle);
@@ -76,7 +73,7 @@
   background: var(--rt-accent);
   margin-bottom: 19px;
 }
-.first-home-hero h2 {
+.first-home-hero :is(h1, h2) {
   font-size: 38px;
 }
 .first-home-hero p {
@@ -129,7 +126,7 @@
   .first-home {
     width: min(100%, calc(100vw - 56px));
   }
-  .first-home-hero h2 {
+  .first-home-hero :is(h1, h2) {
     font-size: 30px;
   }
   .first-home-feature {
@@ -148,25 +145,22 @@
   .first-home-intro h1 {
     font-size: 27px;
   }
-  .first-home-intro p {
-    font-size: 14px;
-    margin-top: 3px;
-  }
   .first-home-hero {
     display: block;
     position: relative;
+    isolation: isolate;
+    overflow: hidden;
     padding: 20px;
     margin: 20px 0 21px;
     border-radius: 14px;
   }
+  .first-home-hero > div:first-child { position: relative; z-index: 1; }
   .first-home-hero > div:first-child::before {
     width: 30px;
     margin-bottom: 10px;
   }
-  .first-home-hero h2 {
+  .first-home-hero :is(h1, h2) {
     font-size: 25px;
-    position: relative;
-    z-index: 1;
   }
   .first-home-hero p {
     font-size: 14px;
@@ -183,10 +177,12 @@
   }
   .first-home-orbit {
     position: absolute;
-    right: 11px;
-    top: 10px;
-    width: 78px;
-    opacity: .65;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform: scale(1.16);
+    opacity: .26;
+    pointer-events: none;
   }
   .first-home-bandtitle {
     font-size: 20px;
@@ -228,3 +224,38 @@
 .first-home-icon-private {
   --mask: url('./first-home-assets/private.png');
 }
+
+.first-home > .meeting-directory { max-width: none; margin: 0 0 32px; }
+
+.meeting-directory li.directory-active-card { display: block; padding: 0; }
+.directory-active-card > button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  min-height: 56px;
+  padding: 16px 20px;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.directory-active-card > button:hover { background: var(--rt-subtle); }
+.directory-active-card > button:focus-visible { outline: 2px solid var(--rt-accent); outline-offset: 2px; }
+.directory-enter-hint { flex-shrink: 0; color: var(--rt-accent); }
+
+.directory-history-card { position: relative; }
+.directory-history-card .directory-history-open { position: static; }
+.directory-history-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.directory-history-open:focus-visible::after { outline: 2px solid var(--rt-accent); outline-offset: 2px; }
+.directory-history-card .directory-actions > button:not(.directory-history-open) { position: relative; z-index: 1; }
