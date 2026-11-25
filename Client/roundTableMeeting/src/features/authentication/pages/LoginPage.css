@@ -47,9 +47,14 @@
 .poster-caption { font-size: 24px; font-weight: 700; }
 .poster-detail { fill: var(--rt-secondary); font-size: 17px; }
 .signin-orbits { display: none; }
-@media (min-width: 1600px) {
-  .signin-layout { grid-template-columns: 46% 54%; padding: 34px; }
-  .signin-form { width: 440px; max-width: 80%; }
+@media (min-width: 1440px) {
+  .signin-layout {
+    /* At the 1440 × 900 reference size the two columns measure 609 × 844 and 775 × 844. */
+    --signin-panel-height: clamp(520px, calc(100dvh - 56px), 844px);
+    place-content: center;
+    grid-template-rows: var(--signin-panel-height);
+    grid-template-columns: calc(var(--signin-panel-height) * 609 / 844) calc(var(--signin-panel-height) * 775 / 844);
+  }
 }
 @media (max-width: 1000px) {
   .signin-layout { grid-template-columns: minmax(0, 1fr); padding: 18px; overflow: clip; }
