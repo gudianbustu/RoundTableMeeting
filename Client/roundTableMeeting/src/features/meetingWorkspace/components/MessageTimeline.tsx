@@ -1,6 +1,6 @@
 import { ReadingPane } from './ReadingPane'
 import './WorkspaceMessages.css'
-import { EllipsisOutlined, RollbackOutlined, RobotOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { RobotOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { MessageBody } from './MessageBody'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -93,7 +93,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
   }
   useEffect(() => clearLongPress, [])
   const openActions = (row: HTMLElement) => {
-    const button = row.querySelector<HTMLButtonElement>('.message-menu-trigger')
+    const button = row.querySelector<HTMLButtonElement>('.message-inline-actions button')
     if (!button || getComputedStyle(button).display === 'none') return false
     button.focus({ preventScroll: true })
     setActionMessageId(row.dataset.messageId)
@@ -160,10 +160,10 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
             <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>
             <Tag className="message-kind">{message.author.kind === 'agent' ? 'AI Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Tag>
             <time className="message-time" dateTime={message.createdAt.toISOString()} title={message.createdAt.toLocaleString()}>{message.createdAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
-            {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
             <MessageActions open={actionMessageId === message.messageId} onOpenChange={open =>
               setActionMessageId(current => open ? message.messageId : current === message.messageId ? undefined : current)} message={message} onReply={canReply ? onReply : undefined}
               onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined} />
+            {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
           </header>
           {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
           {message.content && <MessageBody diagrams content={message.content} mentions={message.mentions} />}
@@ -185,12 +185,9 @@ function MessageActions({ message, onReply, onPrivateChat, open, onOpenChange }:
     ...(authorId && onPrivateChat ? [{ key: 'private', label: '私聊', onClick: () => onPrivateChat(authorId) }] : []),
   ]
   if (!items.length) return null
-  const replyOnly = items.length === 1 && items[0].key === 'reply'
-  return <>
-    {replyOnly && <Button type="text" size="small" className="message-quick-reply" aria-label="回复消息" title="回复消息"
-      icon={<RollbackOutlined />} onClick={items[0].onClick} />}
-    <Dropdown destroyOnHidden open={open} onOpenChange={onOpenChange} classNames={{ root: 'message-action-menu' }} trigger={['click']} autoFocus menu={{ items, 'aria-label': message.author.displayName + '的消息操作' }}>
-      <Button size="small" type="text" className={replyOnly ? "message-menu-trigger reply-only-menu" : "message-menu-trigger"} aria-label="消息操作" icon={<EllipsisOutlined />} />
-    </Dropdown>
-  </>
+  return <Dropdown destroyOnHidden open={open} onOpenChange={onOpenChange} classNames={{ root: 'message-action-menu' }} trigger={['contextMenu']} autoFocus menu={{ items, 'aria-label': message.author.displayName + '的消息操作' }}>
+    <span className="message-inline-actions" role="group" aria-label={message.author.displayName + '的快捷操作'}>
+      {items.map(item => <Button key={item.key} size="small" type="text" onClick={item.onClick}>{item.label}</Button>)}
+    </span>
+  </Dropdown>
 }

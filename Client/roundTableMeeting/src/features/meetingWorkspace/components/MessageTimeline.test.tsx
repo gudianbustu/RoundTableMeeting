@@ -17,6 +17,13 @@ function timeline() {
   return { rows: screen.getAllByRole('article'), reply }
 }
 
+it('replies directly from the message header', () => {
+  const { rows, reply } = timeline()
+  fireEvent.click(within(rows[1]).getByRole('button', { name: '回复' }))
+  expect(reply).toHaveBeenCalledWith(messages[1])
+  expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+})
+
 it('retains native context menus for links and selected text and switches actions between messages', async () => {
   const { rows, reply } = timeline()
   expect(fireEvent.contextMenu(within(rows[0]).getByRole('link'))).toBe(true)
@@ -28,8 +35,8 @@ it('retains native context menus for links and selected text and switches action
   expect(fireEvent.contextMenu(rows[0])).toBe(false)
   await screen.findByRole('menuitem', { name: '回复' })
   fireEvent.contextMenu(rows[1])
-  await waitFor(() => expect(within(rows[1]).getByRole('button', { name: '消息操作' })).toHaveClass('ant-dropdown-open'))
-  expect(within(rows[0]).getByRole('button', { name: '消息操作' })).not.toHaveClass('ant-dropdown-open')
+  await waitFor(() => expect(within(rows[1]).getByRole('group', { name: /的快捷操作/ })).toHaveClass('ant-dropdown-open'))
+  expect(within(rows[0]).getByRole('group', { name: /的快捷操作/ })).not.toHaveClass('ant-dropdown-open')
   const menu = screen.getByRole('menu', { name: 'Second的消息操作' })
   fireEvent.click(within(menu).getByRole('menuitem', { name: '回复' }))
   expect(reply).toHaveBeenCalledWith(messages[1])

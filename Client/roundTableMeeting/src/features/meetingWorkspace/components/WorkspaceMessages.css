@@ -106,11 +106,14 @@
   border-radius: 5px;
   padding: 7px 10px;
 }
-@media (min-width: 601px) and (hover: hover) {
-  .chat-message-column .message-menu-trigger { opacity: 0; }
-  .message-item:hover .message-menu-trigger,
-  .message-item:focus-within .message-menu-trigger,
-  .chat-message-column .message-menu-trigger[aria-expanded="true"] { opacity: 1; }
+.message-inline-actions { display: inline-flex; align-items: center; gap: 2px; }
+.message-own .message-inline-actions { order: -1; }
+.message-inline-actions .ant-btn { color: var(--rt-secondary); padding-inline: 5px; }
+@media (hover: hover) {
+  .message-inline-actions { opacity: 0; pointer-events: none; }
+  .message-item:hover .message-inline-actions,
+  .message-item:focus-within .message-inline-actions,
+  .message-inline-actions.ant-dropdown-open { opacity: 1; pointer-events: auto; }
 }
 
 .message-composer .message-reply-context { border-radius: 7px; border-inline-start: 0; padding: 5px 9px; gap: 8px; }
@@ -125,11 +128,7 @@
 .message-composer .message-composer-footer { flex-wrap: nowrap; align-items: center; }
 .message-composer-footer .message-composer-tools { flex: 1 1 0; }
 
-.chat-message-column .message-quick-reply { display: none; }
-@media (max-width: 600px) {
-  .chat-message-column .message-quick-reply { display: inline-flex; color: var(--rt-secondary); }
-  .chat-message-column .reply-only-menu { display: none; }
-}
+
 
 .scoped-chat .message-timeline { position: relative; }
 .message-timeline > .timeline-jump-latest {
