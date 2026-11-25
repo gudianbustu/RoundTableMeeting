@@ -655,6 +655,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("CreationInformationHash")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("CreatorUserId")
                         .HasColumnType("TEXT");
 

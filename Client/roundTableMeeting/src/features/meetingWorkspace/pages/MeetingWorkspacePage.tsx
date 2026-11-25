@@ -7,6 +7,7 @@ import { MeetingDirectory } from '../components/MeetingDirectory'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
+import { MeetingInformationDialog } from '../components/MeetingInformationDialog'
 import { MeetingNicknameDialog } from '../components/MeetingNicknameDialog'
 import { MeetingNavigation } from '../components/MeetingNavigation'
 import { DiscussionModeControl } from '../components/DiscussionModeControl'
@@ -36,6 +37,14 @@ export function MeetingWorkspacePage() {
   const composerRef = useRef<MessageComposerHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
+  const [informationId, setInformationId] = useState<string>()
+  const meetingName = workspace.details?.name
+  useEffect(() => {
+    if (!meetingName) return
+    const previousTitle = document.title
+    document.title = meetingName + ' - 圆桌会议'
+    return () => { document.title = previousTitle }
+  }, [meetingName])
   const [inviteOpen, setInviteOpen] = useState(false)
   const [mentionPeerId, setMentionPeerId] = useState<string>()
   const [nicknameOpen, setNicknameOpen] = useState(false)
@@ -52,7 +61,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
-    setMembersOpen(false); setNicknameOpen(false); setNavigationOpen(false)
+    setInformationId(undefined); setMembersOpen(false); setNicknameOpen(false); setNavigationOpen(false)
     setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
@@ -77,7 +86,11 @@ export function MeetingWorkspacePage() {
   const discussionMode = workspace.details && <DiscussionModeControl meeting={workspace.details} onModeChanged={workspace.refreshDetails} />
   const topbarSlot = navigationTrigger?.parentElement?.querySelector('#workspace-topbar-content')
   const topicHeader = workspace.details && !historical && <div className="workspace-topic-header">
-    <h1 className="workspace-topbar-title" title={workspace.details.name}>{workspace.details.name}</h1>
+    <h1 aria-label={workspace.details.name} className="workspace-topbar-title" title={workspace.details.name}><button type="button"
+      className="workspace-topic-trigger" aria-label={workspace.details.currentParticipant?.isCreator ? '编辑会议信息' : '查看会议信息'}
+      onClick={() => setInformationId(workspace.details?.meetingId)}>{workspace.details.name}</button></h1>
+    {informationId === workspace.details.meetingId && <MeetingInformationDialog meeting={workspace.details}
+      onClose={() => setInformationId(undefined)} onSaved={workspace.refreshDetails} />}
     <div className="workspace-member-tools">
       <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员`}>
         <span className="workspace-member-faces" aria-hidden="true">{members.slice(0, 3).map(person =>

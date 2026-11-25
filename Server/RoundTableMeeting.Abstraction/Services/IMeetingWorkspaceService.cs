@@ -4,6 +4,7 @@ namespace RoundTableMeeting.Abstraction.Services;
 public interface IMeetingWorkspaceService
 {
     Task<MeetingOperationResult<CreateMeetingResultDto>> CreateAsync(CreateMeetingRequest request, CancellationToken cancellationToken = default);
+    Task<MeetingOperationResult<object>> UpdateInformationAsync(Guid meetingId, UpdateMeetingInformationRequest request, CancellationToken ct);
     Task<MeetingOperationResult<object>> SetDiscussionModeAsync(Guid meetingId, string mode, CancellationToken ct);
     Task<IReadOnlyList<MeetingListItemDto>> ListAsync(CancellationToken cancellationToken = default, bool history = false);
     Task<MeetingOperationResult<MeetingDetailsDto>> GetAsync(Guid meetingId, CancellationToken cancellationToken = default);

@@ -67,7 +67,14 @@ export function useMeetingWorkspace() {
     if (!preserveCurrent) { setDetails(undefined); setDetailLoading(true) }
     try {
       const result = await getMeetingDetails(id, controller.signal)
-      if (!controller.signal.aborted && version === detailVersion.current) { setDetails(result); setError(undefined) }
+      if (!controller.signal.aborted && version === detailVersion.current) {
+        setDetails(result)
+        setError(undefined)
+        setLists(previous => {
+          if (!previous.active.some(item => item.meetingId === id && item.name !== result.name)) return previous
+          return { ...previous, active: previous.active.map(item => item.meetingId === id ? { ...item, name: result.name } : item) }
+        })
+      }
     } catch (value) {
       if (!controller.signal.aborted && version === detailVersion.current) {
         const apiError = value as MeetingWorkspaceApiError

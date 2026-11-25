@@ -513,6 +513,15 @@ export function createUpdateAdminRequestFromDiscriminatorValue(parseNode: ParseN
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {UpdateMeetingInformationRequest}
+ */
+// @ts-ignore
+export function createUpdateMeetingInformationRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoUpdateMeetingInformationRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {UpdateNicknameRequest}
  */
 // @ts-ignore
@@ -1128,6 +1137,18 @@ export function deserializeIntoSystemStatusDto(systemStatusDto: Partial<SystemSt
 export function deserializeIntoUpdateAdminRequest(updateAdminRequest: Partial<UpdateAdminRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "isAdmin": n => { updateAdminRequest.isAdmin = n.getBooleanValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param UpdateMeetingInformationRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoUpdateMeetingInformationRequest(updateMeetingInformationRequest: Partial<UpdateMeetingInformationRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "description": n => { updateMeetingInformationRequest.description = n.getStringValue(); },
+        "name": n => { updateMeetingInformationRequest.name = n.getStringValue(); },
     }
 }
 /**
@@ -2180,6 +2201,19 @@ export function serializeUpdateAdminRequest(writer: SerializationWriter, updateA
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param UpdateMeetingInformationRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeUpdateMeetingInformationRequest(writer: SerializationWriter, updateMeetingInformationRequest: Partial<UpdateMeetingInformationRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!updateMeetingInformationRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("description", updateMeetingInformationRequest.description);
+    writer.writeStringValue("name", updateMeetingInformationRequest.name);
+    writer.writeAdditionalData(updateMeetingInformationRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param UpdateNicknameRequest The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -2279,6 +2313,16 @@ export interface UpdateAdminRequest extends AdditionalDataHolder, Parsable {
      * The isAdmin property
      */
     isAdmin?: boolean | null;
+}
+export interface UpdateMeetingInformationRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The description property
+     */
+    description?: string | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
 }
 export interface UpdateNicknameRequest extends AdditionalDataHolder, Parsable {
     /**

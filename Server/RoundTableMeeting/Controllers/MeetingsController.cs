@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.SignalR;
+using RoundTableMeeting.RealtimeChat;
 using Microsoft.AspNetCore.Mvc;
 using RoundTableMeeting.Abstraction.Contracts.Meetings;
 using RoundTableMeeting.Abstraction.Enums;
@@ -15,6 +17,28 @@ namespace RoundTableMeeting.Controllers;
 [NoStoreResponse]
 public sealed class MeetingsController(IMeetingWorkspaceService service) : ControllerBase
 {
+    [HttpPut("{meetingId:guid}/information")]
+    [RequireBrowserOrigin(true)]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> UpdateInformation(Guid meetingId, UpdateMeetingInformationRequest request,
+        [FromServices] IHubContext<MeetingChatHub> hub, CancellationToken ct)
+    {
+        var result = await service.UpdateInformationAsync(meetingId, request, ct);
+        if (result.Status == MeetingOperationStatus.Success)
+        {
+            await hub.Clients.Group(MeetingChatHub.Group(meetingId)).SendAsync("meetingInformationChanged", cancellationToken: ct);
+            return NoContent();
+        }
+        return result.Status switch
+        {
+            MeetingOperationStatus.CreatorRequired => ApiProblemDetailsWriter.CreateResult(HttpContext, 403, "meeting_creator_required"),
+            MeetingOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed"),
+            MeetingOperationStatus.DeleteBusy => ApiProblemDetailsWriter.CreateResult(HttpContext, 409, "meeting_busy"),
+            MeetingOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
+            _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
+        };
+    }
+
     [HttpPut("{meetingId:guid}/discussion-mode")]
     [RequireBrowserOrigin(true)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]

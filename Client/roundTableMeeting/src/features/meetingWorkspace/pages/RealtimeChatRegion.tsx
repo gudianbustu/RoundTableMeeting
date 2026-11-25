@@ -148,6 +148,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
       onMessage: message => { if (expected !== generation.current) return; onNotificationMessage(message); if (message.author.kind === 'system') onMeetingDetailsChanged?.(); if (matches(message)) dispatch({ ...scoped(), type: 'messageEventReceived', message }) },
       onPresence: (participantId, value) => dispatch({ ...scoped(), type: 'presenceChanged', participantId, state: value }),
       onAgentActivity: activity => dispatch({ ...scoped(), type: 'agentActivityChanged', activity }),
+      onInformationChanged: () => { if (expected === generation.current) onMeetingDetailsChanged?.() },
       onParticipantRenamed: () => { if (expected === generation.current) onMeetingDetailsChanged?.() },
       onMembershipLeft: () => { if (expected === generation.current) onMembershipChanged?.() },
       onDeleted: () => reportUnavailable(expected),

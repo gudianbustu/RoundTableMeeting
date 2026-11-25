@@ -7,6 +7,7 @@ public sealed class Meeting : BaseEntity
 {
     public string Name { get; private set; } = string.Empty;
     public string? Description { get; private set; }
+    public string? CreationInformationHash { get; private set; }
     public Guid CreatorUserId { get; private set; }
     public Guid MeetingCode { get; private set; }
     public MeetingLifecycleState LifecycleState { get; private set; }
@@ -24,6 +25,25 @@ public sealed class Meeting : BaseEntity
     }
     public static Meeting Create(string name, string? description, Guid creatorUserId, DateTimeOffset createdAtUtc)
         => new(name, description, creatorUserId, Guid.NewGuid(), createdAtUtc);
+    private static string InformationHash(string name, string? description)
+    {
+        var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new[] { name, description });
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes));
+    }
+
+    public bool MatchesCreationInformation(string name, string? description) => CreationInformationHash is null
+        ? Name == name && Description == description
+        : CreationInformationHash == InformationHash(name, description);
+
+    public void UpdateInformation(string name, string? description)
+    {
+        var normalizedName = NormalizeName(name);
+        var normalizedDescription = NormalizeDescription(description);
+        CreationInformationHash ??= InformationHash(Name, Description);
+        Name = normalizedName;
+        Description = normalizedDescription;
+    }
+
     public void BeginDeleting()
     {
         if (LifecycleState != MeetingLifecycleState.Active) throw new InvalidOperationException("Meeting is not active.");

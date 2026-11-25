@@ -55,8 +55,7 @@ public sealed class MeetingWorkspaceService(
                 var existing = await meetings.FindByIdAsync(receipt.MeetingId.Value, token);
                 if (existing is null || existing.LifecycleState != Domain.Enums.MeetingLifecycleState.Active)
                     return (MeetingOperationStatus.CreationRequestConsumed, (Meeting?)null);
-                if (!string.Equals(existing.Name, normalizedName, StringComparison.Ordinal)
-                    || !string.Equals(existing.Description, normalizedDescription, StringComparison.Ordinal)
+                if (!existing.MatchesCreationInformation(normalizedName, normalizedDescription)
                     || await discussion.IsFreeAsync(existing.ID, 0, token) != initiallyFree)
                     return (MeetingOperationStatus.CreationRequestMismatch, (Meeting?)null);
                 return (MeetingOperationStatus.Replayed, existing);
@@ -80,6 +79,25 @@ public sealed class MeetingWorkspaceService(
             return new(MeetingOperationStatus.CreationRequestConsumed);
         var details = await BuildDetails(outcome.Item2!, userId, cancellationToken);
         return new(outcome.Item1, new CreateMeetingResultDto(details, new(outcome.Item2!.ID, outcome.Item2.MeetingCode.ToString("D").ToLowerInvariant(), site?.PublicUrl)), IsCreated: outcome.Item1 == MeetingOperationStatus.Created);
+    }
+
+    public async Task<MeetingOperationResult<object>> UpdateInformationAsync(Guid meetingId, UpdateMeetingInformationRequest request, CancellationToken ct)
+    {
+        if (!TryUser(out var userId)) return new(MeetingOperationStatus.Unauthenticated);
+        using var lease = await realtimeGate.AcquireExclusiveMutationAsync(meetingId, TimeSpan.FromSeconds(realtimeChatOptions.GateCloseTimeoutSeconds), ct);
+        if (lease is null) return new(MeetingOperationStatus.DeleteBusy);
+        return await transactionRunner.RunAsync<MeetingOperationResult<object>>(async token =>
+        {
+            var meeting = await meetings.FindActiveByIdAsync(meetingId, token);
+            var member = await participants.FindByUserAsync(meetingId, userId, token);
+            if (meeting is null || member?.MembershipState != Domain.Enums.MeetingMembershipState.Joined)
+                return new(MeetingOperationStatus.MeetingNotFound);
+            if (meeting.CreatorUserId != userId) return new(MeetingOperationStatus.CreatorRequired);
+            try { meeting.UpdateInformation(request.Name, request.Description); }
+            catch (ArgumentException) { return new(MeetingOperationStatus.ValidationFailed); }
+            unitOfWork.RegisterEdit(meeting);
+            return new(MeetingOperationStatus.Success);
+        }, ct);
     }
 
     public async Task<MeetingOperationResult<object>> SetDiscussionModeAsync(Guid meetingId, string mode, CancellationToken ct)

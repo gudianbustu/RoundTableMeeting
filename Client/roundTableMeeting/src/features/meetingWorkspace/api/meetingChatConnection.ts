@@ -1,7 +1,7 @@
 import { HubConnectionBuilder, HubConnectionState, LogLevel, type HubConnection } from '@microsoft/signalr'
 import type { AgentActivity, AgentActivityState, ChatMessage, ConnectionState, PresenceState } from '../types/realtimeChat'
 import { mapMessage } from './listMessages'
-export type ChatConnectionCallbacks = { onState: (state: ConnectionState) => void; onMessage: (message: ChatMessage) => void; onPresence: (participantId: string, state: PresenceState) => void; onAgentActivity: (activity: AgentActivity) => void; onDeleted: () => void; onMembershipLeft?: () => void; onParticipantRenamed?: () => void; onResubscribed?: (subscription: Subscription) => void }
+export type ChatConnectionCallbacks = { onState: (state: ConnectionState) => void; onMessage: (message: ChatMessage) => void; onPresence: (participantId: string, state: PresenceState) => void; onAgentActivity: (activity: AgentActivity) => void; onDeleted: () => void; onMembershipLeft?: () => void; onInformationChanged?: () => void; onParticipantRenamed?: () => void; onResubscribed?: (subscription: Subscription) => void }
 export type Subscription = { onlineParticipantIds: string[]; highWatermarkSequence: number; agentActivities: AgentActivity[] }
 const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const isGuid = (value: unknown): value is string => typeof value === 'string' && guidPattern.test(value)
@@ -37,6 +37,7 @@ export class MeetingChatConnection {
     this.callbacks = callbacks
     this.connection = new HubConnectionBuilder().withUrl('/hubs/meeting-chat', { withCredentials: true }).withAutomaticReconnect([0, 1000, 3000, 10000]).configureLogging(LogLevel.Warning).build()
     this.connection.onreconnecting(() => callbacks.onState('reconnecting')); this.connection.onreconnected(async () => { if (!this.meetingId) return; try { const subscription = await this.subscribe(this.meetingId); callbacks.onResubscribed?.(subscription); callbacks.onState('connected') } catch (error) { if ((error as { message?: string }).message?.includes('meeting_not_found')) { callbacks.onState('rejected'); callbacks.onDeleted() } else callbacks.onState('disconnected') } }); this.connection.onclose(() => callbacks.onState('disconnected'))
+    this.connection.on('meetingInformationChanged', () => callbacks.onInformationChanged?.())
     this.connection.on('participantRenamed', () => callbacks.onParticipantRenamed?.())
     this.connection.on('messageAppended', value => callbacks.onMessage(mapMessage(value))); this.connection.on('participantPresenceChanged', (event: any) => callbacks.onPresence(event.participantId, event.state === 'online' ? 'online' : 'offline')); this.connection.on('agentActivityChangedV1', (value: any) => callbacks.onAgentActivity(mapAgentActivity(value))); this.connection.on('meetingDeleted', callbacks.onDeleted); this.connection.on('meetingDeleting', callbacks.onDeleted); this.connection.on('membershipLeft', () => callbacks.onMembershipLeft?.())
   }

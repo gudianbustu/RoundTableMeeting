@@ -12,6 +12,8 @@ import { DiscussionModeRequestBuilderRequestsMetadata, type DiscussionModeReques
 // @ts-ignore
 import { HistoryRequestBuilderRequestsMetadata, type HistoryRequestBuilder } from './history/index.js';
 // @ts-ignore
+import { InformationRequestBuilderRequestsMetadata, type InformationRequestBuilder } from './information/index.js';
+// @ts-ignore
 import { InvitationRequestBuilderRequestsMetadata, type InvitationRequestBuilder } from './invitation/index.js';
 // @ts-ignore
 import { LeaveRequestBuilderRequestsMetadata, type LeaveRequestBuilder } from './leave/index.js';
@@ -46,6 +48,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The history property
      */
     get history(): HistoryRequestBuilder;
+    /**
+     * The information property
+     */
+    get information(): InformationRequestBuilder;
     /**
      * The invitation property
      */
@@ -106,6 +112,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     },
     history: {
         requestsMetadata: HistoryRequestBuilderRequestsMetadata,
+    },
+    information: {
+        requestsMetadata: InformationRequestBuilderRequestsMetadata,
     },
     invitation: {
         requestsMetadata: InvitationRequestBuilderRequestsMetadata,
