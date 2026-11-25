@@ -1,3 +1,4 @@
+import { MentionNotificationSettings } from '../components/MentionNotificationSettings'
 import { Alert, Button, Card, Form, Input } from 'antd'
 import { TeamOutlined } from '@ant-design/icons'
 import { Link, useLocation } from 'react-router-dom'
@@ -94,6 +95,7 @@ export function PersonalSettingsPage() {
         </div>
       </div>
       <AppearanceSettings />
+      <MentionNotificationSettings />
     </aside>
     <div className="profile-column">
       <Card title="账号昵称">

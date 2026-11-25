@@ -1,3 +1,4 @@
+import { MentionNotificationListener } from '@/features/meetingWorkspace/chat/MentionNotificationListener'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { CurrentUserBar } from '@/features/authentication'
 
@@ -12,6 +13,7 @@ export function AuthenticatedLayout() {
       {pathname.startsWith('/meetings/') && <div id="workspace-topbar-content" />}
       {['/settings/profile', '/users'].includes(pathname.replace(/\/$/, '')) ? <Link to={returnTo}>返回</Link> : <CurrentUserBar />}
     </header>
+    <MentionNotificationListener />
     <Outlet />
   </main>
 }
