@@ -35,7 +35,7 @@ function ReplyQuote({ meetingId, id, loaded, onLocate }: {
 }
 
 type Props = { onWidthChange?: (width: number) => void; onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
-export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
+export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, newMessageCount, onNewMessageClick, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
   const [previewId, setPreviewId] = useState<string>()
   const originals = useMemo(() => new Map(messages.map(message => [message.messageId, message])), [messages])
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -43,7 +43,12 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
   const itemsRef = useRef<HTMLDivElement>(null)
   const position = useRef<ChatScrollPosition>(scrollPosition ?? { atBottom: true })
   const jumpTarget = useRef<number | undefined>(undefined)
+  const jumpDeadline = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(jumpDeadline.current), [])
   const [atBottom, setAtBottom] = useState(position.current.atBottom)
+  useEffect(() => {
+    if (atBottom && newMessageCount > 0) onNewMessageClick()
+  }, [atBottom, newMessageCount, onNewMessageClick])
   const capture = useCallback(() => {
     const element = scrollRef.current; if (!element) return
     if (jumpTarget.current !== undefined) {
@@ -111,12 +116,20 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
     const target = element.scrollHeight - element.clientHeight
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
     jumpTarget.current = smooth ? target : undefined
+    window.clearTimeout(jumpDeadline.current)
     element.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'instant' })
-    if (!smooth) capture()
+    if (!smooth) { capture(); return }
+    // A layout change can cancel a native animation without a final scroll event.
+    jumpDeadline.current = window.setTimeout(() => {
+      if (jumpTarget.current === undefined || scrollRef.current !== element) return
+      jumpTarget.current = undefined
+      element.scrollTo({ top: element.scrollHeight - element.clientHeight, behavior: 'instant' })
+      capture()
+    }, 1200)
   }
   return <section className="message-timeline">
     {hasEarlierMessages && <div className="message-timeline-toolbar">
-      <Button size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>
+      <Button type="text" size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>
     </div>}
     <ReadingPane onWidthChange={onWidthChange}><div ref={scrollRef} className="message-timeline-scroll" tabIndex={0}
       onWheelCapture={interruptJump} onPointerDownCapture={interruptJump} onKeyDownCapture={interruptJump} role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
@@ -128,7 +141,10 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
         onPrivateChat={onPrivateChat} onLocate={onLocate} onPreview={setPreviewId} />)}
       {pendingMessage}
     </div></div></ReadingPane>
-    {!atBottom && <Button className="timeline-jump-latest" shape="round" size="small" onClick={jumpToLatest}>回到最新</Button>}
+    {!atBottom && <Button className="timeline-jump-latest" shape="round" size="small" onClick={jumpToLatest}>
+      <span aria-hidden="true">↓</span> 最新消息
+      {newMessageCount > 0 && <span className="timeline-new-count">{newMessageCount > 999 ? '999+' : newMessageCount}</span>}
+    </Button>}
     {previewId && <ConversationAttachmentViewer selectedId={previewId} messages={messages} currentParticipantId={currentParticipantId} hasEarlierMessages={hasEarlierMessages} onSelect={setPreviewId} />}
   </section>
 }

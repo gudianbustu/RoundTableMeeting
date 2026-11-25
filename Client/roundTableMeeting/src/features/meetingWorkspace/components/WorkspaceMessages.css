@@ -131,11 +131,34 @@
 
 
 .scoped-chat .message-timeline { position: relative; }
+.message-timeline > .message-timeline-toolbar {
+  align-self: center;
+  width: min(100%, var(--reading-width, 100%));
+  border: 0;
+}
+.message-timeline-toolbar::before, .message-timeline-toolbar::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--rt-border);
+}
 .message-timeline > .timeline-jump-latest {
   position: absolute;
-  inset-inline-start: 50%;
+  inset-inline-end: max(12px, calc((100% - var(--reading-width, 100%)) / 2));
   bottom: 8px;
-  transform: translateX(-50%);
   z-index: 1;
-  box-shadow: 0 2px 8px rgb(0 0 0 / 12%);
+  height: 34px;
+  color: var(--rt-primary);
+  border-color: var(--rt-primary);
+  background: var(--rt-surface);
+}
+.timeline-new-count {
+  min-width: 16px;
+  height: 16px;
+  padding-inline: 4px;
+  border-radius: 8px;
+  color: var(--rt-surface);
+  background: var(--rt-primary);
+  font-size: 11px;
+  line-height: 16px;
 }

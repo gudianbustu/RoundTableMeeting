@@ -85,7 +85,7 @@ it.each([false, true])('keeps the reader in history until a jump is requested (r
   const media = vi.spyOn(window, 'matchMedia').mockImplementation(query => query.includes('prefers-reduced-motion')
     ? { ...original(query), matches: reduced } : original(query))
   try {
-    fireEvent.click(screen.getByRole('button', { name: '回到最新' }))
+    fireEvent.click(screen.getByRole('button', { name: '最新消息' }))
     expect(scrollTo).toHaveBeenCalledWith({ top: 800, behavior: reduced ? 'instant' : 'smooth' })
   } finally { media.mockRestore() }
 })
