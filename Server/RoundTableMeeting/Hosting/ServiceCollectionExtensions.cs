@@ -58,6 +58,7 @@ public static class ServiceCollectionExtensions
 		builder.Services.AddSingleton<IAgentTaskSignalRegistry, AgentTaskSignalRegistry>();
 		builder.Services.AddScoped<MeetingAgentContext>();
         builder.Services.AddScoped<CurrentMcpSessionService>();
+        builder.Services.AddScoped<MeetingNicknameService>();
         builder.Services.AddHostedService<AgentConnectionStartupReconciler>();
         builder.Services.AddSingleton<McpTransferTickets>();
         var publicUrl = builder.Configuration["Federation:PublicSiteUrl"];

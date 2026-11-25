@@ -7,6 +7,7 @@ import { Alert, Button, Flex, Input, Modal, Typography, message } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { MeetingNavigation } from '../components/MeetingNavigation'
 import { MeetingHeader } from '../components/MeetingHeader'
+import { MeetingNicknameDialog } from '../components/MeetingNicknameDialog'
 import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { InviteMeetingDialog } from '../components/InviteMeetingDialog'
@@ -33,6 +34,7 @@ export function MeetingWorkspacePage() {
   const composerRef = useRef<MessageComposerHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
+  const [nicknameOpen, setNicknameOpen] = useState(false)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [mentionPeerId, setMentionPeerId] = useState<string>()
   const [leaveOpen, setLeaveOpen] = useState(false)
@@ -87,7 +89,9 @@ export function MeetingWorkspacePage() {
         <RealtimeChatRegion onPeerChanged={setMentionPeerId} sessionCache={chatCache.current} readOnly={workspace.details.membershipState === 'left' || workspace.details.canSend === false} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} composerTools={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onModeChanged={workspace.refreshDetails} onRefresh={workspace.refresh} />} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
-    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList mentionPeerId={mentionPeerId} onInvite={workspace.details.canManageInvitation ? openInvite : undefined} onPrivateChat={participant => composerRef.current?.privateChat?.(participant.participantId)} onMention={workspace.details.membershipState === 'left' ? undefined : participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
+    {nicknameOpen && workspace.details?.currentParticipant && <MeetingNicknameDialog meetingId={workspace.details.meetingId}
+      meetingName={workspace.details.name} name={workspace.details.currentParticipant.displayName} onSaved={workspace.refresh} onClose={() => setNicknameOpen(false)} />}
+    {workspace.details && <aside className="meeting-side-column"><div className="meeting-sidebar"><ParticipantList onEditNickname={historical ? undefined : () => setNicknameOpen(true)} mentionPeerId={mentionPeerId} onInvite={workspace.details.canManageInvitation ? openInvite : undefined} onPrivateChat={participant => composerRef.current?.privateChat?.(participant.participantId)} onMention={workspace.details.membershipState === 'left' ? undefined : participant => composerRef.current?.mention(participant.displayName)} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities} /></div></aside>}
     </>}
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />
     <InviteMeetingDialog meetingName={workspace.details?.name} open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />

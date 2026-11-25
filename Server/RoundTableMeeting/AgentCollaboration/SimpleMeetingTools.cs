@@ -22,12 +22,14 @@ public sealed class SimpleMeetingTools
     private static readonly SemaphoreSlim[] Gates = Enumerable.Range(0, 128).Select(_ => new SemaphoreSlim(1)).ToArray();
     private readonly IServiceScopeFactory scopes;
     private readonly string code, name, checkpoint, owner;
+    private readonly string memberDirectory, invitationAlias;
     private readonly string? address;
     private readonly SemaphoreSlim gate;
 
     private sealed class State
     {
         public string? Owner { get; set; }
+        public Guid? PinnedParticipantId { get; set; }
         public Guid Binding { get; set; }
         public Guid Connection { get; set; }
         public DateTimeOffset RenewAfter { get; set; }
@@ -51,8 +53,12 @@ public sealed class SimpleMeetingTools
         this.code = code;
         this.name = name;
         var key = SHA256.HashData(Encoding.UTF8.GetBytes(code + "/" + name.ToUpperInvariant()));
-        gate = Gates[key[0] % Gates.Length];
-        checkpoint = Path.Combine(databaseDirectory, "mcp-inbox", Convert.ToHexString(key) + ".json");
+        // Renames can join two nickname paths to one checkpoint. Serialize checkpoint resolution per meeting.
+        gate = Gates[SHA256.HashData(Encoding.UTF8.GetBytes(code))[0] % Gates.Length];
+        var inbox = Path.Combine(databaseDirectory, "mcp-inbox");
+        checkpoint = Path.Combine(inbox, Convert.ToHexString(key) + ".json");
+        memberDirectory = Path.Combine(inbox, "members");
+        invitationAlias = Path.Combine(memberDirectory, Convert.ToHexString(key) + "." + owner + ".member");
     }
 
     public static void Configure(HttpContext http, McpServerOptions options, JsonSerializerOptions json)
@@ -84,12 +90,31 @@ public sealed class SimpleMeetingTools
             options.ToolCollection.Add(McpServerTool.Create(method, instance, new() { SerializerOptions = json }));
     }
 
-    private void Save(State state)
+    private string MemberCheckpoint(Guid id) => Path.Combine(memberDirectory, id.ToString("N") + ".json");
+
+    private static void WriteAtomically(string path, byte[] data)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(checkpoint)!);
-        var temp = checkpoint + ".tmp";
-        File.WriteAllBytes(temp, JsonSerializer.SerializeToUtf8Bytes(state));
-        File.Move(temp, checkpoint, true);
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var temp = path + ".tmp";
+        File.WriteAllBytes(temp, data);
+        File.Move(temp, path, true);
+    }
+
+    private void Save(State state) => WriteAtomically(state.PinnedParticipantId is Guid id ? MemberCheckpoint(id) : checkpoint,
+        JsonSerializer.SerializeToUtf8Bytes(state));
+
+    private void RememberInvitation(Guid id) => WriteAtomically(invitationAlias, id.ToByteArray());
+
+    private async Task<string> ResolveCheckpoint(IServiceProvider services, CancellationToken ct)
+    {
+        if (!Directory.Exists(memberDirectory)) return checkpoint;
+        if (File.Exists(invitationAlias)) return MemberCheckpoint(new Guid(await File.ReadAllBytesAsync(invitationAlias, ct)));
+        if (File.Exists(checkpoint)) return checkpoint;
+        var meeting = await services.GetRequiredService<IMeetingRepository>().FindActiveByCodeAsync(Guid.Parse(code), ct);
+        if (meeting is null) return checkpoint;
+        var participant = await services.GetRequiredService<IMeetingParticipantRepository>()
+            .FindByNormalizedNameAsync(meeting.ID, name.ToUpperInvariant(), ct);
+        return participant is not null && File.Exists(MemberCheckpoint(participant.ID)) ? MemberCheckpoint(participant.ID) : checkpoint;
     }
 
     private async Task<T> Locked<T>(Func<State, IServiceProvider, Task<T>> work, CancellationToken ct, bool invited = false)
@@ -97,9 +122,9 @@ public sealed class SimpleMeetingTools
         await gate.WaitAsync(ct);
         try
         {
-            var state = File.Exists(checkpoint)
-                ? JsonSerializer.Deserialize<State>(await File.ReadAllBytesAsync(checkpoint, ct))! : new State();
             await using var scope = scopes.CreateAsyncScope();
+            var path = await ResolveCheckpoint(scope.ServiceProvider, ct);
+            var state = File.Exists(path) ? JsonSerializer.Deserialize<State>(await File.ReadAllBytesAsync(path, ct))! : new State();
             if (state.Owner is not null && state.Owner != owner)
             {
                 if (!invited) throw new McpOperationException("invitation_changed");
@@ -107,7 +132,9 @@ public sealed class SimpleMeetingTools
                 state.Connection = Guid.Empty;
             }
             state.Owner = owner;
-            return await work(state, scope.ServiceProvider);
+            var result = await work(state, scope.ServiceProvider);
+            if (invited && state.PinnedParticipantId is Guid id) RememberInvitation(id);
+            return result;
         }
         catch (McpOperationException e) { throw new ModelContextProtocol.McpException(e.Message); }
         finally { gate.Release(); }
@@ -140,7 +167,16 @@ public sealed class SimpleMeetingTools
         // Use the fenced reconnect path. An existing online participant is never taken over.
         var binding = Guid.NewGuid();
         var key = McpTransportSessionKey.FromDigest(binding.ToByteArray());
-        if (!File.Exists(checkpoint))
+        var currentName = name;
+        if (s.PinnedParticipantId is Guid stableId)
+        {
+            var meeting = await sp.GetRequiredService<IMeetingRepository>().FindActiveByCodeAsync(Guid.Parse(code), ct)
+                ?? throw new McpOperationException("meeting_not_found");
+            var member = (await sp.GetRequiredService<IMeetingParticipantRepository>().ListAsync(meeting.ID, ct))
+                .SingleOrDefault(p => p.ID == stableId) ?? throw new McpOperationException("participant_not_found");
+            currentName = member.DisplayName;
+        }
+        else if (!File.Exists(checkpoint))
         {
             var meeting = await sp.GetRequiredService<IMeetingRepository>().FindActiveByCodeAsync(Guid.Parse(code), ct);
             var participant = meeting is null ? null : await sp.GetRequiredService<IMeetingParticipantRepository>()
@@ -149,8 +185,8 @@ public sealed class SimpleMeetingTools
                 s.Cursor = await sp.GetRequiredService<IMessageVisibilityRepository>().HighWatermarkAsync(meeting!.ID, participant.ID, ct);
         }
         McpConnection joined;
-        try { joined = await service.JoinAsync(key, code, name, "reconnect", address, ct, resumeOnly ? s.Connection : null); }
-        catch (McpOperationException e) when (!resumeOnly && e.Message == "participant_not_found")
+        try { joined = await service.JoinAsync(key, code, currentName, "reconnect", address, ct, resumeOnly ? s.Connection : null); }
+        catch (McpOperationException e) when (!resumeOnly && e.Message == "participant_not_found" && !s.PinnedParticipantId.HasValue)
         { joined = await service.JoinAsync(key, code, name, "create", address, ct); }
         if (s.Binding != Guid.Empty) sp.GetRequiredService<IAgentConnectionRegistry>().RemoveRegistrations(Key(s));
         s.Binding = binding;
@@ -266,6 +302,34 @@ public sealed class SimpleMeetingTools
         } while (elapsed.Elapsed < TimeSpan.FromMinutes(12));
         return new Delivery("idle");
     }
+
+    internal Task<string> RenameSelf(string displayName, CancellationToken ct) => Locked(async (state, services) =>
+    {
+        RequireActive(state);
+        await Connect(state, services, ct, resumeOnly: true);
+        var session = services.GetRequiredService<CurrentMcpSessionService>();
+        return await session.ExecuteAsync(Key(state), state.Connection, async (connection, token) =>
+        {
+            if (!state.PinnedParticipantId.HasValue)
+            {
+                // Pin the invitation before releasing its original nickname, also across a restart.
+                state.PinnedParticipantId = connection.ParticipantId;
+                Save(state);
+                File.Delete(checkpoint);
+            }
+            // After interruption the unchanged nickname resolves the member checkpoint until this alias is durable.
+            RememberInvitation(connection.ParticipantId);
+            var result = await services.GetRequiredService<Meetings.MeetingNicknameService>()
+                .RenameAgentAsync(connection.MeetingId, connection.ParticipantId, displayName, token);
+            return result switch
+            {
+                Abstraction.Enums.MeetingOperationStatus.Success => "renamed",
+                Abstraction.Enums.MeetingOperationStatus.DisplayNameTaken => throw new McpOperationException("display_name_taken"),
+                Abstraction.Enums.MeetingOperationStatus.ValidationFailed => throw new McpOperationException("validation_failed"),
+                _ => throw new McpOperationException("meeting_not_found")
+            };
+        }, ct);
+    }, ct);
 
     internal Task<McpMeetingInfo> ListParticipants(CancellationToken ct)
         => Locked(async (state, services) =>
@@ -414,7 +478,10 @@ public sealed class SimpleMeetingTools
         if (s.Left) return "left";
         var meeting = await sp.GetRequiredService<IMeetingRepository>().FindActiveByCodeAsync(Guid.Parse(code), ct)
             ?? throw new McpOperationException("meeting_not_found");
-        var member = await sp.GetRequiredService<IMeetingParticipantRepository>().FindByNormalizedNameAsync(meeting.ID, name.ToUpperInvariant(), ct);
+        var repository = sp.GetRequiredService<IMeetingParticipantRepository>();
+        var member = s.PinnedParticipantId is Guid stableId
+            ? (await repository.ListAsync(meeting.ID, ct)).SingleOrDefault(p => p.ID == stableId)
+            : await repository.FindByNormalizedNameAsync(meeting.ID, name.ToUpperInvariant(), ct);
         if (member is null || member.ParticipantType != ParticipantType.Agent) throw new McpOperationException("not_joined");
         if (member.MembershipState != MeetingMembershipState.Left)
         {
@@ -423,7 +490,7 @@ public sealed class SimpleMeetingTools
             Save(s);
             await sp.GetRequiredService<CurrentMcpSessionService>().LeaveAsync(Key(s), s.Connection, s.Leaving.Value, ct);
         }
-        var departed = await sp.GetRequiredService<IMeetingParticipantRepository>().FindByNormalizedNameAsync(meeting.ID, name.ToUpperInvariant(), ct);
+        var departed = (await repository.ListAsync(meeting.ID, ct)).SingleOrDefault(p => p.ID == member.ID);
         s.Cursor = Math.Max(s.Cursor, departed?.LeftThroughSequence ?? 0);
         s.Leaving = null;
         s.Left = true;

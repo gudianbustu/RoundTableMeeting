@@ -450,6 +450,15 @@ export function createPreviewJoinRequestFromDiscriminatorValue(parseNode: ParseN
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {RenameMeetingParticipantRequest}
+ */
+// @ts-ignore
+export function createRenameMeetingParticipantRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoRenameMeetingParticipantRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {SetDiscussionModeRequest}
  */
 // @ts-ignore
@@ -1035,6 +1044,17 @@ export function deserializeIntoPreviewJoinRequest(previewJoinRequest: Partial<Pr
 }
 /**
  * The deserialization information for the current model
+ * @param RenameMeetingParticipantRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoRenameMeetingParticipantRequest(renameMeetingParticipantRequest: Partial<RenameMeetingParticipantRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "displayName": n => { renameMeetingParticipantRequest.displayName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param SetDiscussionModeRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -1552,6 +1572,12 @@ export interface PreviewJoinRequest extends AdditionalDataHolder, Parsable {
      */
     meetingCode?: string | null;
 }
+export interface RenameMeetingParticipantRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The displayName property
+     */
+    displayName?: string | null;
+}
 /**
  * Serializes information the current object
  * @param ApiProblemDetails The instance to serialize from.
@@ -2050,6 +2076,18 @@ export function serializePreviewJoinRequest(writer: SerializationWriter, preview
     if (!previewJoinRequest || isSerializingDerivedType) { return; }
     writer.writeStringValue("meetingCode", previewJoinRequest.meetingCode);
     writer.writeAdditionalData(previewJoinRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param RenameMeetingParticipantRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeRenameMeetingParticipantRequest(writer: SerializationWriter, renameMeetingParticipantRequest: Partial<RenameMeetingParticipantRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!renameMeetingParticipantRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("displayName", renameMeetingParticipantRequest.displayName);
+    writer.writeAdditionalData(renameMeetingParticipantRequest.additionalData);
 }
 /**
  * Serializes information the current object

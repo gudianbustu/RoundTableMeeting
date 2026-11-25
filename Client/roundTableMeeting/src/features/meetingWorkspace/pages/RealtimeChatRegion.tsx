@@ -147,6 +147,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
       onMessage: message => { if (expected !== generation.current) return; onNotificationMessage(message); if (message.author.kind === 'system') onMeetingDetailsChanged?.(); if (matches(message)) dispatch({ ...scoped(), type: 'messageEventReceived', message }) },
       onPresence: (participantId, value) => dispatch({ ...scoped(), type: 'presenceChanged', participantId, state: value }),
       onAgentActivity: activity => dispatch({ ...scoped(), type: 'agentActivityChanged', activity }),
+      onParticipantRenamed: () => { if (expected === generation.current) onMeetingDetailsChanged?.() },
       onMembershipLeft: () => { if (expected === generation.current) onMembershipChanged?.() },
       onDeleted: () => reportUnavailable(expected),
       onResubscribed: snapshot => { onMeetingDetailsChanged?.(); void synchronize(snapshot, expected).catch(error => handleError(error, expected)) },
@@ -186,7 +187,13 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
     active.controller.abort(); activeSend.current = undefined
     dispatch({ meetingId, generation: state.generation, type: 'sendFailed', submission: { ...active.submission, uploadFailed: active.phase === 'upload', uploadProgress: undefined, pendingConfirmation: active.phase === 'message', errorCode: 'attachment_upload_interrupted' } })
   }, [state.generation, meetingId])
-  const messages = useMemo(() => selectMessages(state), [state.messagesById, state.orderedMessageIds])
+  const participantNames = useMemo(() => new Map(participants.map(member => [member.participantId, member.displayName])), [participants])
+  const messages = useMemo(() => {
+    return selectMessages(state).map(message => {
+      const name = message.author.participantId && participantNames.get(message.author.participantId)
+      return name && name !== message.author.displayName ? { ...message, author: { ...message.author, displayName: name } } : message
+    })
+  }, [state.messagesById, state.orderedMessageIds, participantNames])
   useEffect(() => { lastApplied.current = state.lastAppliedSequence }, [state.lastAppliedSequence])
   useEffect(() => {
     if (readOnly || state.highWatermarkSequence <= state.lastAppliedSequence || state.history !== 'caughtUp' || gapRepairing.current) return
@@ -273,7 +280,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
   return <section className={peerId ? 'realtime-chat-region chat-private' : 'realtime-chat-region'}>
     {readOnly ? <Alert type={state.history === 'error' ? 'error' : 'info'} title={state.history === 'error' ? '历史消息加载失败' : '已退出会议，只能查看退出前有权访问的历史。'} action={state.history === 'error' ? <Button onClick={() => void connect()}>重试</Button> : undefined} /> : <ChatConnectionStatus connection={state.connection} history={state.history} error={state.history === 'error' ? '消息历史加载失败。' : undefined} onRetry={() => void connect()} />}
     <MessageTimeline onLocate={locate} pendingMessage={state.failedSubmission && state.send !== 'idle' ? <PendingMessage key={state.failedSubmission.clientSubmissionId} submission={state.failedSubmission} status={state.send} attachments={state.attachments} readOnly={readOnly} onRetry={retry} /> : undefined} messages={messages} hasEarlierMessages={state.hasEarlierMessages} loading={state.history === 'loading' || state.history === 'appending'} onLoadEarlier={() => { if (state.earliestLoadedSequence) void load({ beforeSequence: state.earliestLoadedSequence, limit: 100 }) }} newMessageCount={0} onNewMessageClick={() => {}} onReply={message => dispatch({ ...scope(), type: 'replyChanged', message })} onPrivateChat={onPrivateChat} currentParticipantId={participants.find(p => p.isCurrentUser)?.participantId} focusMessageId={focusMessageId} focusRevision={focusRevision} canReply={!locked} scrollPosition={state.scrollPosition} onScrollPositionChanged={retainScroll} />
-    {state.replyTo && <div className="message-reply-context"><Tag>回复 {state.replyTo.author.displayName}</Tag><span>{state.replyTo.content.slice(0, 120) || '附件消息'}</span><Button size="small" disabled={locked} onClick={() => dispatch({ ...scope(), type: 'replyChanged', message: undefined })}>取消回复</Button></div>}
+    {state.replyTo && <div className="message-reply-context"><Tag>回复 {participantNames.get(state.replyTo.author.participantId ?? '') ?? state.replyTo.author.displayName}</Tag><span>{state.replyTo.content.slice(0, 120) || '附件消息'}</span><Button size="small" disabled={locked} onClick={() => dispatch({ ...scope(), type: 'replyChanged', message: undefined })}>取消回复</Button></div>}
     {notificationControl}
     <div className="composer-context-toolbar">{scopeControl}<MeetingAttachmentList meetingId={meetingId} {...requestScope} onLocate={locate} /></div>
     <MessageComposer onCancelReply={state.replyTo ? () => dispatch({ ...scope(), type: 'replyChanged', message: undefined }) : undefined} composerRef={composerRef} onFiles={files => uploader.current?.addFiles(files)} attachments={<DraftAttachments attachments={state.attachments} disabled={locked} onChange={attachments => dispatch({ ...scope(), type: 'attachmentsChanged', attachments })} />} tools={<>{!readOnly && <AttachmentUpload uploadRef={uploader} attachments={state.attachments} disabled={locked} onChange={attachments => dispatch({ ...scope(), type: 'attachmentsChanged', attachments })} />}{composerTools}</>} value={state.draft} send={state.send} participants={peerId ? participants.filter(p => p.isCurrentUser || p.participantId === peerId) : participants} hasAttachments={state.attachments.length > 0} disabled={locked} onChange={draft => dispatch({ ...scope(), type: 'draftChanged', draft })} onSend={submit} />

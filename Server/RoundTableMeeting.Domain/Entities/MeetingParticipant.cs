@@ -47,11 +47,18 @@ public sealed class MeetingParticipant : BaseEntity
         if (meetingId == Guid.Empty) throw new ArgumentException("Meeting is required.", nameof(meetingId));
         if (type == ParticipantType.Human && (!userId.HasValue || userId.Value == Guid.Empty)) throw new ArgumentException("Human participant requires a user.", nameof(userId));
         if (type == ParticipantType.Agent && userId.HasValue) throw new ArgumentException("Agent participant cannot have a user.", nameof(userId));
-        DisplayName = NormalizeDisplayName(displayName);
-        NormalizedDisplayName = DisplayName.ToUpperInvariant();
-        if (NormalizedDisplayName.Length > 128) throw new ArgumentException("Normalized participant name is too long.", nameof(displayName));
+        Rename(displayName);
         MeetingId = meetingId; UserId = userId; ParticipantType = type; JoinedAtUtc = joinedAtUtc;
     }
+    public void Rename(string displayName)
+    {
+        var normalized = NormalizeDisplayName(displayName);
+        var key = normalized.ToUpperInvariant();
+        if (key.Length > 128) throw new ArgumentException("Normalized participant name is too long.", nameof(displayName));
+        DisplayName = normalized;
+        NormalizedDisplayName = key;
+    }
+
     public static MeetingParticipant CreateHuman(Guid meetingId, Guid userId, string displayName, DateTimeOffset joinedAtUtc)
         => new(meetingId, userId, ParticipantType.Human, displayName, joinedAtUtc);
     public static MeetingParticipant CreateAgent(Guid meetingId, string displayName, DateTimeOffset joinedAtUtc)

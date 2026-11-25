@@ -106,6 +106,11 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
         return SimpleMeetingTools.WaitForMessage(Poll, host, progress, ct);
     }
 
+    [McpServerTool(Name = "rename_self")]
+    [Description("Change only your own display name in this room. Your participant ID, private conversations and room remain valid.")]
+    public Task<string> RenameSelf(string room, string displayName, CancellationToken ct)
+        => Route(room, "rename_self", new(DisplayName: displayName), tool => tool.RenameSelf(displayName, ct), ct);
+
     [McpServerTool(Name = "list_participants", ReadOnly = true)]
     [Description("List all participants in this room, including silent members. Membership and online connection state are separate snapshots.")]
     public Task<McpMeetingInfo> ListParticipants(string room, CancellationToken ct)

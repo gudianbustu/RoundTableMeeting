@@ -18,6 +18,8 @@ import { LeaveRequestBuilderRequestsMetadata, type LeaveRequestBuilder } from '.
 // @ts-ignore
 import { MessagesRequestBuilderNavigationMetadata, MessagesRequestBuilderRequestsMetadata, type MessagesRequestBuilder } from './messages/index.js';
 // @ts-ignore
+import { ParticipantsRequestBuilderNavigationMetadata, type ParticipantsRequestBuilder } from './participants/index.js';
+// @ts-ignore
 import { RejoinRequestBuilderRequestsMetadata, type RejoinRequestBuilder } from './rejoin/index.js';
 // @ts-ignore
 import { SubmissionsRequestBuilderNavigationMetadata, type SubmissionsRequestBuilder } from './submissions/index.js';
@@ -56,6 +58,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The messages property
      */
     get messages(): MessagesRequestBuilder;
+    /**
+     * The participants property
+     */
+    get participants(): ParticipantsRequestBuilder;
     /**
      * The rejoin property
      */
@@ -110,6 +116,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     messages: {
         requestsMetadata: MessagesRequestBuilderRequestsMetadata,
         navigationMetadata: MessagesRequestBuilderNavigationMetadata,
+    },
+    participants: {
+        navigationMetadata: ParticipantsRequestBuilderNavigationMetadata,
     },
     rejoin: {
         requestsMetadata: RejoinRequestBuilderRequestsMetadata,

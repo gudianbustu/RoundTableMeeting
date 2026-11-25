@@ -1,7 +1,7 @@
 using RoundTableMeeting.Domain.Entities;
 namespace RoundTableMeeting.Domain.Repositories;
 
-public sealed record VisibleMessage(MeetingMessage Message, long Sequence);
+public sealed record VisibleMessage(MeetingMessage Message, long Sequence, string? CurrentAuthorName = null);
 public interface IMessageVisibilityRepository
 {
     Task<long> HighWatermarkAsync(Guid meetingId, Guid participantId, CancellationToken ct = default);

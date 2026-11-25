@@ -1,9 +1,9 @@
 import { Avatar, Button, Collapse, Empty, Tag, Tooltip, Typography } from 'antd'
-import { MessageOutlined, UserAddOutlined } from '@ant-design/icons'
+import { EditOutlined, MessageOutlined, UserAddOutlined } from '@ant-design/icons'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 
-export function ParticipantList({ onInvite, mentionPeerId, onMention, onPrivateChat, participants, presence = {} }: { onInvite?: () => void; mentionPeerId?: string; onMention?: (participant: Participant) => void; onPrivateChat?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
+export function ParticipantList({ onEditNickname, onInvite, mentionPeerId, onMention, onPrivateChat, participants, presence = {} }: { onEditNickname?: () => void; onInvite?: () => void; mentionPeerId?: string; onMention?: (participant: Participant) => void; onPrivateChat?: (participant: Participant) => void; participants: Participant[]; presence?: Record<string, 'online' | 'offline'>; agentActivities?: Record<string, AgentActivity> }) {
   const members = participants.filter(p => p.membershipState !== 'left')
   const online = members.filter(p => presence[p.participantId] === 'online')
   const offline = members.filter(p => presence[p.participantId] !== 'online')
@@ -14,6 +14,7 @@ export function ParticipantList({ onInvite, mentionPeerId, onMention, onPrivateC
       <Typography.Text type="secondary">{participant.type === 'agent' ? 'AI Agent' : '人类参与者'}</Typography.Text>
     </div></div>
     <div className="participant-list-item-actions">
+      {participant.isCurrentUser && onEditNickname && <Button aria-label="修改会议昵称" title="修改会议昵称" size="small" icon={<EditOutlined />} onClick={onEditNickname}>修改会议昵称</Button>}
       {onMention && (!mentionPeerId || participant.isCurrentUser || participant.participantId === mentionPeerId) && <Tooltip title={`提及 ${participant.displayName}`}><Button type="text" size="small" aria-label={`提及 ${participant.displayName}`} icon={<span className="participant-mention-icon" aria-hidden="true">@</span>} onClick={() => onMention(participant)} /></Tooltip>}
       {!participant.isCurrentUser && onPrivateChat && <Tooltip title={`私聊 ${participant.displayName}`}><Button type="text" size="small" aria-label={`私聊 ${participant.displayName}`} icon={<MessageOutlined />} onClick={() => onPrivateChat(participant)} /></Tooltip>}
     </div>

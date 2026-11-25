@@ -11,7 +11,7 @@ public sealed class MessageVisibilityRepository(RoundTableMeetingDbContext db) :
         => await db.Set<ParticipantMessageCounter>().Where(x => x.MeetingId == meetingId && x.ParticipantId == participantId).Select(x => (long?)x.HighWatermark).SingleOrDefaultAsync(ct) ?? 0;
     public async Task<VisibleMessage?> FindAsync(Guid meetingId, Guid participantId, Guid messageId, long? through = null, CancellationToken ct = default)
         => await Query(meetingId, participantId, "all", null, through).Where(x => x.Message.ID == messageId)
-            .Select(x => new VisibleMessage(x.Message, x.Sequence)).SingleOrDefaultAsync(ct);
+            .Select(x => new VisibleMessage(x.Message, x.Sequence, x.AuthorName)).SingleOrDefaultAsync(ct);
     public async Task<IReadOnlyList<VisibleMessage>> PageAsync(Guid meetingId, Guid participantId, string scope, Guid? peer, long? before, long? after, long? through, int limit, CancellationToken ct = default, bool attachmentsOnly = false)
     {
         var q = Query(meetingId, participantId, scope, peer, through);
@@ -19,19 +19,22 @@ public sealed class MessageVisibilityRepository(RoundTableMeetingDbContext db) :
         if (before.HasValue) q = q.Where(x => x.Sequence < before.Value);
         if (after.HasValue) q = q.Where(x => x.Sequence > after.Value);
         var rows = await (after.HasValue ? q.OrderBy(x => x.Sequence) : q.OrderByDescending(x => x.Sequence)).Take(limit).ToArrayAsync(ct);
-        return rows.OrderBy(x => x.Sequence).Select(x => new VisibleMessage(x.Message, x.Sequence)).ToArray();
+        return rows.OrderBy(x => x.Sequence).Select(x => new VisibleMessage(x.Message, x.Sequence, x.AuthorName)).ToArray();
     }
     private sealed class ProjectionRow
     {
         public MeetingMessage Message { get; init; } = null!;
         public long Sequence { get; init; }
+        public string? AuthorName { get; init; }
     }
     private IQueryable<ProjectionRow> Query(Guid meetingId, Guid participantId, string scope, Guid? peer, long? through)
     {
         var q = from v in db.Set<ParticipantMessageView>().AsNoTracking()
                 join m in db.MeetingMessages.AsNoTracking() on v.MessageId equals m.ID
                 where v.MeetingId == meetingId && v.ParticipantId == participantId && (!through.HasValue || v.Sequence <= through.Value)
-                select new ProjectionRow { Message = m, Sequence = v.Sequence };
+                select new ProjectionRow { Message = m, Sequence = v.Sequence,
+                    AuthorName = db.Set<MeetingParticipant>().Where(p => p.MeetingId == meetingId && p.ID == m.AuthorParticipantId)
+                        .Select(p => p.DisplayName).FirstOrDefault() };
         if (scope != "all") q = q.Where(x => x.Message.Visibility == scope);
         if (peer.HasValue) q = q.Where(x => x.Message.Visibility == "private" && (x.Message.AuthorParticipantId == peer || x.Message.RecipientParticipantId == peer));
         return q;
