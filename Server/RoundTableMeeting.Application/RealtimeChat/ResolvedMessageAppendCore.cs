@@ -49,18 +49,32 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
         scope ??= "public";
         if (scope is not ("public" or "private") || scope == "public" && recipient is not null) throw new ArgumentException("Invalid scope.");
         var ids = request.AttachmentIds?.ToArray() ?? [];
-        if (ids.Length > 20 || ids.Distinct().Count() != ids.Length || ids.Any(id => id == Guid.Empty)) throw new ArgumentException("Invalid attachments.");
+        if (request.OriginalTextAttachmentId is Guid originalId && !ids.Contains(originalId)) throw new ArgumentException("Missing original text attachment.");
+        if (ids.Length > (request.OriginalTextAttachmentId.HasValue ? 21 : 20) || ids.Distinct().Count() != ids.Length || ids.Any(id => id == Guid.Empty)) throw new ArgumentException("Invalid attachments.");
         var content = request.Content ?? "";
         if (string.IsNullOrWhiteSpace(content) && ids.Length == 0) throw new ArgumentException("Content or attachment is required.");
         MeetingMessage.ValidateContentLength(content, options.MaxContentLength);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(new {
             content, scope, recipient, attachments = ids.Order().ToArray(), replyTo = request.ReplyToMessageId,
             mentions = request.MentionCandidates ?? [] }))));
+        if (request.SourceTextDraftId is Guid draft)
+            hash = Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes($"{hash}:text-draft:{draft:N}")));
+        if (request.SourcePendingMessageId is Guid pending)
+            hash = Convert.ToHexString(SHA256.HashData(Encoding.ASCII.GetBytes($"{hash}:pending-reply:{pending:N}")));
+        var legacyHash = hash;
+        if (request.SourceRecipient is { } selector)
+        {
+            // Keep the original MCP address form in the receipt, even if that nickname later changes hands.
+            hash = Convert.ToHexString(SHA256.HashData(JsonSerializer.SerializeToUtf8Bytes(new { hash, selector.RequestedName })));
+        }
         var existing = sender is null ? await messages.FindSystemBySubmissionAsync(meetingId, request.ClientSubmissionId, ct)
             : await messages.FindBySubmissionAsync(meetingId, sender.ID, request.ClientSubmissionId, ct);
         if (existing is not null)
         {
-            if (existing.PayloadFingerprint != hash && !(existing.PayloadFingerprint == "" && scope == "public" && ids.Length == 0
+            if (existing.OriginalTextAttachmentId != request.OriginalTextAttachmentId) throw new MeetingMessageAccessException("submission_mismatch");
+            var matchesLegacyRecipient = request.SourceRecipient is { } previousSelector
+                && previousSelector.CurrentlyResolvedId == existing.RecipientParticipantId && existing.PayloadFingerprint == legacyHash;
+            if (existing.PayloadFingerprint != hash && !matchesLegacyRecipient && !(existing.PayloadFingerprint == "" && scope == "public" && ids.Length == 0
                 && request.ReplyToMessageId is null && existing.Content == content)) throw new MeetingMessageAccessException("submission_mismatch");
             return Result(existing) with { Replayed = true };
         }
@@ -87,6 +101,7 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
             : MeetingMessage.CreateParticipant(meetingId, sequence, sender.ID,
                 author.Kind == TransportAuthorKind.Agent ? DomainAuthorKind.Agent : DomainAuthorKind.Human,
                 sender.DisplayName, content, request.ClientSubmissionId, timeProvider.GetUtcNow());
+        if (request.OriginalTextAttachmentId is Guid fullTextId) message.SetOriginalText(fullTextId);
         message.SetScope(scope, recipient, request.ReplyToMessageId, hash);
         unitOfWork.RegisterAdd(message);
         foreach (var id in ids)

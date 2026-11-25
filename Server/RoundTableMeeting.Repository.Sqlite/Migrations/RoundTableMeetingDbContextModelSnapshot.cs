@@ -958,6 +958,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<Guid>("MeetingId")
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("OriginalTextAttachmentId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("PayloadFingerprint")
                         .IsRequired()
                         .ValueGeneratedOnAdd()

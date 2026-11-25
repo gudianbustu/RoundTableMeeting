@@ -15,7 +15,7 @@ public sealed class VisibleMessageMapper(IMessageRepository messages, IMeetingAt
         var interrupted = turn?.Optional == true && await discussion.WasInterruptedAsync(m.MeetingId, turn.Sequence, ct);
         return new(m.ID, m.MeetingId, row.Sequence, new(m.AuthorParticipantId, (MessageAuthorKind)(int)m.AuthorKind, row.CurrentAuthorName ?? m.AuthorDisplayName), m.Content,
             mentions.Select(x => new MessageMentionDto(x.TargetParticipantId, x.TargetDisplayName, x.StartOffset, x.Length)).ToArray(), m.CreatedAtUtc)
-        { DiscussionTopicId = turn?.TopicId, OptionalAgentResponse = turn?.Optional == true && !interrupted, DiscussionInterrupted = interrupted,
+        { OriginalTextAttachmentId = m.OriginalTextAttachmentId, DiscussionTopicId = turn?.TopicId, OptionalAgentResponse = turn?.Optional == true && !interrupted, DiscussionInterrupted = interrupted,
             Visibility = m.Visibility, Recipient = recipient is null ? null : new(recipient.ID, recipient.DisplayName),
             Attachments = files.Select(x => new AttachmentDto(x.ID, x.OriginalName, x.SizeBytes, x.MediaType, x.State)).ToArray(), ReplyToMessageId = m.ReplyToMessageId };
     }

@@ -137,6 +137,7 @@ public sealed class SimpleMeetingTools
             return result;
         }
         catch (McpOperationException e) { throw new ModelContextProtocol.McpException(e.Message); }
+        catch (AttachmentOperationException e) { throw new ModelContextProtocol.McpException(e.Code); }
         finally { gate.Release(); }
     }
 
@@ -303,6 +304,34 @@ public sealed class SimpleMeetingTools
         return new Delivery("idle");
     }
 
+    private Task<T> WithTextSession<T>(Func<McpLongText, AgentConnectionSession, CancellationToken, Task<T>> action, CancellationToken ct)
+        => Locked(async (state, services) =>
+        {
+            RequireActive(state);
+            await Connect(state, services, ct, resumeOnly: true);
+            var text = services.GetRequiredService<McpLongText>();
+            return await services.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(state), state.Connection,
+                (connection, token) => action(text, connection, token), ct);
+        }, ct);
+
+    internal Task<TextPartReceipt> StageTextPart(Guid draftId, int index, int partCount, long totalBytes, string content, CancellationToken ct)
+        => WithTextSession((text, connection, token) => text.Stage(connection, draftId, index, partCount, totalBytes, content, token), ct);
+
+    internal Task<MessageTextPage> ReadMessageText(Guid messageId, long offsetBytes, int limitBytes, CancellationToken ct)
+        => WithTextSession((text, connection, token) => text.Read(connection, messageId, offsetBytes, limitBytes, token), ct);
+
+    internal async Task<string> SubmitStagedText(Guid draftId, string destination, Guid? recipientId, string? recipientName,
+        Guid? messageId, Guid? replyToMessageId, Guid[]? attachments, CancellationToken ct)
+    {
+        if (draftId == Guid.Empty) throw new McpException("invalid_draft_id");
+        if (destination == "reply" && messageId.HasValue && recipientId is null && recipientName is null)
+            return await Handle(messageId.Value, "", attachments, ct, replyToMessageId, draftId);
+        if (messageId.HasValue || replyToMessageId.HasValue || destination is not ("public" or "private") ||
+            (destination == "public" && (recipientId.HasValue || recipientName is not null)))
+            throw new McpException("invalid_text_destination");
+        return (await SendMessage(draftId, "", ct, destination == "public", recipientId, recipientName, attachments, draftId)).ToString();
+    }
+
     internal Task<string> RenameSelf(string displayName, CancellationToken ct) => Locked(async (state, services) =>
     {
         RequireActive(state);
@@ -372,16 +401,17 @@ public sealed class SimpleMeetingTools
         => SendMessage(clientSubmissionId, content, ct, false, recipientParticipantId, recipientDisplayName, attachmentIds);
 
     private Task<Guid> SendMessage(Guid clientSubmissionId, string content, CancellationToken ct, bool isPublic,
-        Guid? recipientParticipantId, string? recipientDisplayName, Guid[]? attachmentIds)
+        Guid? recipientParticipantId, string? recipientDisplayName, Guid[]? attachmentIds, Guid? draftId = null)
         => Locked(async (s, sp) =>
         {
             RequireActive(s);
             if (clientSubmissionId == Guid.Empty || (!isPublic && recipientParticipantId.HasValue == (recipientDisplayName is not null)))
                 throw new McpOperationException("validation_failed");
-            await Connect(s, sp, ct);
+            await Connect(s, sp, ct, resumeOnly: draftId.HasValue);
             return await sp.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(s), s.Connection, async (c, token) =>
             {
                 var recipient = recipientParticipantId;
+                var currentlyResolved = recipientParticipantId;
                 if (recipientDisplayName is not null)
                 {
                     string normalized;
@@ -389,11 +419,20 @@ public sealed class SimpleMeetingTools
                     catch (ArgumentException) { throw new McpOperationException("validation_failed"); }
                     var member = await sp.GetRequiredService<IMeetingParticipantRepository>()
                         .FindByNormalizedNameAsync(c.MeetingId, normalized, token);
-                    recipient = member?.ID ?? throw new McpOperationException("recipient_unavailable");
+                    currentlyResolved = member?.ID;
+                    var receipt = await sp.GetRequiredService<IMessageRepository>()
+                        .FindBySubmissionAsync(c.MeetingId, c.ParticipantId, clientSubmissionId, token);
+                    if (receipt is not null && receipt.RecipientParticipantId is null) throw new McpOperationException("submission_mismatch");
+                    recipient = receipt?.RecipientParticipantId ?? currentlyResolved ?? throw new McpOperationException("recipient_unavailable");
                 }
-                var sent = await sp.GetRequiredService<IMessageAppendService>().AppendHumanAsync(c.MeetingId,
-                    new(clientSubmissionId, content, Visibility: isPublic ? "public" : "private", RecipientParticipantId: recipient, AttachmentIds: attachmentIds)
-                    { StartsPublicTopic = isPublic }, token);
+                var payload = new SubmitMessageRequest(clientSubmissionId, content, Visibility: isPublic ? "public" : "private",
+                    RecipientParticipantId: recipient, AttachmentIds: attachmentIds)
+                {
+                    StartsPublicTopic = isPublic,
+                    SourceRecipient = isPublic ? null : new(recipientDisplayName, currentlyResolved)
+                };
+                var prepared = await sp.GetRequiredService<McpLongText>().Prepare(c, payload, draftId, token);
+                var sent = await sp.GetRequiredService<IMessageAppendService>().AppendHumanAsync(c.MeetingId, prepared, token);
                 return sent.Data?.MessageId ?? throw new McpOperationException(JsonNamingPolicy.SnakeCaseLower.ConvertName(sent.Status.ToString()));
             }, ct);
         }, ct);
@@ -402,18 +441,45 @@ public sealed class SimpleMeetingTools
     [Description("Mark the pending message handled without sending a reply.")]
     public Task<string> Skip(Guid messageId, CancellationToken ct) => Handle(messageId, null, null, ct);
 
-    private Task<string> Handle(Guid messageId, string? content, Guid[]? attachmentIds, CancellationToken ct, Guid? replyToMessageId = null) => Locked(async (s, sp) =>
+    private Task<string> Handle(Guid messageId, string? content, Guid[]? attachmentIds, CancellationToken ct, Guid? replyToMessageId = null, Guid? draftId = null) => Locked(async (s, sp) =>
     {
         RequireActive(s);
         var target = replyToMessageId ?? messageId;
-        var decision = target == messageId ? JsonSerializer.SerializeToUtf8Bytes(new { content, attachmentIds })
+        var decision = draftId.HasValue ? JsonSerializer.SerializeToUtf8Bytes(new { draftId, attachmentIds, target })
+            : target == messageId ? JsonSerializer.SerializeToUtf8Bytes(new { content, attachmentIds })
             : JsonSerializer.SerializeToUtf8Bytes(new { content, attachmentIds, replyToMessageId });
         var digest = Convert.ToHexString(SHA256.HashData(decision));
-        if (s.LastHandled == messageId && s.LastDecision == digest) return "handled";
-        if (s.LastInterrupted == messageId) return "discussion_ended";
-        if (s.Pending != messageId) throw new McpOperationException("no_matching_pending_message");
+        async Task<MessageOperationResult<MessageDto>> PublishReply(AgentConnectionSession c, CancellationToken token)
+        {
+            var request = new SubmitMessageRequest(draftId ?? s.Submission, content!, AttachmentIds: attachmentIds, ReplyToMessageId: target)
+            {
+                SourcePendingMessageId = draftId.HasValue ? messageId : null
+            };
+            var prepared = await sp.GetRequiredService<McpLongText>().Prepare(c, request, draftId, token);
+            return await sp.GetRequiredService<IMessageAppendService>().AppendHumanAsync(c.MeetingId, prepared, token);
+        }
+        if (draftId is null && s.LastHandled == messageId && s.LastDecision == digest) return "handled";
+        if (draftId is null && s.LastInterrupted == messageId) return "discussion_ended";
+        if (s.Pending != messageId)
+        {
+            if (draftId is not Guid submittedDraft) throw new McpOperationException("no_matching_pending_message");
+            await Connect(s, sp, ct, resumeOnly: true);
+            return await sp.GetRequiredService<CurrentMcpSessionService>().ExecuteAsync(Key(s), s.Connection, async (c, token) =>
+            {
+                // A retry may arrive after other deliveries. Only replay a durable receipt, without touching the cursor.
+                var existing = await sp.GetRequiredService<IMessageRepository>().FindBySubmissionAsync(c.MeetingId, c.ParticipantId, submittedDraft, token);
+                if (existing is null)
+                {
+                    if (s.LastInterrupted == messageId) return "discussion_ended";
+                    throw new McpOperationException("no_matching_pending_message");
+                }
+                var replay = await PublishReply(c, token);
+                return replay.Data?.MessageId.ToString() ?? throw new McpOperationException(JsonNamingPolicy.SnakeCaseLower.ConvertName(replay.Status.ToString()));
+            }, ct);
+        }
+        Guid? publishedId = null;
         if (s.Decision is not null && s.Decision != digest) throw new McpOperationException("decision_already_in_progress");
-        await Connect(s, sp, ct);
+        await Connect(s, sp, ct, resumeOnly: draftId.HasValue);
         if (content is not null)
         {
             s.Decision = digest;
@@ -433,8 +499,17 @@ public sealed class SimpleMeetingTools
                         throw new McpOperationException("invalid_reply_target");
                     }
                 }
-                var sent = await sp.GetRequiredService<IMessageAppendService>().AppendHumanAsync(c.MeetingId,
-                    new(s.Submission, content, AttachmentIds: attachmentIds, ReplyToMessageId: target), token);
+                MessageOperationResult<MessageDto> sent;
+                try
+                {
+                    sent = await PublishReply(c, token);
+                }
+                catch
+                {
+                    s.Decision = null;
+                    Save(s);
+                    throw;
+                }
                 if (sent.Status == MessageOperationStatus.DiscussionEnded) return false;
                 if (sent.Data is null)
                 {
@@ -442,6 +517,7 @@ public sealed class SimpleMeetingTools
                     Save(s);
                     throw new McpOperationException(JsonNamingPolicy.SnakeCaseLower.ConvertName(sent.Status.ToString()));
                 }
+                publishedId = sent.Data.MessageId;
                 return true;
             }, ct);
             if (!accepted)
@@ -459,7 +535,7 @@ public sealed class SimpleMeetingTools
         s.LastHandled = messageId;
         s.LastDecision = digest;
         Save(s);
-        return "handled";
+        return draftId.HasValue ? publishedId!.Value.ToString() : "handled";
     }, ct);
 
     [McpServerTool(Name = "attachment_transfer")]

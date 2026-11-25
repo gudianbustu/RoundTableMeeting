@@ -964,6 +964,7 @@ export function deserializeIntoMessageDto(messageDto: Partial<MessageDto> | unde
         "messageId": n => { messageDto.messageId = n.getGuidValue(); },
         "offsetUnit": n => { messageDto.offsetUnit = n.getStringValue(); },
         "optionalAgentResponse": n => { messageDto.optionalAgentResponse = n.getBooleanValue(); },
+        "originalTextAttachmentId": n => { messageDto.originalTextAttachmentId = n.getGuidValue(); },
         "recipient": n => { messageDto.recipient = n.getObjectValue<MessageRecipientDto>(createMessageRecipientDtoFromDiscriminatorValue); },
         "replyToMessageId": n => { messageDto.replyToMessageId = n.getGuidValue(); },
         "sequence": n => { messageDto.sequence = n.getNumberValue(); },
@@ -1456,6 +1457,10 @@ export interface MessageDto extends AdditionalDataHolder, Parsable {
      * The optionalAgentResponse property
      */
     optionalAgentResponse?: boolean | null;
+    /**
+     * The originalTextAttachmentId property
+     */
+    originalTextAttachmentId?: Guid | null;
     /**
      * The recipient property
      */
@@ -1994,6 +1999,7 @@ export function serializeMessageDto(writer: SerializationWriter, messageDto: Par
     writer.writeGuidValue("messageId", messageDto.messageId);
     writer.writeStringValue("offsetUnit", messageDto.offsetUnit);
     writer.writeBooleanValue("optionalAgentResponse", messageDto.optionalAgentResponse);
+    writer.writeGuidValue("originalTextAttachmentId", messageDto.originalTextAttachmentId);
     writer.writeObjectValue<MessageRecipientDto>("recipient", messageDto.recipient, serializeMessageRecipientDto);
     writer.writeGuidValue("replyToMessageId", messageDto.replyToMessageId);
     writer.writeNumberValue("sequence", messageDto.sequence);

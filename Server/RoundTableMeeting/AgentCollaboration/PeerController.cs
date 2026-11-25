@@ -28,6 +28,11 @@ public sealed class PeerController(PeerTransport peers) : ControllerBase
             object value = operation switch
             {
                 "poll" => await room.Poll(ct),
+                "stage_text_part" when command.Content is not null => await room.StageTextPart(command.DraftId, command.PartIndex, command.PartCount, command.TotalBytes, command.Content, ct),
+                "read_message_text" => await room.ReadMessageText(command.MessageId, command.OffsetBytes, command.LimitBytes, ct),
+                "submit_staged_text" when command.Destination is not null => await room.SubmitStagedText(command.DraftId, command.Destination,
+                    command.RecipientParticipantId, command.RecipientDisplayName, command.MessageId == Guid.Empty ? null : command.MessageId,
+                    command.ReplyToMessageId, command.AttachmentIds, ct),
                 "rename_self" when command.DisplayName is not null => await room.RenameSelf(command.DisplayName, ct),
                 "list_participants" => await room.ListParticipants(ct),
                 "history" => await room.History(ct, command.BeforeSequence, command.Limit),

@@ -13,7 +13,9 @@ namespace RoundTableMeeting.AgentCollaboration;
 public sealed record PeerCommand(string? Room = null, Guid MeetingCode = default, string? DisplayName = null,
     string? InvitationKey = null, Guid MessageId = default, string? Content = null, Guid[]? AttachmentIds = null,
     Guid? ReplyToMessageId = null, Guid? AttachmentId = null, long? BeforeSequence = null, int Limit = 5,
-    Guid ClientSubmissionId = default, Guid? RecipientParticipantId = null, string? RecipientDisplayName = null);
+    Guid ClientSubmissionId = default, Guid? RecipientParticipantId = null, string? RecipientDisplayName = null,
+    Guid DraftId = default, int PartIndex = 0, int PartCount = 0, long TotalBytes = 0, string? Destination = null,
+    long OffsetBytes = 0, int LimitBytes = 16384);
 
 public sealed class PeerTransport : IDisposable
 {

@@ -106,6 +106,26 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
         return SimpleMeetingTools.WaitForMessage(Poll, host, progress, ct);
     }
 
+    [McpServerTool(Name = "stage_text_part")]
+    [Description("Privately stage one UTF-8 segment before publishing a long message. Use the same draftId UUID, partCount and totalBytes each time. Zero-based index; at most 262144 bytes per part. Retry with identical content.")]
+    public Task<TextPartReceipt> StageTextPart(string room, Guid draftId, int index, int partCount, long totalBytes, string content, CancellationToken ct)
+        => Route(room, "stage_text_part", new(DraftId: draftId, PartIndex: index, PartCount: partCount, TotalBytes: totalBytes, Content: content),
+            tool => tool.StageTextPart(draftId, index, partCount, totalBytes, content, ct), ct);
+
+    [McpServerTool(Name = "submit_staged_text")]
+    [Description("Publish all staged parts once. The draftId is the submission ID. Set destination to public, private (one recipient), or reply (pending messageId and optional replyToMessageId). Retry with identical parameters.")]
+    public Task<string> SubmitStagedText(string room, Guid draftId, string destination, CancellationToken ct,
+        Guid? recipientParticipantId = null, string? recipientDisplayName = null, Guid? messageId = null, Guid? replyToMessageId = null, Guid[]? attachmentIds = null)
+        => Route(room, "submit_staged_text", new(DraftId: draftId, Destination: destination, RecipientParticipantId: recipientParticipantId,
+            RecipientDisplayName: recipientDisplayName, MessageId: messageId ?? Guid.Empty, ReplyToMessageId: replyToMessageId, AttachmentIds: attachmentIds),
+            tool => tool.SubmitStagedText(draftId, destination, recipientParticipantId, recipientDisplayName, messageId, replyToMessageId, attachmentIds, ct), ct);
+
+    [McpServerTool(Name = "read_message_text", ReadOnly = true)]
+    [Description("Read the full UTF-8 text behind a visible long message. Start at offsetBytes 0 and reuse nextByteOffset until null. limitBytes accepts 4 through 65536.")]
+    public Task<MessageTextPage> ReadMessageText(string room, Guid messageId, CancellationToken ct, long offsetBytes = 0, int limitBytes = 16384)
+        => Route(room, "read_message_text", new(MessageId: messageId, OffsetBytes: offsetBytes, LimitBytes: limitBytes),
+            tool => tool.ReadMessageText(messageId, offsetBytes, limitBytes, ct), ct);
+
     [McpServerTool(Name = "rename_self")]
     [Description("Change only your own display name in this room. Your participant ID, private conversations and room remain valid.")]
     public Task<string> RenameSelf(string room, string displayName, CancellationToken ct)

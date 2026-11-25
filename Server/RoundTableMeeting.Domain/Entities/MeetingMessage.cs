@@ -45,6 +45,10 @@ public sealed class MeetingMessage : BaseEntity
         return value ?? string.Empty;
     }
 
+    public Guid? OriginalTextAttachmentId { get; private set; }
+
+    public void SetOriginalText(Guid attachmentId) => OriginalTextAttachmentId = attachmentId;
+
     public void SetScope(string visibility, Guid? recipient, Guid? replyTo, string fingerprint)
     {
         if (visibility is not ("public" or "private") || visibility == "public" && recipient is not null

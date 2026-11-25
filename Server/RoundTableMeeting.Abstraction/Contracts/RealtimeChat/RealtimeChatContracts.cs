@@ -1,10 +1,19 @@
 namespace RoundTableMeeting.Abstraction.Contracts.RealtimeChat;
 
 public sealed record MentionCandidateDto(Guid ParticipantId, int StartOffset, int Length);
+public sealed record McpRecipientSelector(string? RequestedName, Guid? CurrentlyResolvedId);
 public sealed record SubmitMessageRequest(Guid ClientSubmissionId, string Content, IReadOnlyList<MentionCandidateDto>? MentionCandidates = null, string? Visibility = null, Guid? RecipientParticipantId = null, IReadOnlyList<Guid>? AttachmentIds = null, Guid? ReplyToMessageId = null)
 {
     [System.Text.Json.Serialization.JsonIgnore]
     public bool StartsPublicTopic { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? OriginalTextAttachmentId { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? SourceTextDraftId { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public Guid? SourcePendingMessageId { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore]
+    public McpRecipientSelector? SourceRecipient { get; init; }
 }
 public sealed record MessageAuthorDto(Guid? ParticipantId, MessageAuthorKind Kind, string DisplayName);
 public sealed record MessageMentionDto(Guid ParticipantId, string DisplayName, int StartOffset, int Length);
@@ -19,6 +28,7 @@ public sealed record MessageDto(Guid MessageId, Guid MeetingId, long Sequence, M
     [System.Text.Json.Serialization.JsonIgnore]
     public bool DiscussionInterrupted { get; init; }
     public bool OptionalAgentResponse { get; init; }
+    public Guid? OriginalTextAttachmentId { get; init; }
     public bool IsForAgent(Guid participantId)
     {
         if (Author.ParticipantId == participantId || Author.Kind == MessageAuthorKind.System) return false;
