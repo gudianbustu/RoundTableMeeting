@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
 import { MessageBody } from './MessageBody'
 import './AttachmentViewer.css'
 import { Alert, Button, Select, Spin } from 'antd'
 
+const MermaidDiagram = lazy(() => import('./MermaidDiagram'))
+
 export const textPreviewLimit = 1024 * 1024
-export const isTextAttachment = (name: string) => /\.(txt|md|log|csv|tsv|json|xml|yaml|yml|ini|conf)$/i.test(name)
+export const isTextAttachment = (name: string) => /\.(txt|md|mmd|log|csv|tsv|json|xml|yaml|yml|ini|conf)$/i.test(name)
 
 export function decodePreview(bytes: Uint8Array, encoding = 'auto', truncated = false) {
   let selected = encoding
@@ -21,7 +23,7 @@ export function decodePreview(bytes: Uint8Array, encoding = 'auto', truncated = 
   return { text, encoding: selected }
 }
 
-export default function TextAttachmentPreview({ url, sizeBytes, markdown = false }: { url: string; sizeBytes: number; markdown?: boolean }) {
+export default function TextAttachmentPreview({ url, sizeBytes, markdown = false, diagram = false }: { url: string; sizeBytes: number; markdown?: boolean; diagram?: boolean }) {
   const [bytes, setBytes] = useState<Uint8Array>()
   const [encoding, setEncoding] = useState('auto')
   const [attempt, setAttempt] = useState(0)
@@ -63,7 +65,9 @@ export default function TextAttachmentPreview({ url, sizeBytes, markdown = false
     {error && <Alert type="error" title="文本预览加载失败。" action={<Button onClick={() => setAttempt(value => value + 1)}>重试</Button>} />}
     {!bytes && !error && <Spin />}
     {decoded && 'error' in decoded && <Alert type="warning" title="无法按所选编码预览，文件可能不是纯文本；请尝试其他编码。" />}
-    {truncated && <Alert type="info" title="文件较大，仅预览前 1 MiB，后续内容未显示。" />}
-    {decoded && 'text' in decoded && (markdown ? <article aria-label="Markdown 正文"><MessageBody content={decoded.text || '（空文件）'} mentions={[]} /></article> : <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>)}
+    {!diagram && truncated && <Alert type="info" title="文件较大，仅预览前 1 MiB，后续内容未显示。" />}
+    {diagram && truncated && <Alert type="warning" title="图表文件超过 1 MiB 读取上限，请下载完整文件查看。" />}
+    {diagram && !truncated && decoded && 'text' in decoded && <Suspense fallback={<Spin />}><MermaidDiagram source={decoded.text} /></Suspense>}
+    {!diagram && decoded && 'text' in decoded && (markdown ? <article aria-label="Markdown 正文"><MessageBody content={decoded.text || '（空文件）'} mentions={[]} /></article> : <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>)}
   </div>
 }
