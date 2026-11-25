@@ -18,6 +18,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
     MeetingAgentContext actor, IMeetingLifecycleService lifecycle, IAgentActivityNotifier notifier,
     IAgentActivityService activity, TimeProvider time, IAgentJoinRateLimiter rateLimiter,
     IAgentRecoveryRepository recovery, IMeetingLifecycleRepository membershipLifecycle, IMessageVisibilityRepository visibility, IMeetingRealtimeTermination termination, RoundTableMeeting.RealtimeChat.MeetingPresenceRegistry presence,
+    RoundTableMeeting.RealtimeChat.HumanAccountPresence accounts,
     Microsoft.AspNetCore.SignalR.IHubContext<RoundTableMeeting.RealtimeChat.MeetingChatHub> hub)
 {
     public const int LeaseSeconds = 300;
@@ -148,7 +149,7 @@ public sealed class CurrentMcpSessionService(IMeetingRepository meetings, IMeeti
         return new(m.ID, m.Name, m.Description, (await participants.ListAsync(m.ID, ct))
             .Select(p => new McpParticipant(p.ID, p.DisplayName, p.ParticipantType.ToString().ToLowerInvariant(),
                 p.MembershipState.ToString().ToLowerInvariant(), p.MembershipState == MeetingMembershipState.Joined
-                    && (p.ParticipantType == ParticipantType.Agent ? agentOnline : humanOnline).Contains(p.ID) ? "online" : "offline", p.UserId == m.CreatorUserId)).ToArray());
+                    && (p.ParticipantType == ParticipantType.Agent ? agentOnline.Contains(p.ID) : accounts.IsOnline(p.UserId) || humanOnline.Contains(p.ID)) ? "online" : "offline", p.UserId == m.CreatorUserId)).ToArray());
     }
     public async Task<McpAcknowledgement> DisconnectAsync(AgentConnectionSession c, CancellationToken ct)
     {

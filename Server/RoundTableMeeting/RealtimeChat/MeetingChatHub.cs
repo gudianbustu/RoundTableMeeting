@@ -8,7 +8,7 @@ using RoundTableMeeting.Authentication;
 namespace RoundTableMeeting.RealtimeChat;
 
 [Authorize]
-public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions, MeetingPresenceRegistry presence, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider, ILogger<MeetingChatHub> logger, CurrentMcpSessionService? mcp = null) : Hub
+public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions, MeetingPresenceRegistry presence, IMeetingRealtimeGate realtimeGate, TimeProvider timeProvider, ILogger<MeetingChatHub> logger, CurrentMcpSessionService? mcp = null, HumanAccountPresence? accounts = null) : Hub
 {
     public async Task<MeetingChatSubscriptionDto> SubscribeMeeting(Guid meetingId)
     {
@@ -29,13 +29,13 @@ public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions
         if (old is not null)
         {
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, Group(old.Value.MeetingId));
-            var released = presence.UnregisterImmediately(Context.ConnectionId);
-            if (released?.BecameOffline == true)
-                await Clients.Group(Group(released.Value.Binding.MeetingId)).SendAsync("participantPresenceChanged", new ParticipantPresenceDto(released.Value.Binding.ParticipantId, "offline", timeProvider.GetUtcNow()), cancellationToken);
+            presence.UnregisterImmediately(Context.ConnectionId);
         }
         await Groups.AddToGroupAsync(Context.ConnectionId, Group(meetingId), cancellationToken);
         var becameOnline = presence.Register(Context.ConnectionId, meetingId, result.Data.ParticipantId, Context.Abort);
-        var online = presence.GetOnline(meetingId).Concat(mcp is null ? [] : await mcp.GetOnlineAsync(meetingId, cancellationToken)).Distinct().ToArray();
+        if (accounts is not null) await accounts.ConnectAsync(userId, Context.ConnectionId);
+        var accountMembers = accounts is null ? Array.Empty<Guid>() : await accounts.OnlineParticipantsAsync(meetingId, cancellationToken);
+        var online = presence.GetOnline(meetingId).Concat(accountMembers).Concat(mcp is null ? [] : await mcp.GetOnlineAsync(meetingId, cancellationToken)).Distinct().ToArray();
         if (becameOnline)
             await Clients.Group(Group(meetingId)).SendAsync("participantPresenceChanged", new ParticipantPresenceDto(result.Data.ParticipantId, "online", timeProvider.GetUtcNow()), cancellationToken);
         return new MeetingChatSubscriptionDto(online, result.Data.HighWatermarkSequence, []);
@@ -52,16 +52,16 @@ public sealed class MeetingChatHub(IMeetingChatSubscriptionService subscriptions
         var current = presence.Get(Context.ConnectionId);
         if (current is null) return;
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, Group(current.Value.MeetingId));
-        var released = presence.UnregisterImmediately(Context.ConnectionId);
-        if (released?.BecameOffline == true)
-            await Clients.Group(Group(released.Value.Binding.MeetingId)).SendAsync("participantPresenceChanged", new ParticipantPresenceDto(released.Value.Binding.ParticipantId, "offline", timeProvider.GetUtcNow()));
+        presence.UnregisterImmediately(Context.ConnectionId);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
         var current = presence.Get(Context.ConnectionId);
         if (current is not null) await Groups.RemoveFromGroupAsync(Context.ConnectionId, Group(current.Value.MeetingId));
-        presence.ScheduleOffline(Context.ConnectionId);
+        presence.UnregisterImmediately(Context.ConnectionId);
+        if (accounts is not null && Guid.TryParse(Context.User?.FindFirst(AuthenticationConstants.ClaimType)?.Value, out var userId))
+            await accounts.DisconnectAsync(userId, Context.ConnectionId);
         await base.OnDisconnectedAsync(exception);
     }
 

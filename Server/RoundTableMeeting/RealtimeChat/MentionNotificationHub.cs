@@ -5,7 +5,7 @@ using RoundTableMeeting.Authentication;
 namespace RoundTableMeeting.RealtimeChat;
 
 [Authorize]
-public sealed class MentionNotificationHub : Hub
+public sealed class MentionNotificationHub(HumanAccountPresence presence) : Hub
 {
     public override async Task OnConnectedAsync()
     {
@@ -15,7 +15,15 @@ public sealed class MentionNotificationHub : Hub
             return;
         }
         await Groups.AddToGroupAsync(Context.ConnectionId, AccountGroup(userId), Context.ConnectionAborted);
+        await presence.ConnectAsync(userId, Context.ConnectionId);
         await base.OnConnectedAsync();
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        if (Guid.TryParse(Context.User?.FindFirst(AuthenticationConstants.ClaimType)?.Value, out var userId))
+            await presence.DisconnectAsync(userId, Context.ConnectionId);
+        await base.OnDisconnectedAsync(exception);
     }
 
     public Task SubscribeMeetingActivity()

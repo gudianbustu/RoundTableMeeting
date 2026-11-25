@@ -142,6 +142,7 @@ public static class ServiceCollectionExtensions
         builder.Services.AddHostedService<AttachmentMaintenanceService>();
 		builder.Services.AddSignalR();
 		builder.Services.AddSingleton<MeetingPresenceRegistry>();
+		builder.Services.AddSingleton<HumanAccountPresence>();
 		builder.Services.AddSingleton<IMeetingRealtimeTermination, MeetingRealtimeTermination>();
 		builder.Services.AddSingleton<MessageSendRateLimiter>();
 		builder.Services.AddScoped<MessageSendRateLimitFilter>();
