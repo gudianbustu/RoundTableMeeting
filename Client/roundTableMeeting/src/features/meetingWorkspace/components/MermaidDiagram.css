@@ -7,3 +7,13 @@
 .ant-modal:has(.mermaid-reader[data-expanded="true"]) { transform: none; }
 .mermaid-reader .image-viewer-tools button { min-height: 36px; min-width: 36px; }
 .ant-modal:has(.mermaid-reader[data-expanded="true"]) .ant-modal-close { visibility: hidden; }
+
+.chat-diagram { margin-block: 6px; max-width: 100%; }
+.chat-diagram-open { display: grid; width: 100%; min-height: 72px; place-items: center; color: var(--rt-primary); border: 1px solid var(--rt-border); border-radius: 6px; background: var(--rt-surface); cursor: zoom-in; }
+.chat-diagram[data-large="false"] .chat-diagram-open { height: 184px; }
+.chat-diagram-open img { display: block; width: 100%; height: 180px; object-fit: contain; background: white; }
+.chat-diagram details { font-size: .875em; }
+.chat-diagram-dialog { box-sizing: border-box; inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 12px; border: 0; color: var(--rt-text); background: var(--rt-surface); }
+.chat-diagram-dialog[open] { display: flex; flex-direction: column; }
+.chat-diagram-dialog .image-viewer { min-height: 0; flex: 1; }
+.chat-diagram-dialog .image-viewer-stage { touch-action: none; background: white; }

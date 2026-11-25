@@ -10,7 +10,7 @@ export default function ImageAttachmentPreview({ url, name, maxScale = 8 }: { ur
   const [view, setView] = useState(fit)
   const stage = useRef<HTMLDivElement>(null)
   const image = useRef<HTMLImageElement>(null)
-  const drag = useRef<{ id: number; x: number; y: number } | null>(null)
+  const pointers = useRef(new Map<number, { x: number; y: number }>())
 
   function contained(scale: number, x: number, y: number) {
     const limitX = Math.max(0, ((image.current?.clientWidth ?? 0) * scale - (stage.current?.clientWidth ?? 0)) / 2)
@@ -44,17 +44,29 @@ export default function ImageAttachmentPreview({ url, name, maxScale = 8 }: { ur
   return <div className="image-viewer">
     <div ref={stage} className="image-viewer-stage" data-zoomed={view.scale > 1}
       onPointerDown={event => {
-        if (event.button !== 0 || view.scale <= 1 || drag.current) return
-        drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY }
+        if (event.button !== 0 || event.pointerType !== 'touch' && view.scale <= 1) return
+        pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
         event.currentTarget.setPointerCapture(event.pointerId)
       }}
       onPointerMove={event => {
-        if (!drag.current || drag.current.id !== event.pointerId) return
-        const dx = event.clientX - drag.current.x, dy = event.clientY - drag.current.y
-        drag.current.x = event.clientX; drag.current.y = event.clientY
-        setView(v => contained(v.scale, v.x + dx, v.y + dy))
+        const points = pointers.current
+        const from = points.get(event.pointerId)
+        if (!from) return
+        const to = { x: event.clientX, y: event.clientY }
+        points.set(event.pointerId, to)
+        if (points.size === 1) {
+          setView(v => contained(v.scale, v.x + to.x - from.x, v.y + to.y - from.y))
+        } else if (points.size === 2) {
+          const other = [...points].find(([id]) => id !== event.pointerId)![1]
+          const distance = Math.hypot(from.x - other.x, from.y - other.y)
+          if (distance < 1) return
+          const rect = event.currentTarget.getBoundingClientRect()
+          zoom(Math.hypot(to.x - other.x, to.y - other.y) / distance,
+            (from.x + other.x - rect.width) / 2 - rect.left,
+            (from.y + other.y - rect.height) / 2 - rect.top)
+        }
       }}
-      onLostPointerCapture={() => { drag.current = null }}>
+      onLostPointerCapture={event => pointers.current.delete(event.pointerId)}>
       {state === 'loading' && <Spin />}
       {state === 'failed' && <Alert type="error" title="图片预览失败，文件可能已损坏或暂时无法访问。" action={
         <Button onClick={() => { setView(fit); setState('loading'); setAttempt(value => value + 1) }}>重试</Button>} />}

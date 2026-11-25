@@ -166,7 +166,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
               onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined} />
           </header>
           {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
-          {message.content && <MessageBody content={message.content} mentions={message.mentions} />}
+          {message.content && <MessageBody diagrams content={message.content} mentions={message.mentions} />}
           {original && <OriginalMessageText key={original.attachmentId} meetingId={message.meetingId} source={original} />}
           {!!attachments?.length && <AttachmentLinks compact meetingId={message.meetingId} attachments={attachments} onOpenViewer={setPreviewId} />}
         </div>

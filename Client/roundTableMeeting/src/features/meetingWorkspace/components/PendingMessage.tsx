@@ -29,7 +29,7 @@ export function PendingMessage({ submission, status, attachments, readOnly, onRe
         </Popover>}
       </div>
       <div className="pending-message-body">
-        {submission.content && <MessageBody content={submission.content} mentions={submission.candidates} />}
+        {submission.content && <MessageBody diagrams content={submission.content} mentions={submission.candidates} />}
         {(submission.attachmentIds ?? []).map(id => <div className="pending-message-file" key={id}>{attachments.find(file => file.attachmentId === id)?.name ?? '附件'}</div>)}
       </div>
     </div>

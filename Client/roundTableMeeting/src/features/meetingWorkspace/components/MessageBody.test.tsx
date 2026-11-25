@@ -22,3 +22,20 @@ it('treats raw HTML as text and only renders safe links', () => {
   expect(view.getByRole('link', { name: '打开' })).toHaveAttribute('href', 'https://example.org')
   expect(view.queryByRole('link', { name: '无效' })).toBeNull()
 })
+
+it('recognizes diagram fences inside chat without changing adjacent Markdown or other code', () => {
+  const source = ['**进展**', '~~~mmd', 'graph TD', 'A-->B', '~~~', '~~~ts', 'sequenceDiagram', '~~~'].join('\n')
+  const view = render(<MessageBody diagrams content={source} mentions={[]} />)
+  expect(view.getAllByRole('button', { name: '查看 Mermaid 图表' })).toHaveLength(1)
+  expect(view.container.querySelector('strong')).toHaveTextContent('进展')
+  expect(view.container.querySelector('code.language-ts')).toHaveTextContent('sequenceDiagram')
+  view.rerender(<MessageBody content={source} mentions={[]} />)
+  expect(view.container.querySelector('code.language-mmd')).toBeInTheDocument()
+})
+
+it('recognizes a standalone diagram declaration and preserves prose about syntax', () => {
+  const view = render(<MessageBody diagrams content={'sequenceDiagram\nAlice->>Bob: Hi'} mentions={[]} />)
+  expect(view.getByRole('button', { name: '查看 Mermaid 图表' })).toBeVisible()
+  view.rerender(<MessageBody diagrams content="sequenceDiagram describes a conversation." mentions={[]} />)
+  expect(view.queryByRole('button')).toBeNull()
+})
