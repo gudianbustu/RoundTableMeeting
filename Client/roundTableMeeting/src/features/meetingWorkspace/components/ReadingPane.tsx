@@ -28,7 +28,7 @@ export function ReadingPane({ children, onWidthChange }: { children: ReactNode; 
   useLayoutEffect(() => {
     const element = container.current
     if (!element) return
-    const measure = () => setAvailable(element.clientWidth)
+    const measure = () => setAvailable(Math.max(0, element.clientWidth - (window.matchMedia('(min-width: 1101px)').matches ? 32 : 0)))
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(element)
@@ -65,8 +65,8 @@ export function ReadingPane({ children, onWidthChange }: { children: ReactNode; 
     savePreferredWidth(clamp(values[event.key]))
   }
   return <div ref={container} className={'reading-pane' + (dragging ? ' reading-pane-dragging' : '')}>
+    {children}
     <div ref={frame} className="reading-frame" style={{ maxWidth: width }}>
-      {children}
       <div className="reading-resizer" role="separator" aria-orientation="vertical" aria-label="调整阅读区右边缘"
         aria-valuemin={lower} aria-valuemax={available} aria-valuenow={width} tabIndex={0}
         onPointerDown={start} onPointerMove={move} onPointerUp={finish} onPointerCancel={finish}

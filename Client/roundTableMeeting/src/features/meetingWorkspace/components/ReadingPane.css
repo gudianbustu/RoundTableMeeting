@@ -1,4 +1,5 @@
 .message-timeline > .reading-pane {
+  position: relative;
   display: flex;
   flex: 1 1 0;
   min-width: 0;
@@ -6,43 +7,24 @@
   justify-content: center;
 }
 .reading-frame {
-  position: relative;
+  position: absolute;
+  inset-block: 0;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
   width: 100%;
 }
-@property --rt-scroll-thumb {
-  syntax: "<color>";
-  inherits: true;
-  initial-value: transparent;
-}
-@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
-  .message-timeline-scroll { --rt-scroll-thumb: transparent; }
-  .reading-frame:hover .message-timeline-scroll,
-  .reading-pane-dragging .message-timeline-scroll,
-  .message-timeline-scroll:focus-visible { --rt-scroll-thumb: var(--rt-secondary); }
-  @supports not selector(::-webkit-scrollbar-thumb) {
-    .message-timeline-scroll { scrollbar-color: var(--rt-scroll-thumb) transparent; }
-    .message-timeline-scroll:active { scrollbar-color: var(--rt-secondary) transparent; }
-  }
-  .message-timeline-scroll::-webkit-scrollbar { width: 12px; background: transparent; }
-  .message-timeline-scroll::-webkit-scrollbar-thumb {
-    background: var(--rt-scroll-thumb);
-    border: 2px solid transparent;
-    border-radius: 6px;
-    background-clip: padding-box;
-  }
-  .message-timeline-scroll::-webkit-scrollbar-thumb:active { background-color: var(--rt-secondary); }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .message-timeline-scroll { transition: --rt-scroll-thumb 160ms ease; }
-  .reading-resizer::after { transition: background-color 160ms ease; }
+.message-timeline .reading-pane > .message-timeline-scroll { width: 100%; padding-inline: 0; }
+.reading-pane .message-timeline-items { box-sizing: border-box; max-width: var(--reading-width, 100%); margin-inline: auto; padding-inline: clamp(10px, 2vw, 26px); }
+@media (hover: hover) and (pointer: fine) {
+  .reading-pane > .message-timeline-scroll { overflow-y: scroll; scrollbar-gutter: stable both-edges; }
 }
 .reading-resizer { display: none; }
 @media (min-width: 1101px) {
-  .message-timeline > .reading-pane { margin-inline: 12px; }
+  .meeting-main > .scoped-chat { margin-inline: calc(-1 * clamp(26px, 2.1vw, 40px)); }
+  .meeting-main > .scoped-chat > .ant-tabs { margin-inline: clamp(26px, 2.1vw, 40px); }
   .reading-resizer {
     position: absolute;
     inset-block: 0;
@@ -50,7 +32,8 @@
     display: grid;
     align-items: center;
     justify-items: center;
-    width: 12px;
+    width: 10px;
+    pointer-events: auto;
     z-index: 1;
     cursor: ew-resize;
     touch-action: none;
@@ -62,12 +45,13 @@
     background: transparent;
     border-radius: 2px;
   }
-  .reading-frame:hover .reading-resizer::after, .reading-resizer:hover::after, .reading-resizer:focus-visible::after,
+  .reading-resizer:hover::after, .reading-resizer:focus-visible::after,
   .reading-pane-dragging .reading-resizer::after { background: var(--rt-secondary); }
   .reading-pane-dragging { user-select: none; }
 }
 @media (max-width: 1100px) {
-  .reading-frame { max-width: none !important; }
+  .reading-frame { display: none; }
+  .reading-pane .message-timeline-items { max-width: none; }
 }
 
 .scoped-chat .realtime-chat-region > .chat-message-notifications,
