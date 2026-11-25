@@ -57,7 +57,6 @@ export function MeetingWorkspacePage() {
     return () => { document.title = previousTitle }
   }, [meetingName])
   const [inviteOpen, setInviteOpen] = useState(false)
-  const [mentionPeerId, setMentionPeerId] = useState<string>()
   const [nicknameOpen, setNicknameOpen] = useState(false)
   const [removal, setRemoval] = useState<{ member: Participant; meetingId: string; operationId: string }>()
   const [removing, setRemoving] = useState(false)
@@ -153,7 +152,7 @@ export function MeetingWorkspacePage() {
             </div>
           </div>
         </header> : topbarSlot ? createPortal(topicHeader, topbarSlot) : topicHeader}
-        <RealtimeChatRegion onPeerChanged={setMentionPeerId} sessionCache={chatCache.current} readOnly={readOnly} composerTools={discussionMode} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} composerTools={discussionMode} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
         {readOnly && discussionMode}
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
@@ -165,7 +164,7 @@ export function MeetingWorkspacePage() {
         setRemovalError('')
         setRemoval({ member, operationId: createUuid(), meetingId: workspace.details!.meetingId })
       } : undefined} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities}
-        mentionPeerId={mentionPeerId} onEditNickname={historical ? undefined : () => { setMembersOpen(false); setNicknameOpen(true) }}
+        onEditNickname={historical ? undefined : () => { setMembersOpen(false); setNicknameOpen(true) }}
         onPrivateChat={participant => { setMembersOpen(false); composerRef.current?.privateChat?.(participant.participantId) }}
         onMention={historical ? undefined : participant => { setMembersOpen(false); composerRef.current?.mention(participant.displayName) }} />
     </Drawer>}
