@@ -62,3 +62,23 @@ it('opens after a stationary long press and cancels movement, release, and link 
   touch(rows[1], 'pointerdown')
   expect(await screen.findByRole('menu', { name: 'Second的消息操作' })).toBeInTheDocument()
 })
+
+it.each([false, true])('keeps the reader in history until a jump is requested (reduced motion %s)', reduced => {
+  const props = { loading: false, hasEarlierMessages: false, onLoadEarlier: vi.fn(), newMessageCount: 0, onNewMessageClick: vi.fn() }
+  const view = render(<MessageTimeline {...props} messages={messages} />)
+  const log = screen.getByRole('log')
+  const scrollTo = vi.fn()
+  Object.defineProperties(log, { clientHeight: { value: 200 }, scrollHeight: { value: 1000 }, scrollTo: { value: scrollTo } })
+  log.scrollTop = 300
+  fireEvent.scroll(log)
+  view.rerender(<MessageTimeline {...props} messages={[...messages, { ...messages[0], messageId: 'new', sequence: 3 }]} />)
+  expect(log.scrollTop).toBe(300)
+  expect(scrollTo).not.toHaveBeenCalled()
+  const original = window.matchMedia.bind(window)
+  const media = vi.spyOn(window, 'matchMedia').mockImplementation(query => query.includes('prefers-reduced-motion')
+    ? { ...original(query), matches: reduced } : original(query))
+  try {
+    fireEvent.click(screen.getByRole('button', { name: '回到最新' }))
+    expect(scrollTo).toHaveBeenCalledWith({ top: 800, behavior: reduced ? 'instant' : 'smooth' })
+  } finally { media.mockRestore() }
+})

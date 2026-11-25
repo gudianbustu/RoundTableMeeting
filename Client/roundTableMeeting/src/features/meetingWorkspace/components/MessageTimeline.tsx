@@ -42,10 +42,16 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
   const processedFocus = useRef<string | undefined>(undefined)
   const itemsRef = useRef<HTMLDivElement>(null)
   const position = useRef<ChatScrollPosition>(scrollPosition ?? { atBottom: true })
+  const jumpTarget = useRef<number | undefined>(undefined)
   const [atBottom, setAtBottom] = useState(position.current.atBottom)
   const capture = useCallback(() => {
     const element = scrollRef.current; if (!element) return
-    const bottom = element.scrollHeight - element.scrollTop - element.clientHeight <= 48
+    if (jumpTarget.current !== undefined) {
+      if (element.scrollTop + 2 < Math.min(jumpTarget.current, element.scrollHeight - element.clientHeight)) return
+      jumpTarget.current = undefined
+      element.scrollTop = element.scrollHeight
+    }
+    const bottom = element.scrollHeight - element.scrollTop - element.clientHeight <= 2
     const top = element.getBoundingClientRect().top
     const first = Array.from(element.querySelectorAll<HTMLElement>('[data-message-id]')).find(row => row.getBoundingClientRect().bottom > top)
     position.current = bottom ? { atBottom: true } : { atBottom: false, messageId: first?.dataset.messageId, offset: first ? first.getBoundingClientRect().top - top : 0 }
@@ -53,6 +59,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
   }, [onScrollPositionChanged])
   const restore = useCallback(() => {
     const element = scrollRef.current; if (!element) return
+    if (jumpTarget.current !== undefined) return
     if (position.current.atBottom) element.scrollTop = element.scrollHeight
     else if (position.current.messageId) {
       const row = Array.from(element.querySelectorAll<HTMLElement>('[data-message-id]')).find(item => item.dataset.messageId === position.current.messageId)
@@ -65,6 +72,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
     const element = scrollRef.current
     const row = Array.from(element?.querySelectorAll<HTMLElement>('[data-message-id]') ?? []).find(item => item.dataset.messageId === focusMessageId)
     if (element && row) {
+      jumpTarget.current = undefined
       processedFocus.current = `${focusMessageId}:${focusRevision}`
       position.current = { atBottom: false, messageId: focusMessageId, offset: 0 }; restore(); setAtBottom(false)
       row.focus({ preventScroll: true }); onScrollPositionChanged?.(position.current)
@@ -91,13 +99,27 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
     setActionMessageId(row.dataset.messageId)
     return true
   }
-  const jumpToLatest = () => { position.current = { atBottom: true }; restore(); setAtBottom(true); onScrollPositionChanged?.(position.current) }
+  const interruptJump = () => {
+    const element = scrollRef.current
+    if (jumpTarget.current === undefined || !element) return
+    jumpTarget.current = undefined
+    element.scrollTo({ top: element.scrollTop, behavior: 'instant' })
+    capture()
+  }
+  const jumpToLatest = () => {
+    const element = scrollRef.current
+    if (!element) return
+    const target = element.scrollHeight - element.clientHeight
+    const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    jumpTarget.current = smooth ? target : undefined
+    element.scrollTo({ top: target, behavior: smooth ? 'smooth' : 'instant' })
+    if (!smooth) capture()
+  }
   return <section className="message-timeline">
-    {(hasEarlierMessages || !atBottom) && <div className="message-timeline-toolbar">
-      {hasEarlierMessages && <Button size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>}
-      {!atBottom && <Button type="link" size="small" onClick={jumpToLatest}>回到最新</Button>}
+    {hasEarlierMessages && <div className="message-timeline-toolbar">
+      <Button size="small" loading={loading} onClick={() => { capture(); onLoadEarlier() }}>加载更早消息</Button>
     </div>}
-    <ReadingPane><div ref={scrollRef} className="message-timeline-scroll" role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
+    <ReadingPane><div ref={scrollRef} className="message-timeline-scroll" onWheelCapture={interruptJump} onPointerDownCapture={interruptJump} onKeyDownCapture={interruptJump} role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
       {messages.length === 0 && !pendingMessage && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" />}
       {messages.map(message => {
         const original = message.originalTextAttachmentId
@@ -151,6 +173,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
       </article>})}
       {pendingMessage}
     </div></div></ReadingPane>
+    {!atBottom && <Button className="timeline-jump-latest" shape="round" size="small" onClick={jumpToLatest}>回到最新</Button>}
     {previewId && <ConversationAttachmentViewer selectedId={previewId} messages={messages} currentParticipantId={currentParticipantId} hasEarlierMessages={hasEarlierMessages} onSelect={setPreviewId} />}
   </section>
 }
