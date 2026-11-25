@@ -5,6 +5,7 @@ import { createUuid } from '@/shared/utils/createUuid'
 import { attachmentUrl, getCommunicationCapabilities, listAttachments } from '../api/messageResources'
 import type { MessagePageRequest } from '../api/listMessages'
 import type { ChatAttachment } from '../types/realtimeChat'
+import { AttachmentViewer } from './ConversationAttachmentViewer'
 import AttachmentPreview from './AttachmentPreview'
 import AttachmentCard, { attachmentPreviewKind } from './AttachmentCard'
 
@@ -44,16 +45,21 @@ export function AttachmentUpload({ uploadRef, attachments, disabled, onChange }:
     {error && <Typography.Text type="danger" role="alert">{error}</Typography.Text>}
   </div>
 }
-export function AttachmentLinks({ meetingId, attachments }: { meetingId: string; attachments: ChatAttachment[] }) {
+export function AttachmentLinks({ meetingId, attachments, onOpenViewer }: { meetingId: string; attachments: ChatAttachment[]; onOpenViewer?: (id: string) => void }) {
   const [preview, setPreview] = useState<ChatAttachment>()
   return <div className="message-attachments">
-    {attachments.map(file => <AttachmentCard key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => setPreview(file)} />)}
+    {attachments.map(file => <AttachmentCard key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => {
+      const kind = attachmentPreviewKind(file)
+      if (onOpenViewer && (kind === 'image' || (kind === 'text' && /\.md$/i.test(file.name)))) onOpenViewer(file.attachmentId)
+      else setPreview(file)
+    }} />)}
     <Modal open={!!preview} title={preview?.name} footer={preview ? <Button icon={<DownloadOutlined />} href={attachmentUrl(meetingId, preview.attachmentId)} target="_blank" rel="noopener noreferrer">下载</Button> : null} destroyOnHidden onCancel={() => setPreview(undefined)} width="min(900px, 92vw)">
       {preview && <AttachmentPreview key={preview.attachmentId} file={preview} url={attachmentUrl(meetingId, preview.attachmentId, true)} />}
     </Modal>
   </div>
 }
 export function MeetingAttachmentList({ meetingId, scope, peerParticipantId, onLocate }: { meetingId: string; scope: 'public' | 'private'; peerParticipantId?: string; onLocate: (id: string) => Promise<void> }) {
+  const [previewId, setPreviewId] = useState<string>()
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<Awaited<ReturnType<typeof listAttachments>>['items']>([])
   const [before, setBefore] = useState<number>()
@@ -69,7 +75,10 @@ export function MeetingAttachmentList({ meetingId, scope, peerParticipantId, onL
     } catch { if (!current.signal.aborted) setError('附件列表加载失败。') }
     finally { if (!current.signal.aborted) setBusy(false) }
   }
-  useEffect(() => () => controller.current?.abort(), [])
+  useEffect(() => {
+    setPreviewId(undefined); setItems([]); setBefore(undefined); setOpen(false)
+    return () => controller.current?.abort()
+  }, [meetingId, scope, peerParticipantId])
   return <><Tooltip title="会议附件"><Button type="text" aria-label="会议附件" icon={<FolderOpenOutlined />} onClick={() => { setOpen(true); void load() }} /></Tooltip><Drawer title={scope === 'private' ? '此私聊的附件' : '公开讨论附件'} open={open} onClose={() => setOpen(false)}>
     {error && <Alert type="error" title={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     <Tabs defaultActiveKey="files" destroyOnHidden items={[
@@ -77,10 +86,14 @@ export function MeetingAttachmentList({ meetingId, scope, peerParticipantId, onL
     ].map(tab => {
       const filtered = items.filter(item => (attachmentPreviewKind(item.attachment) === 'image') === (tab.key === 'images'))
       return { ...tab, children: <>
-        {filtered.map(item => <article className="meeting-attachment-row" key={item.attachment.attachmentId}><AttachmentLinks meetingId={meetingId} attachments={[item.attachment]} /><Typography.Text type="secondary">{item.author} · {item.createdAt.toLocaleString()}</Typography.Text><Button type="link" onClick={() => { void onLocate(item.messageId).then(() => setOpen(false)).catch(() => setError('原消息暂时无法定位，请重试。')) }}>跳转原消息</Button></article>)}
+        {filtered.map(item => <article className="meeting-attachment-row" key={item.attachment.attachmentId}><AttachmentLinks meetingId={meetingId} attachments={[item.attachment]} onOpenViewer={setPreviewId} /><Typography.Text type="secondary">{item.author} · {item.createdAt.toLocaleString()}</Typography.Text><Button type="link" onClick={() => { void onLocate(item.messageId).then(() => setOpen(false)).catch(() => setError('原消息暂时无法定位，请重试。')) }}>跳转原消息</Button></article>)}
         {!busy && !error && !filtered.length && <Typography.Text type="secondary">{before !== undefined ? `当前已加载内容中暂无${tab.label}，可继续加载更早附件。` : `此交流范围还没有${tab.label}`}</Typography.Text>}
       </> }
     })} />
     {busy && <Spin />}{before !== undefined && <Button loading={busy} onClick={() => void load(true)}>加载更早附件</Button>}
-  </Drawer></>
+  </Drawer>
+    {previewId && <AttachmentViewer key={previewId} initialId={previewId} meetingId={meetingId} scope={scope} peerParticipantId={peerParticipantId}
+      beforeSequence={before} entries={items.map(item => ({ file: item.attachment, author: item.author, sequence: item.sequence }))}
+      onClose={() => setPreviewId(undefined)} />}
+  </>
 }

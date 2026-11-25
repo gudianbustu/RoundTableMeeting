@@ -4,7 +4,7 @@ import { MeetingAttachmentList } from './AttachmentControls'
 import { listAttachments } from '../api/messageResources'
 
 vi.mock('../api/messageResources', async original => ({ ...await original<object>(), listAttachments: vi.fn() }))
-vi.mock('./AttachmentCard', async original => ({ ...await original<object>(), default: ({ file }: { file: { name: string } }) => <div>{file.name}</div> }))
+vi.mock('./AttachmentCard', async original => ({ ...await original<object>(), default: ({ file, onPreview }: { file: { name: string }; onPreview: () => void }) => <button onClick={onPreview}>{file.name}</button> }))
 afterEach(() => { cleanup(); vi.clearAllMocks() })
 const row = (id: string, mediaType: string) => ({ attachment: { attachmentId: id, name: id, mediaType, sizeBytes: 1, state: 'bound' }, messageId: `message-${id}`, sequence: 9, author: 'Alice', createdAt: new Date() })
 
@@ -36,4 +36,25 @@ it('shows a definitive empty state only after the available pages are exhausted'
   fireEvent.click(screen.getByRole('tab', { name: '图片' }))
   expect(await screen.findByText('此交流范围还没有图片')).toBeVisible()
   expect(screen.queryByRole('button', { name: '加载更早附件' })).toBeNull()
+})
+
+it('opens the scoped drawer gallery and loads older images across non-image pages', async () => {
+  const latest = { ...row('latest.png', 'image/png'), sequence: 21, author: 'Beta' }
+  const other = { ...row('other.png', 'image/png'), sequence: 20, author: 'Ada' }
+  const earlier = { ...row('first.png', 'image/png'), sequence: 3, author: 'Beta' }
+  vi.mocked(listAttachments)
+    .mockResolvedValueOnce({ items: [latest, other], nextBeforeSequence: 20 })
+    .mockResolvedValueOnce({ items: [row('middle.pdf', 'application/pdf')], nextBeforeSequence: 9 })
+    .mockResolvedValueOnce({ items: [earlier], nextBeforeSequence: undefined })
+  render(<MeetingAttachmentList meetingId="meeting" scope="private" peerParticipantId="beta" onLocate={vi.fn()} />)
+  fireEvent.click(screen.getByRole('button', { name: '会议附件' }))
+  fireEvent.click(await screen.findByRole('tab', { name: '图片' }))
+  fireEvent.click(await screen.findByRole('button', { name: 'other.png' }))
+  expect(await screen.findByText('Ada · 私聊')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '查看 latest.png' })).toBeEnabled()
+  fireEvent.click(screen.getByRole('button', { name: '上一张图片' }))
+  expect(await screen.findByText('Beta · 私聊')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: '上一张图片' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: '查看 first.png' })).toHaveAttribute('aria-current', 'true')
+  expect(listAttachments).toHaveBeenLastCalledWith('meeting', { scope: 'private', peerParticipantId: 'beta', beforeSequence: 9, limit: 50 }, expect.any(AbortSignal))
 })

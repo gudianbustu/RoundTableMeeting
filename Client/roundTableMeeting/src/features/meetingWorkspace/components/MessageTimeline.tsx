@@ -6,6 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { Button, Dropdown, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
 import { getMessage } from '../api/messageResources'
+import { ConversationAttachmentViewer } from './ConversationAttachmentViewer'
 import { AttachmentLinks } from './AttachmentControls'
 
 function ReplyQuote({ meetingId, id, loaded, onLocate }: {
@@ -73,6 +74,7 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
     observer?.observe(element); if (itemsRef.current) observer?.observe(itemsRef.current)
     return () => { element.removeEventListener('scroll', capture); observer?.disconnect() }
   }, [capture, restore])
+  const [previewId, setPreviewId] = useState<string>()
   const [actionMessageId, setActionMessageId] = useState<string>()
   const longPress = useRef<{ timer: number; x: number; y: number } | undefined>(undefined)
   const clearLongPress = () => {
@@ -135,10 +137,11 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
         </header>
         {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
         {message.content && <MessageBody content={message.content} mentions={message.mentions} />}
-        {!!message.attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={message.attachments} />}
+        {!!message.attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={message.attachments} onOpenViewer={setPreviewId} />}
       </article>)}
       {pendingMessage}
     </div></div></ReadingPane>
+    {previewId && <ConversationAttachmentViewer selectedId={previewId} messages={messages} currentParticipantId={currentParticipantId} hasEarlierMessages={hasEarlierMessages} onSelect={setPreviewId} />}
   </section>
 }
 

@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { MessageBody } from './MessageBody'
+import './AttachmentViewer.css'
 import { Alert, Button, Select, Spin } from 'antd'
 
 export const textPreviewLimit = 1024 * 1024
@@ -19,7 +21,7 @@ export function decodePreview(bytes: Uint8Array, encoding = 'auto', truncated = 
   return { text, encoding: selected }
 }
 
-export default function TextAttachmentPreview({ url, sizeBytes }: { url: string; sizeBytes: number }) {
+export default function TextAttachmentPreview({ url, sizeBytes, markdown = false }: { url: string; sizeBytes: number; markdown?: boolean }) {
   const [bytes, setBytes] = useState<Uint8Array>()
   const [encoding, setEncoding] = useState('auto')
   const [attempt, setAttempt] = useState(0)
@@ -53,14 +55,15 @@ export default function TextAttachmentPreview({ url, sizeBytes }: { url: string;
     try { return decodePreview(bytes, encoding, truncated) }
     catch { return { error: true } }
   }, [bytes, encoding, truncated])
-  return <div>
-    <Select aria-label="文本编码" value={encoding} onChange={setEncoding} style={{ width: 190, marginBottom: 12 }} options={[
+  const selector = <Select aria-label="文本编码" value={encoding} onChange={setEncoding} style={{ width: 190, marginBottom: 12 }} options={[
       { value: 'auto', label: '自动识别编码' }, { value: 'utf-8', label: 'UTF-8' }, { value: 'gb18030', label: 'GB18030 / GBK' }, { value: 'utf-16le', label: 'UTF-16 LE' }, { value: 'utf-16be', label: 'UTF-16 BE' },
     ]} />
+  return <div className={markdown ? 'attachment-reader' : undefined}>
+    {markdown ? <details><summary>文本编码</summary>{selector}</details> : selector}
     {error && <Alert type="error" title="文本预览加载失败。" action={<Button onClick={() => setAttempt(value => value + 1)}>重试</Button>} />}
     {!bytes && !error && <Spin />}
     {decoded && 'error' in decoded && <Alert type="warning" title="无法按所选编码预览，文件可能不是纯文本；请尝试其他编码。" />}
     {truncated && <Alert type="info" title="文件较大，仅预览前 1 MiB，后续内容未显示。" />}
-    {decoded && 'text' in decoded && <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>}
+    {decoded && 'text' in decoded && (markdown ? <article aria-label="Markdown 正文"><MessageBody content={decoded.text || '（空文件）'} mentions={[]} /></article> : <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>)}
   </div>
 }
