@@ -46,14 +46,23 @@ public sealed class MultiAgentMigratedEventConsumerTests
             .UseSqlite($"Data Source={original.DatabasePath};Foreign Keys=True;Pooling=False").Options))
         {
             await old.Database.MigrateAsync("20260911063339_AddUserAccountAdmin");
-            old.AddRange(user, meeting);
+            old.Add(user);
             await old.SaveChangesAsync();
+            await old.Database.ExecuteSqlInterpolatedAsync($"""
+                INSERT INTO Meetings (ID, Name, Description, CreatorUserId, MeetingCode, LifecycleState, CreatedAtUtc)
+                VALUES ({meeting.ID}, {meeting.Name}, {meeting.Description}, {user.ID}, {meeting.MeetingCode}, 'Active', {now})
+                """);
             foreach (var participant in new[] { human, alpha, beta }) await LegacyMeetingParticipantSeed.InsertAsync(old, participant);
             foreach (var message in new[] { root, pending, reply }) await LegacyMessageSeed.InsertAsync(old, message);
-            old.AddRange(rootMention, oldEvent, delivery,
-                MessageMention.Create(meeting.ID, pending.ID, beta.ID, "Beta", 0, 5),
-                MessageMention.Create(meeting.ID, reply.ID, beta.ID, "Beta", 0, 5),
-                AgentContextCursor.Create(meeting.ID, beta.ID, 0, now));
+            foreach (var mention in new[] { rootMention, MessageMention.Create(meeting.ID, pending.ID, beta.ID, "Beta", 0, 5),
+                MessageMention.Create(meeting.ID, reply.ID, beta.ID, "Beta", 0, 5) })
+            {
+                await old.Database.ExecuteSqlInterpolatedAsync($"""
+                    INSERT INTO MessageMentions (ID, MeetingId, MessageId, TargetParticipantId, TargetDisplayName, StartOffset, Length)
+                    VALUES ({mention.ID}, {mention.MeetingId}, {mention.MessageId}, {mention.TargetParticipantId}, {mention.TargetDisplayName}, {mention.StartOffset}, {mention.Length})
+                    """);
+            }
+            old.AddRange(oldEvent, delivery, AgentContextCursor.Create(meeting.ID, beta.ID, 0, now));
             await old.SaveChangesAsync();
             await old.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentReplyTasks (ID, MeetingId, AgentParticipantId, TriggerMessageId, TriggerSequence, TriggerMentionId,
