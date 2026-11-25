@@ -96,6 +96,23 @@ public sealed class RealtimeChatService(ICurrentUserContext currentUser, IMeetin
         return new(MessageOperationStatus.Success, new(dtos, !request.AfterSequence.HasValue && more,
             request.AfterSequence.HasValue && more, first, last, first, last) { VisibleThroughSequence = through.Value });
     }
+    public async Task<MessageOperationResult<UnreadActivityDto>> GetUnreadActivityAsync(Guid meetingId, long? afterSequence, CancellationToken ct = default)
+    {
+        if (afterSequence < 0) return Invalid<UnreadActivityDto>("afterSequence");
+        var userId = currentUser.UserId.GetValueOrDefault();
+        using var lease = await realtimeGate.AcquireSharedAsync(meetingId, ct);
+        if (lease is null) return new(await UnavailableStatus(meetingId, userId, ct));
+        var access = await AuthorizeAsync(meetingId, userId, ct);
+        if (access.Data is not { } member) return new(access.Status);
+        var through = member.HighWatermarkSequence;
+        if (afterSequence is not long after || after >= through)
+            return new(MessageOperationStatus.Success, new(member.ParticipantId, through, []));
+        var counts = await visibility.CountIncomingAsync(meetingId, member.ParticipantId, after, through, ct);
+        var scopes = counts.Select(c => new UnreadActivityScopeDto(c.PeerParticipantId.HasValue ? "private" : "public",
+            c.PeerParticipantId, c.Count, c.LastSequence)).ToArray();
+        return new(MessageOperationStatus.Success, new(member.ParticipantId, through, scopes));
+    }
+
     public async Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(Guid meetingId, Guid userId, CancellationToken ct = default)
     {
         if (userId == Guid.Empty) return new(MessageOperationStatus.Unauthenticated);

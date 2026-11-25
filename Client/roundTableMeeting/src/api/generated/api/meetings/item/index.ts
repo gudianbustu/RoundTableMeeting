@@ -26,6 +26,8 @@ import { RejoinRequestBuilderRequestsMetadata, type RejoinRequestBuilder } from 
 // @ts-ignore
 import { SubmissionsRequestBuilderNavigationMetadata, type SubmissionsRequestBuilder } from './submissions/index.js';
 // @ts-ignore
+import { type UnreadActivityRequestBuilder, UnreadActivityRequestBuilderRequestsMetadata } from './unreadActivity/index.js';
+// @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
 
 /**
@@ -76,6 +78,10 @@ export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMe
      * The submissions property
      */
     get submissions(): SubmissionsRequestBuilder;
+    /**
+     * The unreadActivity property
+     */
+    get unreadActivity(): UnreadActivityRequestBuilder;
     /**
      * @param requestConfiguration Configuration for the request such as headers, query parameters, and middleware options.
      * @returns {Promise<MeetingDetailsDto>}
@@ -134,6 +140,9 @@ export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<key
     },
     submissions: {
         navigationMetadata: SubmissionsRequestBuilderNavigationMetadata,
+    },
+    unreadActivity: {
+        requestsMetadata: UnreadActivityRequestBuilderRequestsMetadata,
     },
 };
 /**

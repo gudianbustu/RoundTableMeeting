@@ -21,6 +21,14 @@ public sealed class MessageVisibilityRepository(RoundTableMeetingDbContext db) :
         var rows = await (after.HasValue ? q.OrderBy(x => x.Sequence) : q.OrderByDescending(x => x.Sequence)).Take(limit).ToArrayAsync(ct);
         return rows.OrderBy(x => x.Sequence).Select(x => new VisibleMessage(x.Message, x.Sequence, x.AuthorName)).ToArray();
     }
+    public async Task<IReadOnlyList<VisibleConversationCount>> CountIncomingAsync(Guid meetingId, Guid participantId,
+        long after, long through, CancellationToken ct)
+        => await Query(meetingId, participantId, "all", null, through)
+            .Where(x => x.Sequence > after && x.Message.AuthorParticipantId != participantId)
+            .GroupBy(x => x.Message.Visibility == "private" ? x.Message.AuthorParticipantId : null)
+            .Select(g => new VisibleConversationCount(g.Key, g.LongCount(), g.Max(x => x.Sequence)))
+            .ToArrayAsync(ct);
+
     private sealed class ProjectionRow
     {
         public MeetingMessage Message { get; init; } = null!;

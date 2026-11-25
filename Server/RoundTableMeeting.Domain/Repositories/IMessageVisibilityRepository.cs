@@ -2,8 +2,10 @@ using RoundTableMeeting.Domain.Entities;
 namespace RoundTableMeeting.Domain.Repositories;
 
 public sealed record VisibleMessage(MeetingMessage Message, long Sequence, string? CurrentAuthorName = null);
+public sealed record VisibleConversationCount(Guid? PeerParticipantId, long Count, long LastSequence);
 public interface IMessageVisibilityRepository
 {
+    Task<IReadOnlyList<VisibleConversationCount>> CountIncomingAsync(Guid meetingId, Guid participantId, long after, long through, CancellationToken ct);
     Task<long> HighWatermarkAsync(Guid meetingId, Guid participantId, CancellationToken ct = default);
     Task<VisibleMessage?> FindAsync(Guid meetingId, Guid participantId, Guid messageId, long? through = null, CancellationToken ct = default);
     Task<IReadOnlyList<VisibleMessage>> PageAsync(Guid meetingId, Guid participantId, string scope, Guid? peer,

@@ -43,6 +43,8 @@ public sealed record MessageDto(Guid MessageId, Guid MeetingId, long Sequence, M
     public string OffsetUnit => "utf16";
 }
 public sealed record SubmitMessageResultDto(MessageDto Message, bool Replayed);
+public sealed record UnreadActivityScopeDto(string Scope, Guid? PeerParticipantId, long Count, long LastSequence);
+public sealed record UnreadActivityDto(Guid ParticipantId, long ThroughSequence, IReadOnlyList<UnreadActivityScopeDto> Scopes);
 public sealed record MessagePageRequest(long? BeforeSequence = null, long? AfterSequence = null, long? ThroughSequence = null, int? Limit = null, string Scope = "all", Guid? PeerParticipantId = null);
 public sealed record MessagePageDto(IReadOnlyList<MessageDto> Items, bool HasMoreBefore, bool HasMoreAfter, long? FirstSequence, long? LastSequence, long? NextBeforeSequence, long? NextAfterSequence)
 {

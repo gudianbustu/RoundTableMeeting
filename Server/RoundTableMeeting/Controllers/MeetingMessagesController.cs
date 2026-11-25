@@ -14,6 +14,20 @@ namespace RoundTableMeeting.Controllers;
 [NoStoreResponse]
 public sealed class MeetingMessagesController(IMessageHistoryService history, IMessageAppendService append) : ControllerBase
 {
+    [HttpGet("~/api/meetings/{meetingId:guid}/unread-activity")]
+    [ProducesResponseType(typeof(UnreadActivityDto), StatusCodes.Status200OK)]
+    public async Task<IActionResult> UnreadActivity(Guid meetingId, [FromQuery] long? afterSequence, CancellationToken ct)
+    {
+        var result = await history.GetUnreadActivityAsync(meetingId, afterSequence, ct);
+        return result.Status switch
+        {
+            MessageOperationStatus.Success => Ok(result.Data),
+            MessageOperationStatus.ValidationFailed => ApiProblemDetailsWriter.CreateResult(HttpContext, 400, "validation_failed", result.Errors),
+            MessageOperationStatus.Unauthenticated => ApiProblemDetailsWriter.CreateResult(HttpContext, 401, "unauthenticated"),
+            _ => ApiProblemDetailsWriter.CreateResult(HttpContext, 404, "meeting_not_found")
+        };
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(MessagePageDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]

@@ -38,7 +38,11 @@ public sealed record ResolvedMessageAppendResult(
     string AuthorDisplayName,
     string Content,
     DateTimeOffset CreatedAtUtc) { public bool Replayed { get; init; } }
-public interface IMessageHistoryService { Task<MessageOperationResult<MessagePageDto>> GetPageAsync(Guid meetingId, MessagePageRequest request, CancellationToken cancellationToken = default); }
+public interface IMessageHistoryService
+{
+    Task<MessageOperationResult<MessagePageDto>> GetPageAsync(Guid meetingId, MessagePageRequest request, CancellationToken cancellationToken = default);
+    Task<MessageOperationResult<UnreadActivityDto>> GetUnreadActivityAsync(Guid meetingId, long? afterSequence, CancellationToken ct = default);
+}
 public interface IMeetingChatSubscriptionService { Task<MessageOperationResult<MeetingChatSubscriptionAccessDto>> AuthorizeAsync(Guid meetingId, Guid userId, CancellationToken cancellationToken = default); }
 public interface IAgentActivityService
 {

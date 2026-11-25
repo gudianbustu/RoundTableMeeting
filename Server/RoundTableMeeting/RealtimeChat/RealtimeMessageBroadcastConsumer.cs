@@ -28,17 +28,23 @@ public sealed class RealtimeMessageBroadcastConsumer(
         var mentions = await messages.ListMentionsAsync(envelope.MeetingId, message.ID, cancellationToken);
         var targets = mentions.Select(m => m.TargetParticipantId).ToHashSet();
         var accountGroups = new HashSet<string>();
+        var activityGroups = new HashSet<string>();
         foreach (var projection in recipients)
         {
             if (!eligible.TryGetValue(projection.ParticipantId, out var participant)) continue;
-            if (targets.Contains(participant.ID) && participant.ID != message.AuthorParticipantId &&
-                participant.ParticipantType == Domain.Enums.ParticipantType.Human && participant.UserId is Guid userId)
-                accountGroups.Add(MentionNotificationHub.AccountGroup(userId));
+            if (participant.ID != message.AuthorParticipantId && participant.ParticipantType == Domain.Enums.ParticipantType.Human &&
+                participant.UserId is Guid userId)
+            {
+                activityGroups.Add(MentionNotificationHub.ActivityGroup(userId));
+                if (targets.Contains(participant.ID)) accountGroups.Add(MentionNotificationHub.AccountGroup(userId));
+            }
             var connections = presence.GetConnections(envelope.MeetingId, new HashSet<Guid> { projection.ParticipantId });
             if (connections.Count == 0) continue;
             var dto = await mapper.MapAsync(new(message, projection.Sequence), cancellationToken);
             await hub.Clients.Clients(connections).SendAsync("messageAppended", dto, cancellationToken);
         }
+        if (activityGroups.Count > 0)
+            await notificationHub.Clients.Groups(activityGroups.ToArray()).SendAsync("meetingActivityChanged", new { message.MeetingId }, cancellationToken);
         if (accountGroups.Count > 0)
             await notificationHub.Clients.Groups(accountGroups.ToArray()).SendAsync("humanMentioned",
                 new HumanMentionNotification(message.MeetingId, message.ID), cancellationToken);

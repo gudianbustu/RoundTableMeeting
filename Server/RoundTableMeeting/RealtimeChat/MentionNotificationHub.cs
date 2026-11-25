@@ -18,6 +18,14 @@ public sealed class MentionNotificationHub : Hub
         await base.OnConnectedAsync();
     }
 
+    public Task SubscribeMeetingActivity()
+    {
+        if (!Guid.TryParse(Context.User?.FindFirst(AuthenticationConstants.ClaimType)?.Value, out var userId))
+            throw new HubException("unauthenticated");
+        return Groups.AddToGroupAsync(Context.ConnectionId, ActivityGroup(userId), Context.ConnectionAborted);
+    }
+
+    internal static string ActivityGroup(Guid userId) => $"meeting-activity:{userId:N}";
     internal static string AccountGroup(Guid userId) => $"human-mentions:{userId:N}";
 }
 

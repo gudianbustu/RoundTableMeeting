@@ -504,6 +504,24 @@ export function createSystemStatusDtoFromDiscriminatorValue(parseNode: ParseNode
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {UnreadActivityDto}
+ */
+// @ts-ignore
+export function createUnreadActivityDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoUnreadActivityDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {UnreadActivityScopeDto}
+ */
+// @ts-ignore
+export function createUnreadActivityScopeDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoUnreadActivityScopeDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {UpdateAdminRequest}
  */
 // @ts-ignore
@@ -1126,6 +1144,33 @@ export function deserializeIntoSystemStatusDto(systemStatusDto: Partial<SystemSt
         "database": n => { systemStatusDto.database = n.getObjectValue<DatabaseStatusDto>(createDatabaseStatusDtoFromDiscriminatorValue); },
         "environment": n => { systemStatusDto.environment = n.getStringValue(); },
         "status": n => { systemStatusDto.status = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param UnreadActivityDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoUnreadActivityDto(unreadActivityDto: Partial<UnreadActivityDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "participantId": n => { unreadActivityDto.participantId = n.getGuidValue(); },
+        "scopes": n => { unreadActivityDto.scopes = n.getCollectionOfObjectValues<UnreadActivityScopeDto>(createUnreadActivityScopeDtoFromDiscriminatorValue); },
+        "throughSequence": n => { unreadActivityDto.throughSequence = n.getNumberValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param UnreadActivityScopeDto The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoUnreadActivityScopeDto(unreadActivityScopeDto: Partial<UnreadActivityScopeDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "count": n => { unreadActivityScopeDto.count = n.getNumberValue(); },
+        "lastSequence": n => { unreadActivityScopeDto.lastSequence = n.getNumberValue(); },
+        "peerParticipantId": n => { unreadActivityScopeDto.peerParticipantId = n.getGuidValue(); },
+        "scope": n => { unreadActivityScopeDto.scope = n.getStringValue(); },
     }
 }
 /**
@@ -2189,6 +2234,35 @@ export function serializeSystemStatusDto(writer: SerializationWriter, systemStat
 /**
  * Serializes information the current object
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param UnreadActivityDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeUnreadActivityDto(writer: SerializationWriter, unreadActivityDto: Partial<UnreadActivityDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!unreadActivityDto || isSerializingDerivedType) { return; }
+    writer.writeGuidValue("participantId", unreadActivityDto.participantId);
+    writer.writeCollectionOfObjectValues<UnreadActivityScopeDto>("scopes", unreadActivityDto.scopes, serializeUnreadActivityScopeDto);
+    writer.writeNumberValue("throughSequence", unreadActivityDto.throughSequence);
+    writer.writeAdditionalData(unreadActivityDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param UnreadActivityScopeDto The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeUnreadActivityScopeDto(writer: SerializationWriter, unreadActivityScopeDto: Partial<UnreadActivityScopeDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!unreadActivityScopeDto || isSerializingDerivedType) { return; }
+    writer.writeNumberValue("count", unreadActivityScopeDto.count);
+    writer.writeNumberValue("lastSequence", unreadActivityScopeDto.lastSequence);
+    writer.writeGuidValue("peerParticipantId", unreadActivityScopeDto.peerParticipantId);
+    writer.writeStringValue("scope", unreadActivityScopeDto.scope);
+    writer.writeAdditionalData(unreadActivityScopeDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param UpdateAdminRequest The instance to serialize from.
  * @param writer Serialization writer to use to serialize this model
  */
@@ -2307,6 +2381,38 @@ export interface SystemStatusDto extends AdditionalDataHolder, Parsable {
      * The status property
      */
     status?: string | null;
+}
+export interface UnreadActivityDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The participantId property
+     */
+    participantId?: Guid | null;
+    /**
+     * The scopes property
+     */
+    scopes?: UnreadActivityScopeDto[] | null;
+    /**
+     * The throughSequence property
+     */
+    throughSequence?: number | null;
+}
+export interface UnreadActivityScopeDto extends AdditionalDataHolder, Parsable {
+    /**
+     * The count property
+     */
+    count?: number | null;
+    /**
+     * The lastSequence property
+     */
+    lastSequence?: number | null;
+    /**
+     * The peerParticipantId property
+     */
+    peerParticipantId?: Guid | null;
+    /**
+     * The scope property
+     */
+    scope?: string | null;
 }
 export interface UpdateAdminRequest extends AdditionalDataHolder, Parsable {
     /**
