@@ -29,8 +29,15 @@
 .gallery-prev { left: 0; }
 .gallery-next { right: 0; }
 .gallery-strip { min-width: 0; height: 88px; margin-inline: 65px; position: relative; overflow-x: auto; justify-content: safe center; padding: 4px; }
+.gallery-strip::-webkit-scrollbar { height: 3px; }
+.gallery-strip::-webkit-scrollbar-track { background: #343b3c; }
+.gallery-strip::-webkit-scrollbar-thumb { background: #889292; border-radius: 3px; }
+@supports not selector(::-webkit-scrollbar) {
+  .gallery-strip { scrollbar-width: thin; scrollbar-color: #889292 #343b3c; }
+}
+.gallery-strip button:not([aria-current="true"]) img { filter: brightness(.72); }
 .gallery-strip button { flex: none; background: none; padding: 2px; border: 2px solid transparent; border-radius: 5px; cursor: pointer; }
-.gallery-strip button[aria-current="true"] { border-color: #e5a68d; }
+.gallery-strip button[aria-current="true"] { border-color: #4cb5aa; }
 .gallery-strip img { display: block; width: 99px; height: 62px; border-radius: 4px; object-fit: cover; }
 .attachment-reader { width: min(100%, 840px); margin-inline: auto; max-height: 70dvh; overflow: auto; overflow-wrap: anywhere; }
 .attachment-reader details { margin: 4px 0 16px; color: var(--rt-secondary); }

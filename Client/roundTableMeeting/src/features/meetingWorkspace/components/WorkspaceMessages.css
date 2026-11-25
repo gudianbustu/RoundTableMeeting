@@ -36,7 +36,7 @@
 .chat-message-column .message-kind { color: var(--rt-secondary); border: 0; background: var(--rt-subtle); }
 .message-agent .message-kind { color: var(--rt-primary); }
 .chat-message-column .message-body {
-  width: 100%;
+  width: fit-content;
   max-width: 100%;
   box-sizing: border-box;
   padding: 13px 16px;
