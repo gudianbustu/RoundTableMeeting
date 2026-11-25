@@ -1,0 +1,30 @@
+.status-brand { height: 72px; display: flex; align-items: center; padding-inline: 36px; background: var(--rt-surface); border-bottom: 1px solid var(--rt-border); }
+.status-brand a { display: inline-flex; align-items: center; gap: 11px; font-size: 23px; font-weight: 700; text-decoration: none; color: var(--rt-text); }
+.status-brand img { width: 34px; height: 36px; object-fit: contain; }
+.system-status { width: min(940px, calc(100% - 32px)); margin: 50px auto; }
+.system-status h1 { margin: 0; font-size: 32px; }
+.system-status-panel { margin-top: 24px; padding: 32px; border: 1px solid var(--rt-border); border-radius: 15px; background: var(--rt-surface); }
+.system-status-panel table { width: 100%; }
+.system-status-panel tbody { display: grid; grid-template-columns: 1fr 1fr; column-gap: 50px; }
+.system-status-panel tr { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 20px 4px; border-bottom: 1px solid var(--rt-border); }
+.system-status-panel tr:nth-last-child(-n+2) { border: 0; }
+.system-status-panel th { font-weight: 400; color: var(--rt-secondary); }
+.system-status-panel td { overflow-wrap: anywhere; }
+.status-loaded:before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 8px; background: var(--rt-success); border-radius: 50%; }
+.status-problem { display: grid; justify-items: center; gap: 12px; text-align: center; padding-block: 48px; }
+.status-problem h2, .status-problem p { margin: 0; }
+.status-problem p { color: var(--rt-secondary); }
+.status-problem-icon { display: grid; place-items: center; width: 36px; height: 36px; border: 2px solid currentColor; border-radius: 50%; color: var(--rt-danger); font-weight: 700; }
+.status-problem .ant-btn { height: 44px; padding-inline: 24px; }
+@media (max-width: 600px) {
+  .status-brand { height: 54px; padding-inline: 17px; }
+  .status-brand a { font-size: 18px; gap: 7px; }
+  .status-brand img { width: 27px; }
+  .system-status { margin: 25px auto; }
+  .system-status h1 { font-size: 25px; }
+  .system-status-panel { padding: 16px; }
+  .system-status-panel tbody { grid-template-columns: 1fr; }
+  .system-status-panel tr:nth-last-child(2) { border-bottom: 1px solid var(--rt-border); }
+  .status-problem { padding: 26px 16px; }
+  .status-problem button { width: 100%; }
+}

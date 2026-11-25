@@ -1,7 +1,8 @@
-import { Alert, Descriptions, Typography } from 'antd'
+import './SystemStatusPage.css'
+import { Alert, Button, Typography } from 'antd'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ErrorState, LoadingState } from '@/shared/components/PageState'
+import { LoadingState } from '@/shared/components/PageState'
 import { getSystemStatus } from '../api/getSystemStatus'
 import { DatabaseStatus } from '../components/DatabaseStatus'
 import { ServiceStatus } from '../components/ServiceStatus'
@@ -49,10 +50,30 @@ export function SystemStatusPage() {
   if (state === 'loading') return <LoadingState />
   if (state === 'error' || !status) {
     const errorCopy = getSystemStatusErrorCopy(error ?? { kind: 'unknown', message: '请求未能完成，请稍后重试。' })
-    return <section className="status-content"><ErrorState title={errorCopy.title} description={errorCopy.description} traceId={error?.traceId} onRetry={load} /></section>
+    return <section className="system-status"><h1>框架运行状态</h1>
+      <div className="system-status-panel status-problem" role="alert">
+        <span className="status-problem-icon" aria-hidden="true">!</span>
+        <h2>{errorCopy.title}</h2><p>{errorCopy.description}</p>
+        {error?.traceId && <p>关联标识：{error.traceId}</p>}
+        <Button type="primary" onClick={load}>重试</Button>
+      </div>
+    </section>
   }
   const degraded = status.status === 'degraded'
-  return <section className="status-content"><Typography.Title level={2}>框架运行状态</Typography.Title>{degraded && <Alert type="warning" showIcon title="服务端已连接，但数据库处于不可用状态。" />}<Descriptions bordered column={{ xs: 1, sm: 2 }}><Descriptions.Item label="客户端">已加载</Descriptions.Item><Descriptions.Item label="服务端"><ServiceStatus status={status.status} /></Descriptions.Item><Descriptions.Item label="数据库"><DatabaseStatus status={status.databaseStatus} /></Descriptions.Item><Descriptions.Item label="运行环境">{status.environment}</Descriptions.Item></Descriptions>{error?.traceId && <Typography.Text type="secondary">关联标识：{error.traceId}</Typography.Text>}</section>
+  const rows = [
+    ['客户端', <span className="status-loaded">已加载</span>],
+    ['服务端', <ServiceStatus status={status.status} />],
+    ['数据库', <DatabaseStatus status={status.databaseStatus} />],
+    ['运行环境', status.environment],
+  ] as const
+  return <section className="system-status">
+    <h1>框架运行状态</h1>
+    {degraded && <Alert type="warning" showIcon title="服务端已连接，但数据库处于不可用状态。" />}
+    <div className="system-status-panel">
+      <table aria-label="框架运行状态详情"><tbody>{rows.map(([label, value]) =>
+        <tr key={label}><th scope="row">{label}</th><td>{value}</td></tr>)}</tbody></table>
+    </div>
+  </section>
 }
 
 /** 为未知路由渲染兜底页面 */
