@@ -15,10 +15,11 @@
 }
 .reading-resizer { display: none; }
 @media (min-width: 1101px) {
+  .message-timeline > .reading-pane { margin-inline: 12px; }
   .reading-resizer {
     position: absolute;
     inset-block: 0;
-    right: 0;
+    left: 100%;
     display: grid;
     align-items: center;
     justify-items: center;
