@@ -1,0 +1,50 @@
+.message-composer-tools > .discussion-mode-control { align-self: center; }
+.discussion-mode-control {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--rt-secondary);
+  font-size: 13px;
+}
+.discussion-mode-control strong { color: var(--rt-text); }
+.discussion-mode-control .ant-select { min-width: 116px; color: var(--rt-text); background: var(--rt-surface); }
+.discussion-mode-control .ant-select.ant-select-open .ant-select-content-has-value { opacity: 1; color: var(--rt-text); }
+.discussion-mode-control .ant-select:focus-within { outline: 2px solid var(--rt-text); outline-offset: 2px; }
+.discussion-mode-options.ant-select-dropdown { background: var(--rt-surface); }
+.discussion-mode-options .ant-select-item-option { color: var(--rt-text); }
+.ant-select-dropdown.discussion-mode-options .ant-select-item.ant-select-item-option.ant-select-item-option-selected,
+.ant-select-dropdown.discussion-mode-options .ant-select-item.ant-select-item-option.ant-select-item-option-active {
+  background: var(--rt-surface);
+  color: var(--rt-text);
+}
+.discussion-mode-options .ant-select-item-option-active { outline: 1px solid var(--rt-text); outline-offset: -2px; }
+.discussion-mode-option { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+
+.message-composer .message-composer-tools { align-items: center; }
+.message-composer-tools .attachment-upload {
+  border-inline-end: 1px solid var(--rt-border);
+  padding-inline-end: 6px;
+}
+@media (max-width: 600px) {
+  .message-composer .message-composer-tools { flex-wrap: nowrap; gap: 4px; }
+  .message-composer-tools .attachment-upload { padding-inline-end: 4px; }
+  .message-composer-tools .attachment-upload .ant-btn,
+  .message-composer-tools .browse-attachments { padding-inline: 2px; gap: 2px; }
+  .message-composer-tools .discussion-mode-control { flex-wrap: nowrap; gap: 3px; white-space: nowrap; }
+  .message-composer-tools .discussion-mode-control .ant-select { min-width: 85px; }
+  .message-composer-footer .message-composer-actions > .ant-btn { width: 32px; padding-inline: 0; gap: 0; }
+  .message-composer-actions .ant-btn > span:not(.ant-btn-icon):not(.anticon) { display: none; }
+}
+@media (max-width: 400px) {
+  .scoped-chat .realtime-chat-region > .message-composer { margin-inline: 0; padding-inline: 5px; }
+  .message-composer-tools .attachment-upload .ant-btn,
+  .message-composer-tools .browse-attachments,
+  .message-composer-tools .discussion-mode-control { font-size: 12px; }
+  .message-composer .message-composer-footer { gap: 3px; }
+}
+@media (max-width: 350px) {
+  .meeting-workspace > .meeting-main:has(.message-composer) { padding-inline: 2px; }
+  .message-composer .message-composer-tools { gap: 2px; }
+  .message-composer-tools .attachment-upload { padding-inline-end: 2px; }
+}

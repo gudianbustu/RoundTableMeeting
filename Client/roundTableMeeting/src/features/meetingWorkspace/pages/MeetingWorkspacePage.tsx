@@ -1,16 +1,15 @@
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
-import { CloseOutlined, EllipsisOutlined, MenuOutlined } from '@ant-design/icons'
+import { CloseOutlined, MenuOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import { FirstMeetingHome } from '../components/FirstMeetingHome'
 import { MeetingDirectory } from '../components/MeetingDirectory'
 import type { MessageComposerHandle } from '../components/MessageComposer'
-import { copyText } from '@/shared/utils/copyText'
-import { Alert, Button, Drawer, Flex, Input, Modal, Popover, Typography, message } from 'antd'
+import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
 import { MeetingNicknameDialog } from '../components/MeetingNicknameDialog'
 import { MeetingNavigation } from '../components/MeetingNavigation'
-import { MeetingHeader } from '../components/MeetingHeader'
+import { DiscussionModeControl } from '../components/DiscussionModeControl'
 import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { InviteMeetingDialog } from '../components/InviteMeetingDialog'
@@ -50,7 +49,6 @@ export function MeetingWorkspacePage() {
   const [confirmName, setConfirmName] = useState('')
   const [presence, setPresence] = useState<Record<string, 'online' | 'offline'>>({})
   const [agentActivities, setAgentActivities] = useState<Record<string, AgentActivity>>({})
-  const [messageApi, contextHolder] = message.useMessage()
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
@@ -65,13 +63,6 @@ export function MeetingWorkspacePage() {
   useEffect(() => {
     if (workspace.details && hasUnknownAgentActivity(workspace.details.participants, agentActivities)) workspace.refreshDetails()
   }, [agentActivities, workspace.details?.participants, workspace.refreshDetails])
-  const copyInvitation = async () => {
-    if (!workspace.invitation) return
-    try {
-      await copyText(workspace.invitation.meetingCode)
-      messageApi.success('邀请码已复制')
-    } catch { messageApi.error('复制失败，请手动选择并复制邀请码') }
-  }
   const openInvite = () => setInviteOpen(true)
   const closeDelete = () => { setDeleteOpen(false); setConfirmName('') }
   const historical = workspace.details ? workspace.details.membershipState === 'left'
@@ -82,9 +73,10 @@ export function MeetingWorkspacePage() {
     <MeetingNavigation onAll={() => navigate('/')} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} view={historical ? 'history' : 'active'} meetings={historical ? workspace.lists.history : workspace.lists.active} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
   )
   const members = workspace.details?.participants.filter(person => person.membershipState !== 'left') ?? []
+  const readOnly = historical || workspace.details?.canSend === false
+  const discussionMode = workspace.details && <DiscussionModeControl meeting={workspace.details} onModeChanged={workspace.refreshDetails} />
   const creator = workspace.details?.participants.find(person => person.isCreator)
   return <section className={workspace.selectedId ? "meeting-workspace" : "meeting-home"}>
-    {contextHolder}
     {!workspace.selectedId ? <>
       {listError}
       {workspace.error && <Alert closable onClose={workspace.clearError} type="error" title={workspace.error.message} />}
@@ -113,10 +105,7 @@ export function MeetingWorkspacePage() {
             </div>
           </div>
         </header> : <header className="workspace-topic-header">
-          <div className="workspace-topic-name"><div className="workspace-title-row"><h1>{workspace.details.name}</h1>
-              <Popover trigger="click" placement="bottomLeft" content={<MeetingHeader meeting={workspace.details} invitation={workspace.invitation} onCopy={() => void copyInvitation()} onModeChanged={workspace.refreshDetails} onRefresh={workspace.refresh} />}>
-                <Button type="text" size="small" aria-label="会议操作" icon={<EllipsisOutlined />} />
-              </Popover></div>
+          <div className="workspace-topic-name"><div className="workspace-title-row"><h1>{workspace.details.name}</h1></div>
             {creator && <p>创建者　{creator.displayName}</p>}
           </div>
           <div className="workspace-member-tools">
@@ -127,7 +116,8 @@ export function MeetingWorkspacePage() {
             {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
           </div>
         </header>}
-        <RealtimeChatRegion onPeerChanged={setMentionPeerId} sessionCache={chatCache.current} readOnly={workspace.details.membershipState === 'left' || workspace.details.canSend === false} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        <RealtimeChatRegion onPeerChanged={setMentionPeerId} sessionCache={chatCache.current} readOnly={readOnly} composerTools={discussionMode} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        {readOnly && discussionMode}
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
     </>}

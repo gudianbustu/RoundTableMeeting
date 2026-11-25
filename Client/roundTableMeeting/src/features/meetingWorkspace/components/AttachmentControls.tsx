@@ -79,7 +79,7 @@ export function MeetingAttachmentList({ meetingId, scope, peerParticipantId, onL
     setPreviewId(undefined); setItems([]); setBefore(undefined); setOpen(false)
     return () => controller.current?.abort()
   }, [meetingId, scope, peerParticipantId])
-  return <><Tooltip title="会议附件"><Button type="text" aria-label="会议附件" icon={<FolderOpenOutlined />} onClick={() => { setOpen(true); void load() }} /></Tooltip><Drawer title={scope === 'private' ? '此私聊的附件' : '公开讨论附件'} open={open} onClose={() => setOpen(false)}>
+  return <><Tooltip title="浏览当前会话的附件"><Button type="text" className="browse-attachments" icon={<FolderOpenOutlined aria-hidden />} onClick={() => { setOpen(true); void load() }}>附件列表</Button></Tooltip><Drawer title={scope === 'private' ? '此私聊的附件' : '公开讨论附件'} open={open} onClose={() => setOpen(false)}>
     {error && <Alert type="error" title={error} action={<Button onClick={() => void load()}>重试</Button>} />}
     <Tabs defaultActiveKey="files" destroyOnHidden items={[
       { key: 'files', label: '文件' }, { key: 'images', label: '图片' },
