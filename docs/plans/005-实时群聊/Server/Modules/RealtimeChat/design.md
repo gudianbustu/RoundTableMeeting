@@ -22,7 +22,7 @@ IMessageHistoryService从受信访问上下文获取004历史上界，查询消�
 
 IMessageEventConsumer及注册目录保留稳定consumerName和独立scope，消费可重复；事件只包含稳定消息引用。通知失败不撤销消息，后续补读收敛。Agent同步读取全部有权消息，不注册只对@创建任务的消费者。
 
-历史按NoTracking和序号边界投影，权限上界与through取交集；before/after排他且页内升序。查询不推进已读或CLI前台位置。退出后可查有权历史和原发送结果但不可新发；删除中/已删除不返回内容。
+历史按NoTracking和序号边界投影，权限上界与through取交集；before/after排他且页内升序。查询不推进已读位置或 next 的待处理位置。退出后可查有权历史和原发送结果但不可新发；删除中/已删除不返回内容。
 
 ## 5. 验证
 

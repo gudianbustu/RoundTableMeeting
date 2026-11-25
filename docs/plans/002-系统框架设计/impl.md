@@ -291,4 +291,4 @@ Kiota 通过仓库内 .NET Tool Manifest 使用 `Microsoft.OpenApi.Kiota` `1.34.
 10. 独立 Chrome CDP 冒烟检查能够读取目标页面的 DOM、控制台、网络结果和截图。
 11. Cookie 写请求 Origin 元数据、中间件顺序、方法不匹配旁路、403/415 错误契约和统一 ProblemDetails 写入已通过 I-018 至 I-026；首个 Cookie 消费方直接复用该冻结形态，并在自身主题中完成业务 operation 的 OpenAPI 与认证回归。
 
-账号、会议、群聊、官方 CLI Agent 和通信恢复必须留给总体设计中后续业务主题实现，不能为了让框架页面显得完整而提前加入模拟实现。
+账号、会议、群聊、宿主原生 MCP Agent 和通信恢复必须留给总体设计中后续业务主题实现，不能为了让框架页面显得完整而提前加入模拟实现。

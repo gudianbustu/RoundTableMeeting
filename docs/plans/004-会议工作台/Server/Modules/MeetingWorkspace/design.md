@@ -16,7 +16,7 @@ Delete按Server唯一契约提交删除屏障，协调取消活动IO、幂等清
 
 ## 3. 授权服务
 
-IMeetingAccessGuard分别提供历史与写入授权结果，返回服务端设计中的权限和visibleThroughSequence。消息/附件/CLI必须使用受信身份调用；不得接受外部participantId直接替代认证。不通过重复加入“修复”退出权限，deleting/deleted拒绝全部内容，删除状态专用证明不赋予历史访问权。
+IMeetingAccessGuard分别提供历史与写入授权结果，返回服务端设计中的权限和visibleThroughSequence。消息/附件/MCP必须使用受信身份调用；不得接受外部participantId直接替代认证。不通过重复加入“修复”退出权限，deleting/deleted拒绝全部内容，删除状态专用证明不赋予历史访问权。
 
 ## 4. 事务和错误
 

@@ -10,13 +10,13 @@ C01：扩展feature API适配和模块视图模型，分离活跃/历史列表�
 
 C02：按[页面计划](Pages/MeetingWorkspace/impl.md)接入现有AuthenticatedLayout与/meetings/:meetingId路由。history模式读取同会议授权历史，不另建平行会议。
 
-C03：更新MeetingNavigation、MeetingHeader、ParticipantList、CreateMeetingDialog、JoinMeetingDialog及InviteMeetingDialog的既有组件文档。优先保留桌面/移动布局及可访问交互，增加编辑、删除/退出、分组和统一CLI邀请。
+C03：更新MeetingNavigation、MeetingHeader、ParticipantList、CreateMeetingDialog、JoinMeetingDialog及InviteMeetingDialog的既有组件文档。优先保留桌面/移动布局及可访问交互，增加编辑、删除/退出、分组和原生 MCP 邀请。
 
 C04：接入005消息/附件区域及007连接状态，统一document.title更新位置；加入/离开/更名和切会均测试，新消息不触发标题提醒。
 
 ## 3. 验证
 
-组件测试只验证实际交互/权限与旧响应问题；最终使用真实浏览器检查桌面/窄屏、焦点、网络与标题。主题W01—W09为验收入口。第2批已接入活跃/历史列表、权限按钮、稳定操作ID退出、只读历史及明确重入自动恢复；三浏览器验证通过。在线/离线分组及离线默认折叠已实现。会议编辑、统一页面标题、官方CLI邀请及完整窄屏体验仍按后续批次实施。
+组件测试只验证实际交互/权限与旧响应问题；最终使用真实浏览器检查桌面/窄屏、焦点、网络与标题。主题W01—W09为验收入口。第2批已接入活跃/历史列表、权限按钮、稳定操作ID退出、只读历史及明确重入自动恢复；三浏览器验证通过。在线/离线分组及离线默认折叠已实现。会议编辑、统一页面标题、原生 MCP 邀请及完整窄屏体验仍按后续批次实施。
 
 C05：操作入口归位已完成：邀请位于参与者标题右侧；会议信息和更多操作位于会议列表项右侧，移入/聚焦显示，触摸设备常显。切换会议后按对应详情与权限呈现操作，输入区仅保留刷新、邀请码及复制。33文件166项前端测试、类型检查及生产构建通过。
 

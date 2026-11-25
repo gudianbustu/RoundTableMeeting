@@ -10,6 +10,6 @@ open、invitation?、loading、onCancel与统一公开基础地址。打开时�
 
 ## 3. 边界
 
-AI提示词引用006通用指南：服务地址、名称、会议码、同源latest/SKILL.md和manifest.json，选择系统架构、校验、安装、join/read/send/reconnect/disconnect。只使用官方CLI，不含/mcp或宿主直连替代路径。使用完整复制按钮及成功/失败反馈；部署子路径按统一外部地址构造。
+AI 邀请复制完整的宿主原生 MCP 接入提示，分别提供可复用站点配置和本场 attend 私有参数。站点与脚本地址保留部署前缀；只有用户明确选择脚本时才引用同版官方脚本及指南。复制结果提供成功或失败反馈。
 
 状态与权限以[客户端设计](../../design.md)及[服务端契约](../../../Server/design.md)为准；组件不建立第二套生命周期规则。

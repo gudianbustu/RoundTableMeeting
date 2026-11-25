@@ -41,7 +41,7 @@ MeetingCode 为随机 Guid 的 D 格式，Trim 后严格解析，仅用于加入
 | POST /api/meetings | creationRequestId、name、description? | 201首次/200重放；详情和邀请；已删除创建意图410 |
 | GET /api/meetings/{id} | 无 | 基本信息、成员权限、本人可见高水位、参与者摘要、revision |
 | PATCH /api/meetings/{id} | name、description?、expectedRevision | 200；仅创建者且active |
-| POST /api/meetings/{id}/invitation | 无正文 | 会议码与同版本CLI邀请；仅已加入人类 |
+| POST /api/meetings/{id}/invitation | 无正文 | 会议码与站点级 MCP 邀请；仅已加入人类 |
 | POST /api/meetings/join/preview | meetingCode | 名称背景、默认或既有显示名、参与状态 |
 | POST /api/meetings/join | meetingCode、displayName | 参与身份；left明确恢复joined |
 | POST /api/meetings/{id}/deletion | confirmationName、operationId? | 204清理完成；202表示已封锁且仍清理，返回operationId、status=deleting及状态地址 |
@@ -68,7 +68,7 @@ MeetingCode 为随机 Guid 的 D 格式，Trim 后严格解析，仅用于加入
 
 Agent首次成功绑定会议时生成并私有保存随机 lifecycleProof，服务端只保留不可逆验证值；它独立于活跃连接与历史读取凭据，仅用于查询删除状态。旧会话被接管、退出或断开后仍可用其已有proof确认本会议是否删除，不能用proof读取内容、续接或获取新凭据。服务端删除完成后保留最小墓碑（meetingId、proof验证值、deleted状态及必要幂等标识），不保留会议名称、消息、附件或私聊对象/时间/数量；它不是历史入口。
 
-删除通知必须来自已验证服务连接，通知丢失则后台在联网恢复时先查生命周期；会话已被接管也可显式运行此只读检查，不恢复参与。状态为deleted才触发006受管副本清理；deleting先禁止本地继续查询并等待确认。网络失败、未知meetingId或proof验证失败显示无法确认，不猜测删除。墓碑/proof索引不按普通会话过期自动删除，避免长期离线客户端无法确认；备份恢复及升级需保持删除事实，不能将旧备份直接恢复为对外可访问会议。
+删除通知必须来自已验证服务连接，通知丢失后可经已授权入口核对生命周期；会话已被接管也可显式运行此只读检查，不恢复参与。状态为 deleted 时终止服务端内容访问；deleting 阻止新操作并等待删除完成。网络失败、未知meetingId或proof验证失败显示无法确认，不猜测删除。墓碑/proof索引不按普通会话过期自动删除，避免长期离线客户端无法确认；备份恢复及升级需保持删除事实，不能将旧备份直接恢复为对外可访问会议。
 
 ## 8. 安全与迁移
 
