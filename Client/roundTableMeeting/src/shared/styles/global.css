@@ -321,10 +321,10 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 
 .join-meeting-preview { padding: 16px; border: 1px solid var(--rt-border); border-radius: 10px; background: var(--rt-subtle); }
 .join-meeting-preview label { display: block; margin: 12px 0 6px; }
-.discussion-mode-options { display: flex; gap: 8px; }
-.discussion-mode-options label { flex: 1; margin: 0; border: 1px solid var(--rt-border); border-radius: 8px; padding: 12px; }
-.discussion-mode-options .ant-radio-wrapper-checked { background: var(--rt-subtle); border-color: var(--rt-primary); }
-@media(max-width: 600px) { .discussion-mode-options { flex-direction: column; } }
+.ant-radio-group.discussion-mode-options { display: flex; gap: 8px; }
+.ant-radio-group.discussion-mode-options label { flex: 1; margin: 0; border: 1px solid var(--rt-border); border-radius: 8px; padding: 12px; }
+.ant-radio-group.discussion-mode-options .ant-radio-wrapper-checked { background: var(--rt-subtle); border-color: var(--rt-primary); }
+@media(max-width: 600px) { .ant-radio-group.discussion-mode-options { flex-direction: column; } }
 
 .meeting-form-modal .ant-modal-container { padding: clamp(20px, 3vw, 32px); }
 .meeting-form-modal .ant-modal-title { font-size: 20px; }
@@ -333,7 +333,7 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .join-form-modal .ant-modal-body { min-height: 210px; }
 .join-meeting-preview p { margin: 4px 0 0; color: var(--rt-secondary); }
 .join-code-error { color: var(--rt-danger); }
-.discussion-mode-options small { display: block; margin-top: 6px; color: var(--rt-secondary); }
+.ant-radio-group.discussion-mode-options small { display: block; margin-top: 6px; color: var(--rt-secondary); }
 
 .invite-panel { display: grid; gap: 12px; margin-top: 22px; }
 .invite-copy { padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--rt-subtle); border: 1px solid var(--rt-border); border-radius: 8px; }
