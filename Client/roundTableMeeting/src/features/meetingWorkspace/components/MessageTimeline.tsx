@@ -1,13 +1,14 @@
 import { ReadingPane } from './ReadingPane'
-import { EllipsisOutlined } from '@ant-design/icons'
+import './WorkspaceMessages.css'
+import { EllipsisOutlined, RollbackOutlined, RobotOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { MessageBody } from './MessageBody'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button, Dropdown, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
 import { getMessage } from '../api/messageResources'
-import { ConversationAttachmentViewer } from './ConversationAttachmentViewer'
 import { OriginalMessageText } from './OriginalMessageText'
+import { ConversationAttachmentViewer } from './ConversationAttachmentViewer'
 import { AttachmentLinks } from './AttachmentControls'
 
 function ReplyQuote({ meetingId, id, loaded, onLocate }: {
@@ -35,6 +36,7 @@ function ReplyQuote({ meetingId, id, loaded, onLocate }: {
 
 type Props = { onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
 export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
+  const [previewId, setPreviewId] = useState<string>()
   const originals = new Map(messages.map(message => [message.messageId, message]))
   const scrollRef = useRef<HTMLDivElement>(null)
   const processedFocus = useRef<string | undefined>(undefined)
@@ -75,7 +77,6 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
     observer?.observe(element); if (itemsRef.current) observer?.observe(itemsRef.current)
     return () => { element.removeEventListener('scroll', capture); observer?.disconnect() }
   }, [capture, restore])
-  const [previewId, setPreviewId] = useState<string>()
   const [actionMessageId, setActionMessageId] = useState<string>()
   const longPress = useRef<{ timer: number; x: number; y: number } | undefined>(undefined)
   const clearLongPress = () => {
@@ -131,19 +132,22 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
         }}
         onPointerUp={clearLongPress} onPointerCancel={clearLongPress} onPointerLeave={clearLongPress}
         className={'message-item message-' + message.author.kind + (currentParticipantId && message.author.participantId === currentParticipantId ? ' message-own' : '')}>
-        <header className="message-meta">
-          <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>
-          <time className="message-time" dateTime={message.createdAt.toISOString()}>{message.createdAt.toLocaleString()}</time>
-          <Tag className="message-kind" color={message.author.kind === 'agent' ? 'cyan' : message.author.kind === 'human' ? 'blue' : 'default'}>{message.author.kind === 'agent' ? 'Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Tag>
-          {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
+        <span className="chat-author-avatar" aria-hidden="true">{message.author.kind === 'agent' ? <RobotOutlined /> : message.author.kind === 'system' ? <InfoCircleOutlined /> : Array.from(message.author.displayName.trim())[0]}</span>
+        <div className="chat-message-column">
+          <header className="message-meta">
+            <Typography.Text strong className="message-author">{message.author.displayName}</Typography.Text>
+            <Tag className="message-kind">{message.author.kind === 'agent' ? 'AI Agent' : message.author.kind === 'system' ? '系统' : '人类'}</Tag>
+            <time className="message-time" dateTime={message.createdAt.toISOString()} title={message.createdAt.toLocaleString()}>{message.createdAt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}</time>
+            {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
             <MessageActions open={actionMessageId === message.messageId} onOpenChange={open =>
               setActionMessageId(current => open ? message.messageId : current === message.messageId ? undefined : current)} message={message} onReply={canReply ? onReply : undefined}
               onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined} />
-        </header>
-        {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
-        {message.content && <MessageBody content={message.content} mentions={message.mentions} />}
+          </header>
+          {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
+          {message.content && <MessageBody content={message.content} mentions={message.mentions} />}
           {original && <OriginalMessageText key={original.attachmentId} meetingId={message.meetingId} source={original} />}
-        {!!attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={attachments} onOpenViewer={setPreviewId} />}
+          {!!attachments?.length && <AttachmentLinks compact meetingId={message.meetingId} attachments={attachments} onOpenViewer={setPreviewId} />}
+        </div>
       </article>})}
       {pendingMessage}
     </div></div></ReadingPane>
@@ -158,7 +162,12 @@ function MessageActions({ message, onReply, onPrivateChat, open, onOpenChange }:
     ...(authorId && onPrivateChat ? [{ key: 'private', label: '私聊', onClick: () => onPrivateChat(authorId) }] : []),
   ]
   if (!items.length) return null
-  return <Dropdown destroyOnHidden open={open} onOpenChange={onOpenChange} classNames={{ root: 'message-action-menu' }} trigger={['click']} autoFocus menu={{ items, 'aria-label': message.author.displayName + '的消息操作' }}>
-      <Button size="small" type="text" className="message-menu-trigger" aria-label="消息操作" icon={<EllipsisOutlined />} />
-  </Dropdown>
+  const replyOnly = items.length === 1 && items[0].key === 'reply'
+  return <>
+    {replyOnly && <Button type="text" size="small" className="message-quick-reply" aria-label="回复消息" title="回复消息"
+      icon={<RollbackOutlined />} onClick={items[0].onClick} />}
+    <Dropdown destroyOnHidden open={open} onOpenChange={onOpenChange} classNames={{ root: 'message-action-menu' }} trigger={['click']} autoFocus menu={{ items, 'aria-label': message.author.displayName + '的消息操作' }}>
+      <Button size="small" type="text" className={replyOnly ? "message-menu-trigger reply-only-menu" : "message-menu-trigger"} aria-label="消息操作" icon={<EllipsisOutlined />} />
+    </Dropdown>
+  </>
 }

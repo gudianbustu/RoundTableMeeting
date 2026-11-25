@@ -38,6 +38,7 @@ export function DraftAttachments({ attachments, disabled, onChange }: { attachme
     {attachments.map(file => <div key={file.attachmentId} role="listitem" title={`${file.name} · ${file.sizeBytes.toLocaleString()} 字节`} className={`draft-attachment ${attachmentPreviewKind(file) === 'image' ? 'draft-attachment-image' : 'draft-attachment-file'}`}>
       <button type="button" className="draft-attachment-preview" aria-label={`预览附件 ${file.name}`} onClick={() => setPreviewId(file.attachmentId)}>
       {attachmentPreviewKind(file) === 'image' ? <DraftImage file={file} /> : <FileOutlined className="draft-file-icon" />}
+        <span className="draft-attachment-name">{file.name}</span>
       </button>
       <Button className="draft-attachment-remove" type="text" size="small" icon={<CloseOutlined />} aria-label={`移除附件 ${file.name}`} disabled={disabled} onClick={() => onChange(attachments.filter(item => item.attachmentId !== file.attachmentId))} />
     </div>)}

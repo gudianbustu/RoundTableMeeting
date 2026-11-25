@@ -50,7 +50,7 @@ function TextThumbnail({ url, size }: { url: string; size: number }) {
   return text !== undefined ? <pre>{text || '（空文件）'}</pre> : <span className="attachment-thumbnail-status">{failed ? '缩略预览暂不可用' : '正在加载预览…'}</span>
 }
 
-export default function AttachmentCard({ meetingId, file, onPreview }: { meetingId: string; file: ChatAttachment; onPreview: () => void }) {
+export default function AttachmentCard({ meetingId, file, onPreview, compact = false }: { compact?: boolean; meetingId: string; file: ChatAttachment; onPreview: () => void }) {
   const host = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
   const kind = attachmentPreviewKind(file)
@@ -63,7 +63,15 @@ export default function AttachmentCard({ meetingId, file, onPreview }: { meeting
     return () => observer.disconnect()
   }, [kind])
   const thumbnail = visible && (kind === 'pdf' || kind === 'text') ? kind === 'pdf' ? <Suspense fallback={<span>正在加载预览…</span>}><PdfThumbnail url={url} name={file.name} /></Suspense> : <TextThumbnail url={url} size={file.sizeBytes} /> : <div className="attachment-file-symbol"><FileOutlined /><span>{kind === 'audio' ? '音频预览' : kind === 'video' ? '视频预览' : kind ? '文件预览' : file.name.split('.').pop()?.toUpperCase() || '文件'}</span></div>
-  if (kind === 'image') return <div ref={host} className="message-image"><button type="button" className="message-image-button" aria-label={`预览 ${file.name}`} onClick={onPreview}>{visible ? <ImageThumbnail key={url} url={url} name={file.name} /> : <span className="attachment-thumbnail-status">图片</span>}</button></div>
+  if (kind === 'image') return <div ref={host} className="message-image">
+    <button type="button" className="message-image-button" aria-label={`预览 ${file.name}`} onClick={onPreview}>
+      {visible ? <ImageThumbnail key={url} url={url} name={file.name} /> : <span className="attachment-thumbnail-status">图片</span>}
+      {compact && <>
+        <span className="chat-file-name">{file.name}</span>
+        <span className="chat-file-open">查看图片 ›</span>
+      </>}
+    </button>
+  </div>
   return <div ref={host} className="attachment-card" aria-label={`附件 ${file.name}`}>
     {kind ? <button className="attachment-thumbnail" type="button" aria-label={`预览 ${file.name}`} onClick={onPreview}>{thumbnail}</button> : <div className="attachment-thumbnail">{thumbnail}</div>}
     <div className="attachment-card-info"><div className="attachment-card-name" title={file.name}>{file.name}</div><span className="attachment-card-size">{file.sizeBytes >= 1_000_000 ? `${(file.sizeBytes / 1_000_000).toFixed(1)} MB` : `${file.sizeBytes} 字节`}</span></div>

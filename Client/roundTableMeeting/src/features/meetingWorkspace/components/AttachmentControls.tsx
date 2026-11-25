@@ -40,15 +40,15 @@ export function AttachmentUpload({ uploadRef, attachments, disabled, onChange }:
   }
   useImperativeHandle(uploadRef, () => ({ addFiles }))
   return <div className="attachment-upload">
-    <Tooltip title={limit ? `添加附件 · 单文件上限 ${sizeLabel(limit)} · 发送时上传` : '正在读取附件大小限制'}><Button type="text" aria-label="添加附件" icon={<PaperClipOutlined />} disabled={disabled || !limit} onClick={() => input.current?.click()} /></Tooltip>
+    <Tooltip title={limit ? `添加附件 · 单文件上限 ${sizeLabel(limit)} · 发送时上传` : '正在读取附件大小限制'}><Button type="text" aria-label="添加附件" icon={<PaperClipOutlined />} disabled={disabled || !limit} onClick={() => input.current?.click()}>附件</Button></Tooltip>
     <input ref={input} type="file" multiple hidden aria-label="选择附件" disabled={disabled || !limit} onChange={event => { const files = Array.from(event.target.files ?? []); event.target.value = ''; addFiles(files) }} />
     {error && <Typography.Text type="danger" role="alert">{error}</Typography.Text>}
   </div>
 }
-export function AttachmentLinks({ meetingId, attachments, onOpenViewer }: { meetingId: string; attachments: ChatAttachment[]; onOpenViewer?: (id: string) => void }) {
+export function AttachmentLinks({ meetingId, attachments, onOpenViewer, compact = false }: { compact?: boolean; meetingId: string; attachments: ChatAttachment[]; onOpenViewer?: (id: string) => void }) {
   const [preview, setPreview] = useState<ChatAttachment>()
   return <div className="message-attachments">
-    {attachments.map(file => <AttachmentCard key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => {
+    {attachments.map(file => <AttachmentCard compact={compact} key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => {
       const kind = attachmentPreviewKind(file)
       if (onOpenViewer && (kind === 'image' || (kind === 'text' && /\.md$/i.test(file.name)))) onOpenViewer(file.attachmentId)
       else setPreview(file)
