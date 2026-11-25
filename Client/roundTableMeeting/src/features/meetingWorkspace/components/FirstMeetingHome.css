@@ -42,18 +42,6 @@
   outline: 2px solid var(--rt-accent);
   outline-offset: 3px;
 }
-.first-home-orbit { fill: var(--rt-accent); }
-.first-home-orbit path, .first-home-ring {
-  fill: none;
-  stroke: var(--rt-border);
-  stroke-width: 1.5;
-}
-.first-home-ring[r="13"] { stroke: var(--rt-accent); }
-.first-home-node { offset-path: var(--home-orbit); animation: first-home-travel 28s linear infinite; }
-@keyframes first-home-travel { from { offset-distance: 0%; } to { offset-distance: 100%; } }
-@media (prefers-reduced-motion: reduce) {
-  .first-home-node { animation-play-state: paused; }
-}
 .first-home {
   width: min(100%, calc(100vw - 100px));
   max-width: 1450px;
@@ -104,7 +92,7 @@
 }
 .first-home-orbit {
   width: 38%;
-  aspect-ratio: 2.16;
+  height: auto;
   position: relative;
 }
 .first-home-bandtitle {

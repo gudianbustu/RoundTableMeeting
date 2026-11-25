@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react'
+import { BrandOrbit } from '@/shared/components/BrandOrbit'
 import './FirstMeetingHome.css'
 
 type FirstMeetingHomeProps = {
@@ -11,26 +11,6 @@ const features = [
   { icon: 'public', title: '公开讨论', description: '向全体发消息，或点名请成员回应。' },
   { icon: 'private', title: '一对一私聊', description: '在会议内单独联系一位参与者。' },
 ]
-
-const orbits = [
-  { rx: 216, ry: 68, angle: -17, phases: [1, 9, 19] },
-  { rx: 197, ry: 70, angle: 18, phases: [3, 13, 23] },
-  { rx: 134, ry: 49, angle: -17, phases: [6, 18] },
-]
-
-function HomeOrbit() {
-  return <svg className="first-home-orbit" viewBox="0 0 432 220" aria-hidden="true">
-    {orbits.map(({ rx, ry, angle, phases }) => {
-      const path = `M ${rx} 0 a ${rx} ${ry} 0 1 1 ${-2 * rx} 0 a ${rx} ${ry} 0 1 1 ${2 * rx} 0`
-      return <g key={rx} transform={`translate(214 110) rotate(${angle})`} style={{ '--home-orbit': `path('${path}')` } as CSSProperties}>
-        <path d={path} />
-        {phases.map(phase => <circle key={phase} r="4" className="first-home-node" style={{ animationDelay: `-${phase}s` }} />)}
-      </g>
-    })}
-    {[29, 21, 13].map(radius => <circle key={radius} cx="214" cy="110" r={radius} className="first-home-ring" />)}
-    <circle cx="214" cy="110" r="5" />
-  </svg>
-}
 
 export function FirstMeetingHome({ onCreate, onJoin }: FirstMeetingHomeProps) {
   return <div className="first-home">
@@ -47,7 +27,7 @@ export function FirstMeetingHome({ onCreate, onJoin }: FirstMeetingHomeProps) {
           <button type="button" onClick={onJoin}>加入会议</button>
         </div>
       </div>
-      <HomeOrbit />
+      <BrandOrbit className="first-home-orbit" />
     </section>
     <h2 className="first-home-bandtitle">在圆桌里，你可以</h2>
     <div className="first-home-band">

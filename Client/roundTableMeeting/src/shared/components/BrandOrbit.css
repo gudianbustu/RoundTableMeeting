@@ -1,0 +1,17 @@
+@property --brand-orbit-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+.brand-orbit { animation: brand-orbit-turn 4.8s linear infinite; }
+.brand-orbit-node {
+  fill: var(--rt-accent);
+  transform: translate(
+    calc(var(--cos-x) * cos(var(--brand-orbit-angle)) + var(--sin-x) * sin(var(--brand-orbit-angle))),
+    calc(var(--cos-y) * cos(var(--brand-orbit-angle)) + var(--sin-y) * sin(var(--brand-orbit-angle)))
+  );
+}
+@keyframes brand-orbit-turn { to { --brand-orbit-angle: 360deg; } }
+@media (prefers-reduced-motion: reduce) {
+  .brand-orbit { animation: none; }
+}
