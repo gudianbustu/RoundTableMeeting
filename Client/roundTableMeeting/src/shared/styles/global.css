@@ -302,6 +302,11 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .profile-account { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 8px; }
 .profile-account strong { font-size: 14px; font-weight: 500; overflow-wrap: anywhere; }
 .profile-account .profile-admin-link { margin: 0; border: 1px solid var(--rt-border); border-radius: 6px; padding: 5px 8px; background: var(--rt-surface); color: var(--rt-text); font-size: 13px; text-decoration: none; }
+.profile-account > span, .profile-account .profile-admin-link { white-space: nowrap; }
+@media (min-width: 741px) and (max-width: 1000px) {
+  .profile-account { grid-template-columns: auto minmax(0, 1fr); }
+  .profile-account .profile-admin-link { grid-column: 1 / -1; justify-self: start; }
+}
 .profile-admin-link:hover { border-color: var(--rt-accent); }
 
 @media (min-width: 741px) {
