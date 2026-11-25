@@ -92,6 +92,7 @@ try
     app.UseAuthentication();
     app.UseAuthorization();
     app.MapOpenApi().AllowAnonymous();
+    app.MapGet(RoundTableMeeting.AgentCollaboration.NativeMeetingGuide.Path, () => Results.Text(RoundTableMeeting.AgentCollaboration.NativeMeetingGuide.Text, "text/plain; charset=utf-8")).AllowAnonymous();
     app.MapControllers();
     app.MapMcp("/mcp").AllowAnonymous();
     app.MapHub<MeetingChatHub>("/hubs/meeting-chat")

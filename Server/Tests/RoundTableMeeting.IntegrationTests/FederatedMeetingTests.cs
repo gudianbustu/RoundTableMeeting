@@ -42,7 +42,29 @@ public sealed class FederatedMeetingTests
         var joined = await first.CallToolAsync("attend", args);
         var payload = Assert.Single(joined.Content.OfType<TextContentBlock>()).Text;
         Assert.False(joined.IsError == true, payload);
-        var room = JsonDocument.Parse(payload).RootElement.GetProperty("room").GetString();
+        var admission = JsonDocument.Parse(payload).RootElement;
+        var room = admission.GetProperty("room").GetString();
+        using var anonymous = peer.CreateClient();
+        using var published = await anonymous.GetAsync("/agent/0.1.0/native-guide.txt");
+        published.EnsureSuccessStatusCode();
+        Assert.Equal("text/plain", published.Content.Headers.ContentType?.MediaType);
+        var guide = await published.Content.ReadAsStringAsync();
+        Assert.Equal(guide, admission.GetProperty("guide").GetString());
+        Assert.Contains("clientSubmissionId", guide);
+        Assert.DoesNotContain(room!, guide);
+        foreach (var field in new[] { "meetingCode", "displayName", "invitationKey" })
+            Assert.DoesNotContain(args[field]!.ToString()!, guide);
+        await using var direct = await McpClient.CreateAsync(new HttpClientTransport(new()
+        {
+            Endpoint = new Uri(anonymous.BaseAddress!, "mcp"), TransportMode = HttpTransportMode.StreamableHttp,
+            AdditionalHeaders = new Dictionary<string, string> { ["X-RoundTable-Mode"] = "rooms" }
+        }, anonymous));
+        var local = await direct.CallToolAsync("attend", new Dictionary<string, object?>
+        {
+            ["meetingCode"] = args["meetingCode"], ["displayName"] = "本地样本", ["invitationKey"] = Guid.NewGuid()
+        });
+        Assert.False(local.IsError == true);
+        Assert.Equal(guide, JsonDocument.Parse(Assert.Single(local.Content.OfType<TextContentBlock>()).Text).RootElement.GetProperty("guide").GetString());
         await using var resumed = await Connect();
         args["displayName"] = "收信助手";
         args["invitationKey"] = Guid.NewGuid().ToString();

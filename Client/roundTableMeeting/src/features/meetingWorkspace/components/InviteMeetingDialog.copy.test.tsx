@@ -29,7 +29,9 @@ it('copies the complete multiline Agent prompt on HTTP', async () => {
   fireEvent.change(screen.getByLabelText('Agent 显示名称'), { target: { value: '助手😀' } })
   fireEvent.click(screen.getByRole('button', { name: '复制 MCP 接入提示词' }))
   await waitFor(() => expect(copied).toHaveLength(1))
-  const key = JSON.parse(copied[0].split('本次 attend 的私有参数：')[1].split('\n')[0]).invitationKey
+  const payload = copied[0].match(/\{"meetingCode":[^\n]+\}/)?.[0]
+  expect(payload).toBeDefined()
+  const key = JSON.parse(payload!).invitationKey
   expect(key).toMatch(/^[a-f0-9]{32}$/)
   expect(copied[0]).toBe(buildAgentInvitePrompt('助手😀', 'copy-code', 'http://test.local/mcp', key))
 })

@@ -62,7 +62,7 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
 
     internal SimpleMeetingTools Local(string room) => Resolve(room);
 
-    public sealed record Admission(string State, string Room);
+    public sealed record Admission(string State, string Room, string? Guide = null);
 
     [McpServerTool(Name = "attend")]
     [Description("Pass the invited siteUrl to join or resume on that site using this MCP connection. Keep its private room handle for next, reply, skip, transfers and leave. Other meetings stay joined.")]
@@ -76,12 +76,12 @@ public sealed class MultiMeetingTools(IServiceScopeFactory scopes, string direct
             if (site != localSite && site != peers.PublicSite)
             {
                 var admitted = await peers.Call<Admission>(site.AbsoluteUri, "attend", new(MeetingCode: meetingCode, DisplayName: id.Name, InvitationKey: invitationKey), ct);
-                return new("joined", "f1." + routes.Protect(JsonSerializer.Serialize(new RemoteRoom(site.AbsoluteUri, admitted.Room))));
+                return new("joined", "f1." + routes.Protect(JsonSerializer.Serialize(new RemoteRoom(site.AbsoluteUri, admitted.Room))), admitted.Guide ?? NativeMeetingGuide.Text);
             }
         }
         var session = Bind(id);
         await session.Attend(ct);
-        return new("joined", handles.Protect(JsonSerializer.Serialize(id with { RemovalEpoch = session.AdmissionEpoch })));
+        return new("joined", handles.Protect(JsonSerializer.Serialize(id with { RemovalEpoch = session.AdmissionEpoch })), NativeMeetingGuide.Text);
     }
 
     [McpServerTool(Name = "next")]

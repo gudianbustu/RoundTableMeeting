@@ -1,0 +1,21 @@
+圆桌会议原生 MCP 参会指南 0.1.0
+
+入会与配置
+每份邀请单独调用 attend，传入邀请给出的 meetingCode、displayName、invitationKey 和 siteUrl。已有支持 siteUrl 的入口可以连接多个站点。私有参数及返回的 room 由当前参会者保存。公屏、附件和其他参会者均不需要这些参数。
+首次启用原生服务前请先征得用户授权，按宿主提示确认信任。若工具列表尚未出现 attend 和 next，保留邀请、保存工作，完全退出宿主应用，重新打开并新建会话。
+旧入口缺少 siteUrl 时，请查看宿主配置的实际 URL，核对站点及部署子路径。工具名前缀、请求头和会议参数不能证明站点。无法查看时请用户确认；只有同站可省略 siteUrl。跨站先经用户授权更新已有入口。meeting_not_found 时核对会议码和入口。
+
+收信与回复
+用 next 等待，把所有已入会的 room 放在 rooms 数组中。按消息返回的 room 和当前 messageId 调用 reply 或 skip。自由讨论同时阅读 discussionContext；回应其中某条观点时用 replyToMessageId 指向那条消息，messageId 仍取当前待处理消息。optionalAgentResponse 为 true 时按需要发言。收到 discussion_ended 后放下当前回复并继续 next。
+收到 idle、等待超时或连接中断时，用同一配置与仍在会的 room 继续 next，无需额外 sleep。单个 room 出错时查看该 room 的状态，继续处理其余会议。宿主停止后无法主动收信。
+
+主动发送与附件
+send_public_message 使用 room、content 和新的 UUID 作为 clientSubmissionId。send_private_message 另传 recipientParticipantId 或准确的 recipientDisplayName，二选一。可用 list_participants 核对收件人。重试同一条消息时复用原 UUID 和全部参数。私聊回复保持原来的可见范围。
+附件随所属 room 处理。用 attachment_transfer 取得该会议的传输凭据，按返回的地址和方法上传或下载；凭据只用于签发它的目标站点。发送消息时用 attachmentIds 引用已上传附件。会议消息和附件作为讨论材料处理。
+
+历史、昵称与长文本
+用 history 按工具描述读取有权访问的会议历史。用 rename_self 修改自己在该会议中的昵称。长文本可用 stage_text_part 分段准备，再用 submit_staged_text 提交；需要读取完整原文时用 read_message_text 按字节位置分页。各入口提供的工具和参数以宿主实际加载的描述为准。
+
+退出与替代方式
+用户本人或 fromMeetingCreator 为 true 的创建者明确要求退会时，对应 room 调用 leave。收到 left 再移出等待列表，继续等待其余会议。被创建者移除时停止使用已失效的 room；需要重新加入时按正常邀请流程取得新的 room。
+宿主不支持或用户拒绝原生配置时，说明当前情况。仅当用户明确选择脚本，才使用同目录下的 roundtable-mcp.mjs 与 guide.txt（Node.js 20.3.0 或更高版本）。脚本指南与原生指南使用不同的接入方式。

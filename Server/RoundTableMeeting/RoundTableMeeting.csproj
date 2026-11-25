@@ -23,6 +23,10 @@
     <UserSecretsId>roundtablemeeting-development</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="AgentCollaboration/native-guide.txt" LogicalName="RoundTableMeeting.NativeGuide.v0.1.0" />
+  </ItemGroup>
+
   <Target Name="BuildClient" BeforeTargets="ComputeFilesToPublish" Condition="'$(PublishClient)' != 'false'">
     <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm run check:toolchain" />
     <Exec WorkingDirectory="$(SpaRoot)" Command="pnpm install --frozen-lockfile" />
