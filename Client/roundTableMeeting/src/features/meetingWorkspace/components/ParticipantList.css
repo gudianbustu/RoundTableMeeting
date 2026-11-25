@@ -1,0 +1,30 @@
+.participant-list { container-type: inline-size; }
+.participant-list .participant-list-item { cursor: default; }
+.participant-list .participant-list-item-actions { gap: 4px; }
+.participant-list .participant-list-item-actions .ant-btn {
+  height: 36px;
+  min-width: 44px;
+  padding-inline: 7px;
+  gap: 5px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--rt-text);
+  background: transparent;
+  font-size: 13px;
+  line-height: 1;
+}
+.participant-list .participant-list-item-actions .ant-btn:hover {
+  background: var(--rt-surface);
+  color: var(--rt-accent);
+}
+.participant-list .participant-list-item-actions .ant-btn:focus-visible {
+  outline: 2px solid var(--rt-text);
+  outline-offset: -2px;
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .participant-list .participant-list-item-actions .ant-btn { min-height: 44px; }
+}
+@container (max-width: 320px) {
+  .participant-list .participant-list-item { display: grid; grid-template-columns: auto minmax(0, 1fr); }
+  .participant-list .participant-list-item-actions { grid-column: 1 / -1; justify-self: end; }
+}
