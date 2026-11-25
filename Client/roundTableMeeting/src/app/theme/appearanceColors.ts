@@ -1,7 +1,10 @@
 export const palettes = {
-  paper: '暖纸白墨炭黑',
-  slate: '石板蓝灰',
-  sage: '鼠尾草绿',
+  paper: '暖纸',
+  slate: '岩青',
+  sage: '鼠尾',
+  sky: '晴空',
+  peach: '桃桃',
+  cinnabar: '朱砂',
 } as const
 export type Palette = keyof typeof palettes
 export type Mode = 'light' | 'dark'
@@ -45,6 +48,42 @@ export const colors: Record<Palette, Record<Mode, Colors>> = {
       page: '#171e1a', surface: '#202923', subtle: '#2c3830', primary: '#bdd6c6', hover: '#d4e6da', accent: '#9bc3ae',
       text: '#e4eee7', secondary: '#bdcec1', muted: '#9eb3a5', border: '#3e5043',
       success: '#88c59e', warning: '#dbb270', danger: '#e99b91',
+    },
+  },
+  sky: {
+    light: {
+      page: '#F1F8FF', surface: '#FFFFFF', subtle: '#DEEFFD', primary: '#165DA3', hover: '#124C87', accent: '#15718C',
+      text: '#142D46', secondary: '#405D75', muted: '#637689', border: '#C5DEEF',
+      success: '#247451', warning: '#875C16', danger: '#B73643',
+    },
+    dark: {
+      page: '#111F30', surface: '#182B40', subtle: '#223B55', primary: '#96C9FF', hover: '#BBDFFF', accent: '#82D6E6',
+      text: '#E6F2FF', secondary: '#BCD2E5', muted: '#9FB7CA', border: '#35536C',
+      success: '#81CAA8', warning: '#E8BF77', danger: '#FFA4A8',
+    },
+  },
+  peach: {
+    light: {
+      page: '#FFF5F8', surface: '#FFFCFD', subtle: '#FBE3ED', primary: '#A33D70', hover: '#872F5D', accent: '#AE5345',
+      text: '#47253A', secondary: '#735366', muted: '#846877', border: '#EDCDD9',
+      success: '#467552', warning: '#8E6225', danger: '#AE324E',
+    },
+    dark: {
+      page: '#281B25', surface: '#342431', subtle: '#4A3041', primary: '#F5ACCF', hover: '#FFD0E5', accent: '#F8B6A5',
+      text: '#FCEBF3', secondary: '#DEC2D0', muted: '#BFA1B1', border: '#68475A',
+      success: '#9BD2A8', warning: '#E7BE81', danger: '#FF9FAE',
+    },
+  },
+  cinnabar: {
+    light: {
+      page: '#FCF4F0', surface: '#FFFCFA', subtle: '#F6DFD5', primary: '#A63428', hover: '#88291F', accent: '#886121',
+      text: '#392521', secondary: '#70554A', muted: '#806D62', border: '#E6CBBE',
+      success: '#467653', warning: '#875B15', danger: '#AF2845',
+    },
+    dark: {
+      page: '#251B19', surface: '#332420', subtle: '#49312A', primary: '#F59A89', hover: '#FFB9A9', accent: '#E7BE79',
+      text: '#F8EAE4', secondary: '#DBC3B9', muted: '#BCA499', border: '#67473D',
+      success: '#A1CBA8', warning: '#E9BA74', danger: '#FFA0AD',
     },
   },
 }

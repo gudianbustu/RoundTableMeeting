@@ -1,14 +1,16 @@
 import { Card, Radio } from 'antd'
 import { palettes, saveAppearance, useAppearance, type Palette } from '@/app/theme/appearance'
 
+import { colors } from '@/app/theme/appearanceColors'
+
 export function AppearanceSettings() {
-  const { palette, preference } = useAppearance()
+  const { palette, preference, mode } = useAppearance()
   return <Card title="外观">
     <div className="appearance-options">
       <fieldset><legend>配色主题</legend>
         <Radio.Group className="palette-options" aria-label="配色主题" value={palette} onChange={event => saveAppearance(event.target.value, preference)}>
           {(Object.keys(palettes) as Palette[]).map(key => <Radio key={key} value={key}>
-            <i className={'palette-swatch swatch-' + key} />{palettes[key]}
+            <i aria-hidden className="palette-swatch" style={{ backgroundImage: `linear-gradient(135deg, ${colors[key][mode].primary} 50%, ${colors[key][mode].accent} 50%)` }} />{palettes[key]}
           </Radio>)}
         </Radio.Group>
       </fieldset>
