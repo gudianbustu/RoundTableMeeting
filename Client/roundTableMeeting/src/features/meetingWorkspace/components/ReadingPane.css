@@ -42,6 +42,7 @@
   .reading-frame { max-width: none !important; }
 }
 
+.scoped-chat .chat-private > .composer-context-toolbar,
 .scoped-chat .realtime-chat-region > .message-composer {
   box-sizing: border-box;
   width: 100%;
@@ -49,5 +50,6 @@
   margin-inline: auto;
 }
 @media (max-width: 1100px) {
+  .scoped-chat .chat-private > .composer-context-toolbar,
   .scoped-chat .realtime-chat-region > .message-composer { max-width: none; }
 }
