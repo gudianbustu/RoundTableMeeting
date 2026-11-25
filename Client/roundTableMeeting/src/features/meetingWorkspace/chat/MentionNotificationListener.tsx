@@ -2,7 +2,7 @@ import { useEffect, useEffectEvent, useLayoutEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { subscribeAccountActivity } from '../api/accountActivityConnection'
 import { useAuthentication } from '@/features/authentication'
-import { useMentionPermission } from './mentionPermission'
+import { mentionPreference, useMentionPreference, useMentionPermission } from './mentionPermission'
 
 const guid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i
 const foregroundLock = (account: string, meeting: string) => 'rtm-mention-view:' + account + ':' + meeting
@@ -39,13 +39,14 @@ export function MentionNotificationListener() {
   const navigate = useNavigate()
   const openMeeting = useEffectEvent((id: string) => { window.focus(); void navigate('/meetings/' + id) })
   const permission = useMentionPermission()
+  const enabled = useMentionPreference(account)
 
   useLayoutEffect(() => {
     if (navigator.locks && account && meeting && guid.test(meeting)) return trackForeground(account, meeting)
   }, [account, meeting])
 
   useEffect(() => {
-    if (!account || permission !== 'granted') return
+    if (!account || !enabled || permission !== 'granted') return
     let active = true
     const shown = new Set<Notification>()
     const recentKey = 'rtm-mention-seen:' + account
@@ -62,7 +63,7 @@ export function MentionNotificationListener() {
         } catch { /* Use the browser notification tag if storage is unavailable. */ }
         if (recent.includes(id)) return
         await navigator.locks.request(foregroundLock(account!, room.toLowerCase()), { ifAvailable: true }, lock => {
-          if (!active) return
+          if (!active || !mentionPreference(account) || Notification.permission !== 'granted') return
           if (lock) {
             const notice = new Notification('圆桌会议', { body: '有人在会议中提到了你。', tag: recentKey + '/' + id })
             shown.add(notice)
@@ -79,6 +80,6 @@ export function MentionNotificationListener() {
       unsubscribe()
       for (const notice of shown) notice.close()
     }
-  }, [account, permission])
+  }, [account, permission, enabled])
   return null
 }

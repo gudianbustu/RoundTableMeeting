@@ -29,3 +29,40 @@ function subscribe(update: () => void) {
 export function useMentionPermission() {
   return useSyncExternalStore(subscribe, mentionPermission)
 }
+
+const preferenceChanged = 'rt-mention-preference-change'
+const fallback = new Map<string, boolean>()
+const preferenceKey = (account: string) => 'rtm-mention-enabled:' + account
+
+export function mentionPreference(account?: string): boolean {
+  if (!account) return false
+  const key = preferenceKey(account)
+  if (fallback.has(key)) return fallback.get(key)!
+  try {
+    const value = localStorage.getItem(key)
+    if (value === 'on' || value === 'off') return value === 'on'
+  } catch { /* Storage may be inaccessible in this tab. */ }
+  return mentionPermission() === 'granted'
+}
+
+export function setMentionPreference(account: string, enabled: boolean) {
+  const key = preferenceKey(account)
+  try {
+    localStorage.setItem(key, enabled ? 'on' : 'off')
+    fallback.delete(key)
+  } catch { fallback.set(key, enabled) }
+  window.dispatchEvent(new Event(preferenceChanged))
+}
+
+function subscribePreference(update: () => void) {
+  window.addEventListener(preferenceChanged, update)
+  window.addEventListener('storage', update)
+  return () => {
+    window.removeEventListener(preferenceChanged, update)
+    window.removeEventListener('storage', update)
+  }
+}
+
+export function useMentionPreference(account?: string) {
+  return useSyncExternalStore(subscribePreference, () => mentionPreference(account))
+}
