@@ -1,3 +1,4 @@
+import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import type { CSSProperties, ReactNode, Ref } from 'react'
 import { useMessageNotifications } from '../hooks/useMessageNotifications'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
@@ -30,7 +31,17 @@ export function RealtimeChatRegion(props: ChatProps) {
   const peerId = selection[props.meetingId]
   useLayoutEffect(() => { props.onPeerChanged?.(peerId) }, [props.onPeerChanged, peerId])
   const peer = props.participants.find(p => p.participantId === peerId)
-  const notices = useMessageNotifications(props.meetingId, props.participants.find(p => p.isCurrentUser)?.participantId, peerId ?? 'public', !props.readOnly)
+  const accountUnread = useAccountUnread()
+  const shared = accountUnread?.store
+  const saved = shared?.meetings.get(props.meetingId)
+  const legacyNotices = useMessageNotifications(props.meetingId, props.participants.find(p => p.isCurrentUser)?.participantId, peerId ?? 'public', !props.readOnly && accountUnread === undefined)
+  const syncUnread = useCallback(async () => shared?.refresh(props.meetingId), [props.meetingId, shared])
+  const notices = shared ? {
+    publicUnread: saved?.scopes.public?.count ?? 0,
+    privateUnread: (id: string) => saved?.scopes[id]?.count ?? 0,
+    pending: Object.fromEntries(Object.entries(saved?.scopes ?? {}).filter(([, bucket]) => bucket.count > 0)),
+    receive: syncUnread, synchronize: syncUnread, retry: syncUnread, remove: syncUnread, failed: false,
+  } : legacyNotices
   const key = `${props.meetingId}:${peerId ?? 'public'}`
   const { meetingId, sessionCache } = props
   const updateTabs = useCallback((update: (current: string[]) => string[]) => {
@@ -201,6 +212,33 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
       return name && name !== message.author.displayName ? { ...message, author: { ...message.author, displayName: name } } : message
     })
   }, [state.messagesById, state.orderedMessageIds, participantNames])
+  const unreadStore = useAccountUnread()?.store
+  const region = useRef<HTMLElement>(null)
+  const initialized = unreadStore?.meetings.has(meetingId)
+  useEffect(() => {
+    const log = region.current?.querySelector<HTMLElement>('[role="log"]')
+    if (!log || !unreadStore || !initialized || readOnly || !window.IntersectionObserver) return
+    const sequences = new Map(messages.map(message => [message.messageId, message.sequence]))
+    const visible = new Set<number>()
+    const markRead = () => {
+      if (visible.size && document.visibilityState === 'visible' && document.hasFocus())
+        void unreadStore.readThrough(meetingId, peerId ?? 'public', Math.max(...visible))
+    }
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        const sequence = sequences.get((entry.target as HTMLElement).dataset.messageId ?? '')
+        if (sequence !== undefined) {
+          if (entry.isIntersecting && entry.intersectionRatio > 0) visible.add(sequence)
+          else visible.delete(sequence)
+        }
+      }
+      markRead()
+    }, { root: log })
+    log.querySelectorAll('[data-message-id]').forEach(row => observer.observe(row))
+    document.addEventListener('visibilitychange', markRead)
+    window.addEventListener('focus', markRead)
+    return () => { observer.disconnect(); document.removeEventListener('visibilitychange', markRead); window.removeEventListener('focus', markRead) }
+  }, [unreadStore, initialized, meetingId, peerId, messages, readOnly])
   useEffect(() => { lastApplied.current = state.lastAppliedSequence }, [state.lastAppliedSequence])
   useEffect(() => {
     if (readOnly || state.highWatermarkSequence <= state.lastAppliedSequence || state.history !== 'caughtUp' || gapRepairing.current) return
@@ -285,7 +323,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
   }
   const browseAttachments = <MeetingAttachmentList meetingId={meetingId} {...requestScope} onLocate={locate} />
   const locked = readOnly || state.send === 'sending' || state.send === 'pending_confirmation'
-  return <section className={peerId ? 'realtime-chat-region chat-private' : 'realtime-chat-region'}
+  return <section ref={region} className={peerId ? 'realtime-chat-region chat-private' : 'realtime-chat-region'}
     style={{ '--reading-width': readingWidth === undefined ? undefined : readingWidth + 'px' } as CSSProperties}>
     {readOnly ? state.history === 'error' && <Alert type="error" title="历史消息加载失败" action={<Button onClick={() => void connect()}>重试</Button>} /> : <ChatConnectionStatus connection={state.connection} history={state.history} error={state.history === 'error' ? '消息历史加载失败。' : undefined} onRetry={() => void connect()} />}
     {(readOnly || scopeControl) && <div className="composer-context-toolbar">{readOnly ? <Dropdown trigger={['click']} menu={{

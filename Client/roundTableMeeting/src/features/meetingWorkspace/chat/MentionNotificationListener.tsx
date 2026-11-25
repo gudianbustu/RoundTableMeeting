@@ -1,6 +1,6 @@
 import { useEffect, useEffectEvent, useLayoutEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { HubConnectionBuilder, LogLevel } from '@microsoft/signalr'
+import { subscribeAccountActivity } from '../api/accountActivityConnection'
 import { useAuthentication } from '@/features/authentication'
 import { useMentionPermission } from './mentionPermission'
 
@@ -47,11 +47,8 @@ export function MentionNotificationListener() {
   useEffect(() => {
     if (!account || permission !== 'granted') return
     let active = true
-    let retry: ReturnType<typeof setTimeout> | undefined
     const shown = new Set<Notification>()
     const recentKey = 'rtm-mention-seen:' + account
-    const connection = new HubConnectionBuilder().withUrl('/hubs/mention-notifications', { withCredentials: true })
-      .withAutomaticReconnect().configureLogging(LogLevel.Warning).build()
     async function receive(value: { meetingId?: string; messageId?: string } | null) {
       const room = value?.meetingId, message = value?.messageId
       if (!active || !room || !message || !guid.test(room) || !guid.test(message)) return
@@ -76,16 +73,11 @@ export function MentionNotificationListener() {
         })
       })
     }
-    connection.on('humanMentioned', value => { void receive(value).catch(() => {}) })
-    const schedule = () => { if (active && !retry) retry = setTimeout(() => { retry = undefined; start() }, 5000) }
-    const start = () => { if (active) void connection.start().catch(schedule) }
-    connection.onclose(schedule)
-    start()
+    const unsubscribe = subscribeAccountActivity(account, { humanMentioned: value => { void receive(value).catch(() => {}) } })
     return () => {
       active = false
-      clearTimeout(retry)
+      unsubscribe()
       for (const notice of shown) notice.close()
-      void connection.stop().catch(() => {})
     }
   }, [account, permission])
   return null

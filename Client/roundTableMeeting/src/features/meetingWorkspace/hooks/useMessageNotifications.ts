@@ -21,10 +21,11 @@ export function useMessageNotifications(meetingId: string, participantId: string
   const visibleScope = useCallback(() => document.visibilityState === 'hidden' ? undefined : activeScope.current, [])
   const refresh = useCallback(() => render(value => value + 1), [])
   useEffect(() => {
+    if (!enabled) return
     const clear = () => { if (document.visibilityState !== 'hidden') { tracker.clear(activeScope.current); refresh() } }
     clear(); document.addEventListener('visibilitychange', clear)
     return () => document.removeEventListener('visibilitychange', clear)
-  }, [tracker, scope, refresh])
+  }, [tracker, scope, enabled, refresh])
   const synchronize = useCallback(async (through: number) => {
     if (!enabled || !participantId) return
     const current = runtime.current

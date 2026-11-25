@@ -1,3 +1,4 @@
+import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
 import { CloseOutlined, MenuOutlined } from '@ant-design/icons'
@@ -35,6 +36,13 @@ export function hasUnknownAgentActivity(participants: Participant[], activities:
 
 export function MeetingWorkspacePage() {
   const workspace = useMeetingWorkspace()
+  const unread = useAccountUnread()
+  const unreadStore = unread?.store
+  useEffect(() => { if (workspace.listReady) unreadStore?.list(workspace.lists.active.map(item => item.meetingId)) }, [unreadStore, workspace.listReady, workspace.lists.active])
+  const unreadCounts: Record<string, number> = {}
+  for (const [id, meeting] of unreadStore?.meetings ?? []) {
+    unreadCounts[id] = Object.values(meeting.scopes).reduce((sum, scope) => sum + scope.count, 0)
+  }
   const navigate = useNavigate()
   const chatCache = useRef<ChatSessionCache>({ states: new Map(), selection: {} })
   const composerRef = useRef<MessageComposerHandle>(null)
@@ -96,7 +104,7 @@ export function MeetingWorkspacePage() {
   const listError = workspace.listError && <Alert type="error" showIcon title={workspace.listError.message}
     action={<Button size="small" loading={workspace.loading} onClick={workspace.refresh}>重试加载会议列表</Button>} />
   const navigation = (
-    <MeetingNavigation onAll={() => navigate('/')} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} view={historical ? 'history' : 'active'} meetings={historical ? workspace.lists.history : workspace.lists.active} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
+    <MeetingNavigation unreadCounts={unreadCounts} onAll={() => navigate('/')} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} view={historical ? 'history' : 'active'} meetings={historical ? workspace.lists.history : workspace.lists.active} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
   )
   const members = workspace.details?.participants.filter(person => person.membershipState !== 'left') ?? []
   const readOnly = historical || workspace.details?.canSend === false
