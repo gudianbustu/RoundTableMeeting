@@ -47,12 +47,16 @@ export function AttachmentUpload({ uploadRef, attachments, disabled, onChange }:
 }
 export function AttachmentLinks({ meetingId, attachments, onOpenViewer, compact = false }: { compact?: boolean; meetingId: string; attachments: ChatAttachment[]; onOpenViewer?: (id: string) => void }) {
   const [preview, setPreview] = useState<ChatAttachment>()
+  const renderCard = (file: ChatAttachment) => <AttachmentCard compact={compact} key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => {
+    const kind = attachmentPreviewKind(file)
+    if (onOpenViewer && (kind === 'image' || (kind === 'text' && /\.md$/i.test(file.name)))) onOpenViewer(file.attachmentId)
+    else setPreview(file)
+  }} />
+  const images = compact ? attachments.filter(file => attachmentPreviewKind(file) === 'image') : []
+  const files = compact ? attachments.filter(file => attachmentPreviewKind(file) !== 'image') : attachments
   return <div className="message-attachments">
-    {attachments.map(file => <AttachmentCard compact={compact} key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => {
-      const kind = attachmentPreviewKind(file)
-      if (onOpenViewer && (kind === 'image' || (kind === 'text' && /\.md$/i.test(file.name)))) onOpenViewer(file.attachmentId)
-      else setPreview(file)
-    }} />)}
+    {images.length > 0 && <div className="chat-image-group">{images.map(renderCard)}</div>}
+    {files.map(renderCard)}
     <Modal open={!!preview} title={preview?.name} footer={preview ? <Button icon={<DownloadOutlined />} href={attachmentUrl(meetingId, preview.attachmentId)} target="_blank" rel="noopener noreferrer">下载</Button> : null} destroyOnHidden onCancel={() => setPreview(undefined)} width="min(900px, 92vw)">
       {preview && <AttachmentPreview key={preview.attachmentId} file={preview} url={attachmentUrl(meetingId, preview.attachmentId, true)} />}
     </Modal>

@@ -58,7 +58,10 @@ export default function AttachmentCard({ meetingId, file, onPreview, compact = f
   useEffect(() => {
     if (!kind || !host.current) return
     if (!('IntersectionObserver' in window)) { setVisible(true); return }
-    const observer = new IntersectionObserver(entries => setVisible(entries[0].isIntersecting), { rootMargin: '100px' })
+    const observer = new IntersectionObserver(([entry]) => {
+      setVisible(entry.isIntersecting)
+      if (kind === 'image' && entry.isIntersecting) observer.disconnect()
+    }, { rootMargin: '100px' })
     observer.observe(host.current)
     return () => observer.disconnect()
   }, [kind])
@@ -66,10 +69,7 @@ export default function AttachmentCard({ meetingId, file, onPreview, compact = f
   if (kind === 'image') return <div ref={host} className="message-image">
     <button type="button" className="message-image-button" aria-label={`预览 ${file.name}`} onClick={onPreview}>
       {visible ? <ImageThumbnail key={url} url={url} name={file.name} /> : <span className="attachment-thumbnail-status">图片</span>}
-      {compact && <>
-        <span className="chat-file-name">{file.name}</span>
-        <span className="chat-file-open">查看图片 ›</span>
-      </>}
+      {compact && <span className="chat-file-name">{file.name}</span>}
     </button>
   </div>
   return <div ref={host} className="attachment-card" aria-label={`附件 ${file.name}`}>
