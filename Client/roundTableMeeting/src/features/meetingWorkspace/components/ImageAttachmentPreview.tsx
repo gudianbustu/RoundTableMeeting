@@ -4,7 +4,7 @@ import './AttachmentViewer.css'
 
 const fit = { scale: 1, x: 0, y: 0 }
 
-export default function ImageAttachmentPreview({ url, name }: { url: string; name: string }) {
+export default function ImageAttachmentPreview({ url, name, maxScale = 8 }: { url: string; name: string; maxScale?: number }) {
   const [attempt, setAttempt] = useState(0)
   const [state, setState] = useState<'loading' | 'loaded' | 'failed'>('loading')
   const [view, setView] = useState(fit)
@@ -20,7 +20,7 @@ export default function ImageAttachmentPreview({ url, name }: { url: string; nam
 
   function zoom(factor: number, cx = 0, cy = 0) {
     setView(previous => {
-      const scale = Math.min(8, Math.max(1, previous.scale * factor))
+      const scale = Math.min(maxScale, Math.max(1, previous.scale * factor))
       const ratio = scale / previous.scale
       return contained(scale, cx + (previous.x - cx) * ratio, cy + (previous.y - cy) * ratio)
     })
@@ -39,7 +39,7 @@ export default function ImageAttachmentPreview({ url, name }: { url: string; nam
     const resize = new ResizeObserver(() => setView(v => contained(v.scale, v.x, v.y)))
     resize.observe(element)
     return () => { element.removeEventListener('wheel', wheel); resize.disconnect() }
-  }, [state])
+  }, [state, maxScale])
 
   return <div className="image-viewer">
     <div ref={stage} className="image-viewer-stage" data-zoomed={view.scale > 1}
@@ -66,7 +66,7 @@ export default function ImageAttachmentPreview({ url, name }: { url: string; nam
     {state === 'loaded' && <div className="image-viewer-tools">
       <button type="button" aria-label="缩小图片" disabled={view.scale <= 1} onClick={() => zoom(.8)}>−</button>
       <button type="button" aria-label="恢复适应画面" onClick={() => setView(fit)}>{Math.round(view.scale * 100)}%</button>
-      <button type="button" aria-label="放大图片" disabled={view.scale >= 8} onClick={() => zoom(1.25)}>＋</button>
+      <button type="button" aria-label="放大图片" disabled={view.scale >= maxScale} onClick={() => zoom(1.25)}>＋</button>
     </div>}
   </div>
 }

@@ -1,0 +1,9 @@
+.mermaid-reader { position: relative; background: var(--rt-surface); color: var(--rt-text); }
+.mermaid-render-frame { position: absolute; width: 800px; height: 1px; max-width: 100%; opacity: 0; pointer-events: none; border: 0; }
+.mermaid-reader .image-viewer-stage { background: white; }
+.mermaid-expand { display: block; margin: 0 0 6px auto; padding: 5px 10px; border: 1px solid var(--rt-border); border-radius: 6px; color: inherit; background: var(--rt-surface); font: inherit; cursor: pointer; }
+.mermaid-reader[data-expanded="true"] { position: fixed; inset: 0; z-index: 2; display: flex; flex-direction: column; padding: 12px; }
+.mermaid-reader[data-expanded="true"] .image-viewer { height: auto; min-height: 0; flex: 1; }
+.ant-modal:has(.mermaid-reader[data-expanded="true"]) { transform: none; }
+.mermaid-reader .image-viewer-tools button { min-height: 36px; min-width: 36px; }
+.ant-modal:has(.mermaid-reader[data-expanded="true"]) .ant-modal-close { visibility: hidden; }

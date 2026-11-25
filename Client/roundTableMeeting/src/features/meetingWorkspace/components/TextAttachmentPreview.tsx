@@ -67,7 +67,7 @@ export default function TextAttachmentPreview({ url, sizeBytes, markdown = false
     {decoded && 'error' in decoded && <Alert type="warning" title="无法按所选编码预览，文件可能不是纯文本；请尝试其他编码。" />}
     {!diagram && truncated && <Alert type="info" title="文件较大，仅预览前 1 MiB，后续内容未显示。" />}
     {diagram && truncated && <Alert type="warning" title="图表文件超过 1 MiB 读取上限，请下载完整文件查看。" />}
-    {diagram && !truncated && decoded && 'text' in decoded && <Suspense fallback={<Spin />}><MermaidDiagram source={decoded.text} /></Suspense>}
+    {diagram && !truncated && decoded && 'text' in decoded && <Suspense fallback={<Spin />}><MermaidDiagram key={decoded.text} source={decoded.text} /></Suspense>}
     {!diagram && decoded && 'text' in decoded && (markdown ? <article aria-label="Markdown 正文"><MessageBody content={decoded.text || '（空文件）'} mentions={[]} /></article> : <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>)}
   </div>
 }
