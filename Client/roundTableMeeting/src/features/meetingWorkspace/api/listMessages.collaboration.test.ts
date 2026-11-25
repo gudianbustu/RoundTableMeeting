@@ -49,3 +49,11 @@ it('accepts Kiota null-object decoding for public recipients but rejects missing
   expect(mapMessage(payload).recipient).toBeUndefined()
   expect(() => mapMessage({ ...payload, visibility: 'private' })).toThrow(RealtimeChatApiError)
 })
+
+it('maps the explicit original text attachment on history and realtime payloads', () => {
+  const id = '44444444-4444-4444-8444-444444444444'
+  const payload = wire('短预览', [])
+  expect(mapMessage(payload).originalTextAttachmentId).toBeUndefined()
+  expect(mapMessage({ ...payload, originalTextAttachmentId: id }).originalTextAttachmentId).toBe(id)
+  expect(mapMessage({ ...payload, additionalData: { originalTextAttachmentId: id } }).originalTextAttachmentId).toBe(id)
+})

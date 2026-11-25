@@ -7,6 +7,7 @@ import { Button, Dropdown, Empty, Tag, Typography } from 'antd'
 import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
 import { getMessage } from '../api/messageResources'
 import { ConversationAttachmentViewer } from './ConversationAttachmentViewer'
+import { OriginalMessageText } from './OriginalMessageText'
 import { AttachmentLinks } from './AttachmentControls'
 
 function ReplyQuote({ meetingId, id, loaded, onLocate }: {
@@ -97,7 +98,11 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
     </div>}
     <ReadingPane><div ref={scrollRef} className="message-timeline-scroll" role="log" aria-label="会议消息"><div ref={itemsRef} className="message-timeline-items">
       {messages.length === 0 && !pendingMessage && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有消息" />}
-      {messages.map(message => <article key={message.messageId} data-message-id={message.messageId} tabIndex={0}
+      {messages.map(message => {
+        const original = message.originalTextAttachmentId
+          ? message.attachments?.find(file => file.attachmentId === message.originalTextAttachmentId) : undefined
+        const attachments = original ? message.attachments?.filter(file => file !== original) : message.attachments
+        return <article key={message.messageId} data-message-id={message.messageId} tabIndex={0}
         onContextMenu={event => {
           clearLongPress()
           if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)
@@ -137,8 +142,9 @@ export function MessageTimeline({ onLocate, pendingMessage, messages, hasEarlier
         </header>
         {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={originals.get(message.replyToMessageId)} onLocate={onLocate} />}
         {message.content && <MessageBody content={message.content} mentions={message.mentions} />}
-        {!!message.attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={message.attachments} onOpenViewer={setPreviewId} />}
-      </article>)}
+          {original && <OriginalMessageText key={original.attachmentId} meetingId={message.meetingId} source={original} />}
+        {!!attachments?.length && <AttachmentLinks meetingId={message.meetingId} attachments={attachments} onOpenViewer={setPreviewId} />}
+      </article>})}
       {pendingMessage}
     </div></div></ReadingPane>
     {previewId && <ConversationAttachmentViewer selectedId={previewId} messages={messages} currentParticipantId={currentParticipantId} hasEarlierMessages={hasEarlierMessages} onSelect={setPreviewId} />}
