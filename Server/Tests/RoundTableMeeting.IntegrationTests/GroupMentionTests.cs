@@ -1,3 +1,6 @@
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using RoundTableMeeting.Repository.Sqlite.Database;
 using System.Net.Http.Json;
 using System.Text.Json;
 using ModelContextProtocol.Client;
@@ -76,5 +79,30 @@ public sealed class GroupMentionTests
         var personal = await Next(second);
         Assert.Equal("private", personal.GetProperty("visibility").GetString());
         Assert.Empty(personal.GetProperty("mentions").EnumerateArray());
+        await Call("send_public_message", new() { ["room"] = first, ["content"] = "@乙", ["clientSubmissionId"] = Guid.NewGuid() });
+        await VerifyDowngradeAsync(factory.DatabasePath);
+    }
+
+    private static async Task VerifyDowngradeAsync(string sourcePath)
+    {
+        await using var source = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = sourcePath, Mode = SqliteOpenMode.ReadOnly }.ToString());
+        await using var copy = new SqliteConnection("Data Source=:memory:");
+        await source.OpenAsync();
+        await copy.OpenAsync();
+        source.BackupDatabase(copy);
+        await using var db = new RoundTableMeetingDbContext(new DbContextOptionsBuilder<RoundTableMeetingDbContext>().UseSqlite(copy).Options);
+        async Task<long> Count(string query)
+        {
+            await using var command = copy.CreateCommand();
+            command.CommandText = query;
+            return (long)(await command.ExecuteScalarAsync())!;
+        }
+        var individual = await Count("SELECT COUNT(*) FROM MessageMentions WHERE IsGroup = 0");
+        Assert.True(individual > 0);
+        Assert.True(await Count("SELECT COUNT(*) FROM MessageMentions WHERE IsGroup = 1") > 1);
+        await db.Database.MigrateAsync("20261125024318_RecordParticipantRemovalEpoch");
+        Assert.Equal(individual, await Count("SELECT COUNT(*) FROM MessageMentions"));
+        await db.Database.MigrateAsync("20261125040755_ExpandGroupMentionTargets");
+        Assert.Equal(individual, await Count("SELECT COUNT(*) FROM MessageMentions WHERE IsGroup = 0"));
     }
 }

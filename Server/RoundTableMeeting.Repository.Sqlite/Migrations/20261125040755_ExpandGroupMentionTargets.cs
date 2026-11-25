@@ -26,7 +26,10 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropColumn(name: "IsGroup", table: "MessageMentions");
+            // Earlier schemas can only represent individual mentions at a given offset.
+            migrationBuilder.Sql("DELETE FROM MessageMentions WHERE IsGroup = 1");
+            // Keep the table in place because existing audit triggers reference it.
+            migrationBuilder.Sql("ALTER TABLE MessageMentions DROP COLUMN IsGroup");
 
             migrationBuilder.DropIndex(
                 name: "IX_MessageMentions_MessageId_MeetingId_StartOffset_TargetParticipantId",
