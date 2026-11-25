@@ -374,7 +374,9 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .composer-context-toolbar { color: var(--rt-secondary); font-size: 13px; }
 .message-composer .message-reply-context { min-width: 0; background: var(--rt-subtle); border-inline-start: 3px solid var(--rt-accent); }
 
-.scoped-chat { --private-ink: light-dark(#6941a5, #cdb3eb); --private-bg: light-dark(#f2edf8, #34293f); }
+.scoped-chat { --private-ink: #6941a5; --private-bg: #f2edf8; }
+:root[data-appearance-mode="dark"] .scoped-chat { --private-ink: #cdb3eb; --private-bg: #34293f; }
+.conversation-tabs .ant-tabs-tab-remove { min-width: 24px; min-height: 24px; display: inline-grid; place-items: center; }
 .scoped-chat .conversation-tabs .ant-tabs-tab-active:has(.private-tab-name) { background: var(--private-bg) !important; }
 .scoped-chat .conversation-tabs .ant-tabs-tab-active .private-tab-name, .chat-private .composer-context-toolbar > span { color: var(--private-ink); }
 .scoped-chat .chat-private > .message-composer { border-color: var(--private-ink); box-shadow: none; }
