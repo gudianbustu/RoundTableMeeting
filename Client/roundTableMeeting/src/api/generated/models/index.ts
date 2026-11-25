@@ -94,6 +94,40 @@ export interface AttachmentPageDto extends AdditionalDataHolder, Parsable {
      */
     nextBeforeSequence?: number | null;
 }
+export interface AvatarEntry extends AdditionalDataHolder, Parsable {
+    /**
+     * The category property
+     */
+    category?: string | null;
+    /**
+     * The id property
+     */
+    id?: string | null;
+    /**
+     * The imageUrl property
+     */
+    imageUrl?: string | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+}
+export interface AvatarInvitationRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The avatarId property
+     */
+    avatarId?: string | null;
+    /**
+     * The displayName property
+     */
+    displayName?: string | null;
+}
+export interface AvatarInvitationResult extends AdditionalDataHolder, Parsable {
+    /**
+     * The invitationKey property
+     */
+    invitationKey?: string | null;
+}
 export interface ChangePasswordRequest extends AdditionalDataHolder, Parsable {
     /**
      * The currentPassword property
@@ -166,6 +200,33 @@ export function createAttachmentListItemDtoFromDiscriminatorValue(parseNode: Par
 // @ts-ignore
 export function createAttachmentPageDtoFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoAttachmentPageDto;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AvatarEntry}
+ */
+// @ts-ignore
+export function createAvatarEntryFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAvatarEntry;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AvatarInvitationRequest}
+ */
+// @ts-ignore
+export function createAvatarInvitationRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAvatarInvitationRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AvatarInvitationResult}
+ */
+// @ts-ignore
+export function createAvatarInvitationResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAvatarInvitationResult;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -459,6 +520,24 @@ export function createRenameMeetingParticipantRequestFromDiscriminatorValue(pars
 /**
  * Creates a new instance of the appropriate class based on discriminator value
  * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SelectAvatarRequest}
+ */
+// @ts-ignore
+export function createSelectAvatarRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSelectAvatarRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {SelectedAvatarResult}
+ */
+// @ts-ignore
+export function createSelectedAvatarResultFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoSelectedAvatarResult;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
  * @returns {SetDiscussionModeRequest}
  */
 // @ts-ignore
@@ -571,6 +650,10 @@ export function createUserSummaryDtoFromDiscriminatorValue(parseNode: ParseNode 
 }
 export interface CurrentUserDto extends AdditionalDataHolder, Parsable {
     /**
+     * The avatarUrl property
+     */
+    avatarUrl?: string | null;
+    /**
      * The isAdmin property
      */
     isAdmin?: boolean | null;
@@ -675,6 +758,43 @@ export function deserializeIntoAttachmentPageDto(attachmentPageDto: Partial<Atta
 }
 /**
  * The deserialization information for the current model
+ * @param AvatarEntry The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAvatarEntry(avatarEntry: Partial<AvatarEntry> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "category": n => { avatarEntry.category = n.getStringValue(); },
+        "id": n => { avatarEntry.id = n.getStringValue(); },
+        "imageUrl": n => { avatarEntry.imageUrl = n.getStringValue(); },
+        "name": n => { avatarEntry.name = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param AvatarInvitationRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAvatarInvitationRequest(avatarInvitationRequest: Partial<AvatarInvitationRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "avatarId": n => { avatarInvitationRequest.avatarId = n.getStringValue(); },
+        "displayName": n => { avatarInvitationRequest.displayName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param AvatarInvitationResult The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAvatarInvitationResult(avatarInvitationResult: Partial<AvatarInvitationResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "invitationKey": n => { avatarInvitationResult.invitationKey = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param ChangePasswordRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -746,6 +866,7 @@ export function deserializeIntoCreateUserRequest(createUserRequest: Partial<Crea
 // @ts-ignore
 export function deserializeIntoCurrentUserDto(currentUserDto: Partial<CurrentUserDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "avatarUrl": n => { currentUserDto.avatarUrl = n.getStringValue(); },
         "isAdmin": n => { currentUserDto.isAdmin = n.getBooleanValue(); },
         "nickname": n => { currentUserDto.nickname = n.getStringValue(); },
         "userId": n => { currentUserDto.userId = n.getGuidValue(); },
@@ -969,6 +1090,8 @@ export function deserializeIntoMentionCandidateDto(mentionCandidateDto: Partial<
 // @ts-ignore
 export function deserializeIntoMessageAuthorDto(messageAuthorDto: Partial<MessageAuthorDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "avatarColorSlot": n => { messageAuthorDto.avatarColorSlot = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+        "avatarUrl": n => { messageAuthorDto.avatarUrl = n.getStringValue(); },
         "displayName": n => { messageAuthorDto.displayName = n.getStringValue(); },
         "kind": n => { messageAuthorDto.kind = n.getEnumValue<MessageAuthorKind>(MessageAuthorKindObject); },
         "participantId": n => { messageAuthorDto.participantId = n.getGuidValue(); },
@@ -1050,6 +1173,8 @@ export function deserializeIntoMessageRecipientDto(messageRecipientDto: Partial<
 // @ts-ignore
 export function deserializeIntoParticipantDto(participantDto: Partial<ParticipantDto> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
+        "avatarColorSlot": n => { participantDto.avatarColorSlot = n.getObjectValue<UntypedNode>(createUntypedNodeFromDiscriminatorValue); },
+        "avatarUrl": n => { participantDto.avatarUrl = n.getStringValue(); },
         "displayName": n => { participantDto.displayName = n.getStringValue(); },
         "isCreator": n => { participantDto.isCreator = n.getBooleanValue(); },
         "isCurrentUser": n => { participantDto.isCurrentUser = n.getBooleanValue(); },
@@ -1079,6 +1204,28 @@ export function deserializeIntoPreviewJoinRequest(previewJoinRequest: Partial<Pr
 export function deserializeIntoRenameMeetingParticipantRequest(renameMeetingParticipantRequest: Partial<RenameMeetingParticipantRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "displayName": n => { renameMeetingParticipantRequest.displayName = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SelectAvatarRequest The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSelectAvatarRequest(selectAvatarRequest: Partial<SelectAvatarRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "avatarId": n => { selectAvatarRequest.avatarId = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param SelectedAvatarResult The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoSelectedAvatarResult(selectedAvatarResult: Partial<SelectedAvatarResult> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "avatarUrl": n => { selectedAvatarResult.avatarUrl = n.getStringValue(); },
     }
 }
 /**
@@ -1473,6 +1620,14 @@ export interface MentionCandidateDto extends AdditionalDataHolder, Parsable {
 }
 export interface MessageAuthorDto extends AdditionalDataHolder, Parsable {
     /**
+     * The avatarColorSlot property
+     */
+    avatarColorSlot?: UntypedNode | null;
+    /**
+     * The avatarUrl property
+     */
+    avatarUrl?: string | null;
+    /**
      * The displayName property
      */
     displayName?: string | null;
@@ -1608,6 +1763,14 @@ export interface MessageRecipientDto extends AdditionalDataHolder, Parsable {
 }
 export interface ParticipantDto extends AdditionalDataHolder, Parsable {
     /**
+     * The avatarColorSlot property
+     */
+    avatarColorSlot?: UntypedNode | null;
+    /**
+     * The avatarUrl property
+     */
+    avatarUrl?: string | null;
+    /**
      * The displayName property
      */
     displayName?: string | null;
@@ -1648,6 +1811,18 @@ export interface RenameMeetingParticipantRequest extends AdditionalDataHolder, P
      * The displayName property
      */
     displayName?: string | null;
+}
+export interface SelectAvatarRequest extends AdditionalDataHolder, Parsable {
+    /**
+     * The avatarId property
+     */
+    avatarId?: string | null;
+}
+export interface SelectedAvatarResult extends AdditionalDataHolder, Parsable {
+    /**
+     * The avatarUrl property
+     */
+    avatarUrl?: string | null;
 }
 /**
  * Serializes information the current object
@@ -1723,6 +1898,46 @@ export function serializeAttachmentPageDto(writer: SerializationWriter, attachme
     writer.writeCollectionOfObjectValues<AttachmentListItemDto>("items", attachmentPageDto.items, serializeAttachmentListItemDto);
     writer.writeNumberValue("nextBeforeSequence", attachmentPageDto.nextBeforeSequence);
     writer.writeAdditionalData(attachmentPageDto.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param AvatarEntry The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAvatarEntry(writer: SerializationWriter, avatarEntry: Partial<AvatarEntry> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!avatarEntry || isSerializingDerivedType) { return; }
+    writer.writeStringValue("category", avatarEntry.category);
+    writer.writeStringValue("id", avatarEntry.id);
+    writer.writeStringValue("imageUrl", avatarEntry.imageUrl);
+    writer.writeStringValue("name", avatarEntry.name);
+    writer.writeAdditionalData(avatarEntry.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param AvatarInvitationRequest The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAvatarInvitationRequest(writer: SerializationWriter, avatarInvitationRequest: Partial<AvatarInvitationRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!avatarInvitationRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("avatarId", avatarInvitationRequest.avatarId);
+    writer.writeStringValue("displayName", avatarInvitationRequest.displayName);
+    writer.writeAdditionalData(avatarInvitationRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param AvatarInvitationResult The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAvatarInvitationResult(writer: SerializationWriter, avatarInvitationResult: Partial<AvatarInvitationResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!avatarInvitationResult || isSerializingDerivedType) { return; }
+    writer.writeStringValue("invitationKey", avatarInvitationResult.invitationKey);
+    writer.writeAdditionalData(avatarInvitationResult.additionalData);
 }
 /**
  * Serializes information the current object
@@ -1803,6 +2018,7 @@ export function serializeCreateUserRequest(writer: SerializationWriter, createUs
 // @ts-ignore
 export function serializeCurrentUserDto(writer: SerializationWriter, currentUserDto: Partial<CurrentUserDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!currentUserDto || isSerializingDerivedType) { return; }
+    writer.writeStringValue("avatarUrl", currentUserDto.avatarUrl);
     writer.writeBooleanValue("isAdmin", currentUserDto.isAdmin);
     writer.writeStringValue("nickname", currentUserDto.nickname);
     writer.writeGuidValue("userId", currentUserDto.userId);
@@ -2042,6 +2258,8 @@ export function serializeMentionCandidateDto(writer: SerializationWriter, mentio
 // @ts-ignore
 export function serializeMessageAuthorDto(writer: SerializationWriter, messageAuthorDto: Partial<MessageAuthorDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!messageAuthorDto || isSerializingDerivedType) { return; }
+    writer.writeObjectValue("avatarColorSlot", messageAuthorDto.avatarColorSlot);
+    writer.writeStringValue("avatarUrl", messageAuthorDto.avatarUrl);
     writer.writeStringValue("displayName", messageAuthorDto.displayName);
     writer.writeEnumValue<MessageAuthorKind>("kind", messageAuthorDto.kind);
     writer.writeGuidValue("participantId", messageAuthorDto.participantId);
@@ -2128,6 +2346,8 @@ export function serializeMessageRecipientDto(writer: SerializationWriter, messag
 // @ts-ignore
 export function serializeParticipantDto(writer: SerializationWriter, participantDto: Partial<ParticipantDto> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!participantDto || isSerializingDerivedType) { return; }
+    writer.writeObjectValue("avatarColorSlot", participantDto.avatarColorSlot);
+    writer.writeStringValue("avatarUrl", participantDto.avatarUrl);
     writer.writeStringValue("displayName", participantDto.displayName);
     writer.writeBooleanValue("isCreator", participantDto.isCreator);
     writer.writeBooleanValue("isCurrentUser", participantDto.isCurrentUser);
@@ -2160,6 +2380,30 @@ export function serializeRenameMeetingParticipantRequest(writer: SerializationWr
     if (!renameMeetingParticipantRequest || isSerializingDerivedType) { return; }
     writer.writeStringValue("displayName", renameMeetingParticipantRequest.displayName);
     writer.writeAdditionalData(renameMeetingParticipantRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SelectAvatarRequest The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSelectAvatarRequest(writer: SerializationWriter, selectAvatarRequest: Partial<SelectAvatarRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!selectAvatarRequest || isSerializingDerivedType) { return; }
+    writer.writeStringValue("avatarId", selectAvatarRequest.avatarId);
+    writer.writeAdditionalData(selectAvatarRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param SelectedAvatarResult The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeSelectedAvatarResult(writer: SerializationWriter, selectedAvatarResult: Partial<SelectedAvatarResult> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!selectedAvatarResult || isSerializingDerivedType) { return; }
+    writer.writeStringValue("avatarUrl", selectedAvatarResult.avatarUrl);
+    writer.writeAdditionalData(selectedAvatarResult.additionalData);
 }
 /**
  * Serializes information the current object

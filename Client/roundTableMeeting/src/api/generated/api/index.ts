@@ -8,6 +8,8 @@ import { AgentRequestBuilderNavigationMetadata, type AgentRequestBuilder } from 
 // @ts-ignore
 import { AuthRequestBuilderNavigationMetadata, type AuthRequestBuilder } from './auth/index.js';
 // @ts-ignore
+import { AvatarsRequestBuilderNavigationMetadata, AvatarsRequestBuilderRequestsMetadata, type AvatarsRequestBuilder } from './avatars/index.js';
+// @ts-ignore
 import { MeetingsRequestBuilderNavigationMetadata, MeetingsRequestBuilderRequestsMetadata, type MeetingsRequestBuilder } from './meetings/index.js';
 // @ts-ignore
 import { SystemRequestBuilderNavigationMetadata, type SystemRequestBuilder } from './system/index.js';
@@ -32,6 +34,10 @@ export interface ApiRequestBuilder extends BaseRequestBuilder<ApiRequestBuilder>
      * The auth property
      */
     get auth(): AuthRequestBuilder;
+    /**
+     * The avatars property
+     */
+    get avatars(): AvatarsRequestBuilder;
     /**
      * The meetings property
      */
@@ -61,6 +67,10 @@ export const ApiRequestBuilderNavigationMetadata: Record<Exclude<keyof ApiReques
     },
     auth: {
         navigationMetadata: AuthRequestBuilderNavigationMetadata,
+    },
+    avatars: {
+        requestsMetadata: AvatarsRequestBuilderRequestsMetadata,
+        navigationMetadata: AvatarsRequestBuilderNavigationMetadata,
     },
     meetings: {
         requestsMetadata: MeetingsRequestBuilderRequestsMetadata,

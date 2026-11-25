@@ -4,6 +4,8 @@
 // @ts-ignore
 import { createApiProblemDetailsFromDiscriminatorValue, createMeetingDetailsDtoFromDiscriminatorValue, type ApiProblemDetails, type MeetingDetailsDto } from '../../../models/index.js';
 // @ts-ignore
+import { AgentInvitationsRequestBuilderRequestsMetadata, type AgentInvitationsRequestBuilder } from './agentInvitations/index.js';
+// @ts-ignore
 import { AttachmentsRequestBuilderNavigationMetadata, AttachmentsRequestBuilderRequestsMetadata, type AttachmentsRequestBuilder } from './attachments/index.js';
 // @ts-ignore
 import { DeletionRequestBuilderNavigationMetadata, DeletionRequestBuilderRequestsMetadata, type DeletionRequestBuilder } from './deletion/index.js';
@@ -34,6 +36,10 @@ import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type 
  * Builds and executes requests for operations under /api/meetings/{meetingId}
  */
 export interface WithMeetingItemRequestBuilder extends BaseRequestBuilder<WithMeetingItemRequestBuilder> {
+    /**
+     * The agentInvitations property
+     */
+    get agentInvitations(): AgentInvitationsRequestBuilder;
     /**
      * The attachments property
      */
@@ -105,6 +111,9 @@ export const WithMeetingItemRequestBuilderUriTemplate = "{+baseurl}/api/meetings
  * Metadata for all the navigation properties in the request builder.
  */
 export const WithMeetingItemRequestBuilderNavigationMetadata: Record<Exclude<keyof WithMeetingItemRequestBuilder, KeysToExcludeForNavigationMetadata>, NavigationMetadata> = {
+    agentInvitations: {
+        requestsMetadata: AgentInvitationsRequestBuilderRequestsMetadata,
+    },
     attachments: {
         requestsMetadata: AttachmentsRequestBuilderRequestsMetadata,
         navigationMetadata: AttachmentsRequestBuilderNavigationMetadata,
