@@ -17,6 +17,41 @@ namespace RoundTableMeeting.IntegrationTests;
 public sealed class AttachmentTests
 {
     [Fact]
+    public async Task AttachmentSelectionOrderSurvivesHistoryAndRetry()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = Client(factory);
+        await Login(client, "alice");
+        var meeting = await Body(await Post(client, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Order" }), HttpStatusCode.Created);
+        var id = meeting.GetProperty("meeting").GetProperty("meetingId").GetGuid();
+        var endpoint = $"/api/meetings/{id}/messages";
+        var files = new List<Guid>();
+        for (var i = 0; i < 5; i++)
+        {
+            var uploaded = await Body(await Upload(client, id, Guid.NewGuid(), $"{i}.png", i.ToString()), HttpStatusCode.OK);
+            files.Add(uploaded.GetProperty("attachmentId").GetGuid());
+        }
+        var selected = files.OrderDescending().ToArray();
+        var clientSubmissionId = Guid.NewGuid();
+        var submission = new { clientSubmissionId, content = "", attachmentIds = selected };
+        var sent = await Body(await Post(client, endpoint, submission), HttpStatusCode.Created);
+        static Guid[] FileIds(JsonElement message) => message.GetProperty("attachments").EnumerateArray()
+            .Select(file => file.GetProperty("attachmentId").GetGuid()).ToArray();
+        Assert.Equal(selected, FileIds(sent.GetProperty("message")));
+        var page = await Body(await client.GetAsync(endpoint), HttpStatusCode.OK);
+        Assert.Equal(selected, FileIds(page.GetProperty("items").EnumerateArray().Single()));
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, endpoint, submission)).StatusCode);
+        Assert.Equal(HttpStatusCode.Conflict, (await Post(client, endpoint, new { clientSubmissionId, content = "", attachmentIds = selected.Reverse() })).StatusCode);
+
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
+        await db.Set<MeetingAttachment>().Where(file => file.MeetingId == id).ExecuteUpdateAsync(update => update.SetProperty(file => file.MessagePosition, (int?)null));
+        var legacy = await Body(await client.GetAsync(endpoint), HttpStatusCode.OK);
+        Assert.Equal(files.Order().ToArray(), FileIds(legacy.GetProperty("items").EnumerateArray().Single()));
+        Assert.Equal(HttpStatusCode.OK, (await Post(client, endpoint, submission)).StatusCode);
+    }
+
+    [Fact]
     public async Task MediaPreviewUsesWhitelistedTypesAndRangesWithoutExposingUnboundOrAnonymousFiles()
     {
         using var factory = new TestApplicationFactory(); using var a = Client(factory); using var b = Client(factory);

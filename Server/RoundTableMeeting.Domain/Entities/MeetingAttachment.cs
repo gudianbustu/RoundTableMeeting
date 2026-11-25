@@ -4,6 +4,7 @@ namespace RoundTableMeeting.Domain.Entities;
 public sealed class MeetingAttachment : BaseEntity
 {
     public Guid MeetingId { get; private set; }
+    public int? MessagePosition { get; private set; }
     public Guid UploaderParticipantId { get; private set; }
     public Guid UploadRequestId { get; private set; }
     public string OriginalName { get; private set; } = "";
@@ -24,9 +25,11 @@ public sealed class MeetingAttachment : BaseEntity
         return new() { MeetingId = meetingId, UploaderParticipantId = uploader, UploadRequestId = requestId,
             OriginalName = name, SizeBytes = size, MediaType = mediaType, StorageKey = key, ContentHash = hash, CreatedAtUtc = now };
     }
-    public void Bind(Guid messageId)
+    public void Bind(Guid messageId, int position)
     {
         if (State != "staged" || MessageId is not null || messageId == Guid.Empty) throw new InvalidOperationException("Attachment is unavailable.");
+        ArgumentOutOfRangeException.ThrowIfNegative(position);
+        MessagePosition = position;
         MessageId = messageId; State = "attached";
     }
 }

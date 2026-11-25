@@ -51,7 +51,7 @@ public sealed class MeetingAttachmentRepository(RoundTableMeetingDbContext db) :
     public Task<MeetingAttachment?> FindUploadAsync(Guid meetingId, Guid participantId, Guid requestId, CancellationToken ct = default)
         => db.Set<MeetingAttachment>().AsNoTracking().SingleOrDefaultAsync(x => x.MeetingId == meetingId && x.UploaderParticipantId == participantId && x.UploadRequestId == requestId, ct);
     public async Task<IReadOnlyList<MeetingAttachment>> ForMessageAsync(Guid meetingId, Guid messageId, CancellationToken ct = default)
-        => await db.Set<MeetingAttachment>().AsNoTracking().Where(x => x.MeetingId == meetingId && x.MessageId == messageId).OrderBy(x => x.ID).ToArrayAsync(ct);
+        => await db.Set<MeetingAttachment>().AsNoTracking().Where(x => x.MeetingId == meetingId && x.MessageId == messageId).OrderBy(x => x.MessagePosition).ThenBy(x => x.ID).ToArrayAsync(ct);
     public async Task<IReadOnlyList<MeetingAttachment>> ExpiredAsync(DateTimeOffset before, CancellationToken ct = default)
         => (await db.Set<MeetingAttachment>().AsNoTracking().Where(x => x.State == "staged").ToArrayAsync(ct)).Where(x => x.CreatedAtUtc < before).ToArray();
 }

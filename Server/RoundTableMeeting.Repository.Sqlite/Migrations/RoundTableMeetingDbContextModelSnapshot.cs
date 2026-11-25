@@ -716,6 +716,9 @@ namespace RoundTableMeeting.Repository.Sqlite.Migrations
                     b.Property<Guid?>("MessageId")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("MessagePosition")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("OriginalName")
                         .IsRequired()
                         .HasMaxLength(512)

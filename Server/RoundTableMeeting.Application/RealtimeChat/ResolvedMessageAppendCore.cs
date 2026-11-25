@@ -76,6 +76,12 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
                 && previousSelector.CurrentlyResolvedId == existing.RecipientParticipantId && existing.PayloadFingerprint == legacyHash;
             if (existing.PayloadFingerprint != hash && !matchesLegacyRecipient && !(existing.PayloadFingerprint == "" && scope == "public" && ids.Length == 0
                 && request.ReplyToMessageId is null && existing.Content == content)) throw new MeetingMessageAccessException("submission_mismatch");
+            if (ids.Length > 1)
+            {
+                var bound = await attachments.ForMessageAsync(meetingId, existing.ID, ct);
+                if (bound.Any(file => file.MessagePosition.HasValue) && !bound.Select(file => file.ID).SequenceEqual(ids))
+                    throw new MeetingMessageAccessException("submission_mismatch");
+            }
             return Result(existing) with { Replayed = true };
         }
         // Replay of an already committed submission takes precedence over a later mode change.
@@ -104,11 +110,12 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
         if (request.OriginalTextAttachmentId is Guid fullTextId) message.SetOriginalText(fullTextId);
         message.SetScope(scope, recipient, request.ReplyToMessageId, hash);
         unitOfWork.RegisterAdd(message);
-        foreach (var id in ids)
+        for (var position = 0; position < ids.Length; position++)
         {
+            var id = ids[position];
             var file = await attachments.FindAsync(meetingId, id, ct);
             if (file is null || file.UploaderParticipantId != sender?.ID || file.State != "staged") throw new MeetingMessageAccessException("attachment_unavailable");
-            file.Bind(message.ID); unitOfWork.RegisterEdit(file);
+            file.Bind(message.ID, position); unitOfWork.RegisterEdit(file);
         }
         if (sender is not null)
         {
