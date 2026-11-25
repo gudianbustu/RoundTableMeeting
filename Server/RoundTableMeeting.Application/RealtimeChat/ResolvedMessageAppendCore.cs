@@ -93,7 +93,7 @@ public sealed class ResolvedMessageAppendCore(IMeetingRepository meetings, IMeet
         var hasGroupMention = false;
         if (sender is not null)
         {
-            var people = roster.Where(p => p.MembershipState == MeetingMembershipState.Joined && (scope == "public" || p.ID == sender.ID || p.ID == recipient))
+            var people = roster.Where(p => p.MembershipState == MeetingMembershipState.Joined)
                 .Select(p => new MentionParticipant(p.ID, p.DisplayName, p.NormalizedDisplayName)).ToArray();
             mentions = parser.Parse(content, people, request.MentionCandidates);
             if (scope == "public")

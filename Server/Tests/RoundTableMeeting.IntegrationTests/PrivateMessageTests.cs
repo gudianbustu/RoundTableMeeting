@@ -30,7 +30,7 @@ public sealed class PrivateMessageTests
         var code = created.GetProperty("invitation").GetProperty("meetingCode").GetString();
         var joined = await Body(await Post(b, "/api/meetings/join", new { meetingCode = code, displayName = "Bob" }), HttpStatusCode.OK);
         var peer = joined.GetProperty("currentParticipant").GetProperty("participantId").GetGuid();
-        await Body(await Post(c, "/api/meetings/join", new { meetingCode = code, displayName = "Charlie" }), HttpStatusCode.OK);
+        var third = await Body(await Post(c, "/api/meetings/join", new { meetingCode = code, displayName = "Charlie" }), HttpStatusCode.OK);
         var url = $"/api/meetings/{id}/messages";
         await Body(await Post(a, url, new { clientSubmissionId = Guid.NewGuid(), content = "public" }), HttpStatusCode.Created);
         var submission = Guid.NewGuid();
@@ -38,7 +38,13 @@ public sealed class PrivateMessageTests
         var sent = await Body(await Post(a, url, body), HttpStatusCode.Created);
         var message = sent.GetProperty("message"); var messageId = message.GetProperty("messageId").GetGuid();
         Assert.Equal(body.content, message.GetProperty("content").GetString());
-        Assert.Empty(message.GetProperty("mentions").EnumerateArray());
+        var mention = Assert.Single(message.GetProperty("mentions").EnumerateArray());
+        Assert.Equal(third.GetProperty("currentParticipant").GetProperty("participantId").GetGuid(), mention.GetProperty("participantId").GetGuid());
+        var text = message.GetProperty("content").GetString()!;
+        Assert.Equal("@Charlie", text.Substring(mention.GetProperty("startOffset").GetInt32(), mention.GetProperty("length").GetInt32()));
+        var recipientView = await b.GetFromJsonAsync<JsonElement>($"{url}/{messageId}");
+        Assert.Equal(mention.GetRawText(), Assert.Single(recipientView.GetProperty("mentions").EnumerateArray()).GetRawText());
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync($"{url}/{messageId}")).StatusCode);
         var replay = await Body(await Post(a, url, body), HttpStatusCode.OK);
         Assert.Equal(messageId, replay.GetProperty("message").GetProperty("messageId").GetGuid());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(a, url, new { clientSubmissionId = submission, content = body.content })).StatusCode);

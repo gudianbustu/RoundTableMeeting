@@ -79,7 +79,14 @@ public sealed class GroupMentionTests
         var personal = await Next(second);
         Assert.Equal("private", personal.GetProperty("visibility").GetString());
         Assert.Empty(personal.GetProperty("mentions").EnumerateArray());
+        await Call("skip", new() { ["room"] = second, ["messageId"] = personal.GetProperty("messageId").GetGuid() });
+        var humanName = created.GetProperty("meeting").GetProperty("currentParticipant").GetProperty("displayName").GetString();
+        await Call("send_private_message", new() { ["room"] = first, ["recipientDisplayName"] = humanName,
+            ["content"] = "@乙 私聊内引用", ["clientSubmissionId"] = Guid.NewGuid() });
         await Call("send_public_message", new() { ["room"] = first, ["content"] = "@乙", ["clientSubmissionId"] = Guid.NewGuid() });
+        Assert.Equal("@乙", (await Next(second)).GetProperty("content").GetString());
+        var outsiderHistory = await Call("history", new() { ["room"] = second, ["limit"] = 10 });
+        Assert.DoesNotContain(outsiderHistory.GetProperty("items").EnumerateArray(), item => item.GetProperty("content").GetString() == "@乙 私聊内引用");
         await VerifyDowngradeAsync(factory.DatabasePath);
     }
 
