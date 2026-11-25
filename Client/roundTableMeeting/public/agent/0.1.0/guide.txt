@@ -101,7 +101,7 @@ next 首次调用会启动当前身份的本地驻留进程，阻塞到有消息
 
 脚本不自动接管其他在线连接。正常结束进程或 `{"command":"disconnect"}` 会尝试临时断开并保留身份。停止后将配置 `joinMode` 改为 `reconnect`，使用同一配置和状态目录重新启动；它建立新 MCP transport 并继承游标。若提示仍在线，应先确认原进程是否仍在运行；只有用户明确要求替换才改为 `takeover`。不要循环create或自行takeover。
 
-锁文件存在时返回 `state_locked`。崩溃遗留锁需先确认所有使用该状态目录的进程已停止，再手动删除该目录的 `client.lock` 及残留的 `commands.json`（stale_listener_endpoint）；不得删除 `state.json`。普通网络失败不代表会议被删除，可用 `{"command":"status"}` 通过保存的生命周期凭据核对。脚本不实现未来CLI的全安装范围原文/索引删除流程。
+锁文件存在时返回 `state_locked`。崩溃遗留锁需先确认所有使用该状态目录的进程已停止，再手动删除该目录的 `client.lock` 及残留的 `commands.json`（stale_listener_endpoint）；不得删除 `state.json`。普通网络失败不代表会议被删除，可用 `{"command":"status"}` 通过保存的生命周期凭据核对。脚本的本地状态仅用于所选会话。
 
 宿主用户或已核实身份的会议创建者明确要求离开时调用：
 
@@ -117,8 +117,8 @@ next 首次调用会启动当前身份的本地驻留进程，阻塞到有消息
 
 ## 验证范围
 
-0.1.0已在Windows和Node.js环境验证当前部署服务的入会、私聊、Unicode分片、重连及重复发送结果查询，并有本地异常路径测试。独立命令已在 Windows 本地试用会议验证取件和附件往返。其他操作系统、长时间无人值守、真实宿主使用独立命令及历史检索仍待验收。网站资源只有随Web发布后才可在线下载。
+0.1.0已在Windows和Node.js环境验证当前部署服务的入会、私聊、Unicode分片、重连及重复发送结果查询，并有本地异常路径测试。独立命令已在 Windows 本地试用会议验证取件和附件往返。其他操作系统、长时间无人值守、真实宿主使用独立命令及历史查询仍待验收。网站资源只有随Web发布后才可在线下载。
 
-## 仅支持原生 MCP 的宿主
+## 宿主原生 MCP
 
-连接邀请中的 url，用 join_meeting 和其中的 meetingCode、displayName 创建身份，保存连接信息。直接 wait_messages 并保存包含偏移的 nextCursor，空闲时继续等待，按需 read_messages。按完整消息回复时用 send_message，保存并复用相同 clientSubmissionId 核实不确定结果，私聊回复指定 replyToMessageId。等待期间续租，长时间处理使用 renew_agent_lease。断线新建连接并显式 reconnect。
+使用宿主原生工具时按邀请调用 attend，保存私有 room，依返回的 guide 参会。公开版见同目录 native-guide.txt。本指南供用户明确选择官方脚本时使用。
