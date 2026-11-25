@@ -75,7 +75,17 @@ export function MeetingWorkspacePage() {
   const members = workspace.details?.participants.filter(person => person.membershipState !== 'left') ?? []
   const readOnly = historical || workspace.details?.canSend === false
   const discussionMode = workspace.details && <DiscussionModeControl meeting={workspace.details} onModeChanged={workspace.refreshDetails} />
-  const creator = workspace.details?.participants.find(person => person.isCreator)
+  const topbarSlot = navigationTrigger?.parentElement?.querySelector('#workspace-topbar-content')
+  const topicHeader = workspace.details && !historical && <div className="workspace-topic-header">
+    <h1 className="workspace-topbar-title" title={workspace.details.name}>{workspace.details.name}</h1>
+    <div className="workspace-member-tools">
+      <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员`}>
+        <span className="workspace-member-faces" aria-hidden="true">{members.slice(0, 3).map(person =>
+          <i key={person.participantId}>{Array.from(person.displayName)[0]}</i>)}</span>{members.length} 位成员
+      </button>
+      {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
+    </div>
+  </div>
   return <section className={workspace.selectedId ? "meeting-workspace" : "meeting-home"}>
     {!workspace.selectedId ? <>
       {listError}
@@ -104,18 +114,7 @@ export function MeetingWorkspacePage() {
               <Button type="primary" loading={workspace.operationLoading} onClick={() => void workspace.updateHistory(workspace.details!.meetingId, 'rejoin')}>重新入会</Button>
             </div>
           </div>
-        </header> : <header className="workspace-topic-header">
-          <div className="workspace-topic-name"><div className="workspace-title-row"><h1>{workspace.details.name}</h1></div>
-            {creator && <p>创建者　{creator.displayName}</p>}
-          </div>
-          <div className="workspace-member-tools">
-              <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员`}>
-                <span className="workspace-member-faces" aria-hidden="true">{members.slice(0, 3).map(person =>
-                  <i key={person.participantId}>{Array.from(person.displayName)[0]}</i>)}</span>{members.length} 位成员
-              </button>
-            {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
-          </div>
-        </header>}
+        </header> : topbarSlot ? createPortal(topicHeader, topbarSlot) : topicHeader}
         <RealtimeChatRegion onPeerChanged={setMentionPeerId} sessionCache={chatCache.current} readOnly={readOnly} composerTools={discussionMode} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
         {readOnly && discussionMode}
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}

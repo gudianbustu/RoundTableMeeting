@@ -76,3 +76,33 @@
 .workspace-member-drawer .participant-list-item-content { overflow-wrap: anywhere; }
 .workspace-member-drawer .participant-list-item-actions button { white-space: nowrap; }
 @media (max-width: 600px) { .ant-modal.history-remove-confirm { max-width: calc(100vw - 28px); } }
+
+#workspace-topbar-content { min-width: 0; flex: 1; }
+#workspace-topbar-content:empty { display: none; }
+#workspace-topbar-content .workspace-topic-header {
+  gap: 12px;
+  padding-inline: clamp(8px, 2vw, 32px);
+  border-inline: 1px solid var(--rt-border);
+}
+#workspace-topbar-content .workspace-topbar-title {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 21px;
+}
+#workspace-topbar-content .workspace-member-tools { padding: 0; background: transparent; }
+#workspace-topbar-content .workspace-member-tools > .ant-btn { height: 34px; }
+@media (max-width: 1000px) {
+  #workspace-topbar-content .workspace-member-faces { display: none; }
+}
+@media (max-width: 740px) {
+  .top-navigation:has(#workspace-topbar-content > *) .app-brand { font-size: 0; gap: 0; }
+  .top-navigation:has(#workspace-topbar-content > *) .account-trigger { padding-inline: 4px; }
+  .top-navigation:has(#workspace-topbar-content > *) .account-trigger > strong,
+  .top-navigation:has(#workspace-topbar-content > *) .account-trigger > .anticon-down { display: none; }
+  #workspace-topbar-content .workspace-topic-header { padding: 0; border: 0; gap: 4px; }
+  #workspace-topbar-content .workspace-topbar-title { font-size: 16px; }
+  #workspace-topbar-content .workspace-member-tools { gap: 4px; }
+}

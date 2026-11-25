@@ -7,6 +7,7 @@ export function AuthenticatedLayout() {
     <header className="app-header top-navigation">
       {pathname.startsWith('/meetings/') && <span id="workspace-navigation-trigger" />}
       <Link className="app-brand" to="/"><img className="brand-mark" src="/roundtable-mark.png" alt="" />圆桌会议</Link>
+      {pathname.startsWith('/meetings/') && <div id="workspace-topbar-content" />}
       {['/settings/profile', '/users'].includes(pathname.replace(/\/$/, '')) ? <Link to="/">返回工作台 ›</Link> : <CurrentUserBar />}
     </header>
     <Outlet />
