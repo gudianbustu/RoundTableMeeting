@@ -1,4 +1,4 @@
-.rt-avatar-image { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
+.rt-avatar-image { display: block; min-width: 0; min-height: 0; contain: size; width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .rt-avatar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 8px; padding: 3px; }
 .rt-avatar-cell { position: relative; min-width: 0; width: 100%; aspect-ratio: 1; display: grid; place-items: center; border-radius: 10px; background: var(--rt-subtle); }
 label.rt-avatar-cell { cursor: pointer; }
@@ -63,4 +63,9 @@ label.rt-avatar-cell { cursor: pointer; }
   .library-group-head { gap: 8px; }
   .library-avatars { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); }
   .library-heading .ant-btn { flex-shrink: 0; }
+}
+.account-avatar, .workspace-member-faces i,
+.rt-meeting-avatar {
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  overflow: hidden;
 }
