@@ -1,7 +1,4 @@
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.Formats;
-using SixLabors.ImageSharp.Formats.Png;
-using SixLabors.ImageSharp.Processing;
+using SkiaSharp;
 
 namespace RoundTableMeeting.Avatars;
 
@@ -13,19 +10,25 @@ internal static class AvatarUpload
     {
         if (file.Length is <= 0 or > MaxBytes) return null;
         using var stream = file.OpenReadStream();
-        try
-        {
-            var options = new DecoderOptions { SkipMetadata = true, MaxFrames = 1 };
-            var info = await Image.IdentifyAsync(options, stream, ct);
-            if (info.Metadata.DecodedImageFormat?.Name is not ("PNG" or "JPEG" or "Webp" or "WEBP")
-                || info.Width > 4096 || info.Height > 4096) return null;
-            stream.Position = 0;
-            using var image = await Image.LoadAsync(options, stream, ct);
-            image.Mutate(x => x.Resize(new ResizeOptions { Size = new Size(256, 256), Mode = ResizeMode.Max }));
-            using var output = new MemoryStream();
-            await image.SaveAsync(output, new PngEncoder { SkipMetadata = true }, ct);
-            return output.ToArray();
-        }
-        catch (Exception e) when (e is UnknownImageFormatException or InvalidImageContentException or NotSupportedException) { return null; }
+        var bytes = new byte[(int)file.Length];
+        await stream.ReadExactlyAsync(bytes, ct);
+        using var data = SKData.CreateCopy(bytes);
+        using var codec = SKCodec.Create(data);
+        if (codec is null || codec.EncodedFormat is not (SKEncodedImageFormat.Png or SKEncodedImageFormat.Jpeg or SKEncodedImageFormat.Webp))
+            return null;
+
+        var width = codec.Info.Width;
+        var height = codec.Info.Height;
+        if (width is <= 0 or > 4096 || height is <= 0 or > 4096) return null;
+
+        using var bitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+        if (codec.GetPixels(bitmap.Info, bitmap.GetPixels()) != SKCodecResult.Success) return null;
+        ct.ThrowIfCancellationRequested();
+
+        var scale = 256d / Math.Max(width, height);
+        var size = new SKSizeI(Math.Max(1, (int)Math.Round(width * scale)), Math.Max(1, (int)Math.Round(height * scale)));
+        using var resized = bitmap.Resize(size, new SKSamplingOptions(SKCubicResampler.CatmullRom));
+        using var png = resized?.Encode(SKEncodedImageFormat.Png, 100);
+        return png?.ToArray();
     }
 }

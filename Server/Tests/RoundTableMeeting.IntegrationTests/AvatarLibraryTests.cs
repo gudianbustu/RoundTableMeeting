@@ -8,8 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using SixLabors.ImageSharp;
-using SixLabors.ImageSharp.PixelFormats;
+using SkiaSharp;
 
 namespace RoundTableMeeting.IntegrationTests;
 
@@ -100,8 +99,8 @@ public sealed class AvatarLibraryTests
         Assert.Equal(expectedCount, initial.GetArrayLength());
         Assert.Equal(expectedCount, initial.EnumerateArray().Select(a => a.GetProperty("id").GetString()).Distinct().Count());
 
-        using var png = new MemoryStream();
-        using (var image = new Image<Rgba32>(3, 2)) await image.SaveAsPngAsync(png);
+        using var bitmap = new SKBitmap(3, 2);
+        using var png = bitmap.Encode(SKEncodedImageFormat.Png, 100);
         MultipartFormDataContent Form(bool valid = true)
         {
             var body = new MultipartFormDataContent();
