@@ -57,3 +57,21 @@ it('waits for the target meeting permissions instead of reusing the previous mee
   expect(leave).toHaveBeenCalledOnce()
   expect(remove).not.toHaveBeenCalled()
 })
+
+it('filters only current meeting names and restores the original rows on clear', () => {
+  const select = vi.fn()
+  render(<MeetingNavigation meetings={meetings} selectedId="a" historyMeetings={[{ ...meetings[0], meetingId: 'h', name: '历史事项' }]}
+    unreadCounts={{ b: 3 }} onSelect={select} onCreate={vi.fn()} onJoin={vi.fn()} />)
+  const search = screen.getByRole('textbox', { name: '搜索会议' })
+  fireEvent.change(search, { target: { value: ' 乙 ' } })
+  expect(screen.queryByText('甲会议')).toBeNull()
+  expect(screen.getByLabelText('未读 3 条')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: '历史会议' }))
+  expect(screen.getByText('历史事项')).toBeVisible()
+  fireEvent.change(search, { target: { value: 'Alice' } })
+  expect(screen.getByText('没有匹配的会议')).toBeVisible()
+  fireEvent.change(search, { target: { value: '' } })
+  expect(screen.getByText('甲会议').closest('button')).toHaveAttribute('aria-current', 'page')
+  expect(screen.getByText('甲会议').compareDocumentPosition(screen.getByText('乙会议')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  expect(select).not.toHaveBeenCalled()
+})

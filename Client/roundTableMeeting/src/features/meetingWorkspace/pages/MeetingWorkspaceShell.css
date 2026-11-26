@@ -139,15 +139,21 @@
 }
 .workspace-topic-trigger:hover { text-decoration: underline; }
 
-.meeting-navigation-add { display: flex; justify-content: flex-end; flex: none; padding-inline: 6px; margin-block-end: 6px; }
-.meeting-navigation-add .meeting-add-trigger {
-  width: 40px; height: 40px; min-width: 40px; padding: 0; border-radius: 50%;
-  background: #e4f1ea; border: 1px solid #d9e6df; color: #286457; font-size: 22px; box-shadow: none;
+.meeting-list-search { display: flex; flex: none; align-items: center; gap: 6px; padding: 8px 8px 0; margin-block-end: -6px; }
+.meeting-list-search .ant-input-affix-wrapper { min-width: 0; background: var(--rt-subtle); }
+:root:not([data-appearance-mode="dark"]) .meeting-list-search :is(.ant-input-affix-wrapper, .meeting-add-trigger.ant-btn) { background: #f7f6f3; border-color: #e7e4de; }
+@media (min-width: 1001px) {
+  .meeting-workspace > .meeting-navigation:has(.meeting-list-search) { padding-block-start: 0; }
+  .meeting-list-search { padding-block-start: 6px; }
 }
-.meeting-navigation-add .ant-btn.meeting-add-trigger:not(:disabled):is(:hover, :active, .ant-dropdown-open) { background: #e4f1ea; color: #286457; border-color: #d9e6df; }
-:root[data-appearance-mode="dark"] .meeting-navigation-add .ant-btn.meeting-add-trigger:not(:disabled) { background: #2b4238; color: #b8dac7; border-color: #425d4e; }
+@media (max-width: 1000px) {
+  .meeting-list-search .ant-input-affix-wrapper, .meeting-list-search .meeting-add-trigger.ant-btn { height: 40px; }
+  .meeting-list-search .meeting-add-trigger.ant-btn { width: 40px; }
+}
+.meeting-list-search .ant-input-prefix { color: var(--rt-secondary); }
+.meeting-list-search .meeting-add-trigger { flex: none; width: 32px; height: 32px; padding: 0; background: var(--rt-subtle); color: var(--rt-text); border-radius: 6px; box-shadow: none; }
 .meeting-add-menu .ant-dropdown-menu {
-  min-width: 96px; padding: 8px 0; border: 1px solid var(--rt-border); border-radius: 8px;
+  min-width: 116px; padding: 6px 0; border: 1px solid var(--rt-border); border-radius: 8px;
   background: var(--rt-surface); box-shadow: 0 4px 14px rgb(0 0 0 / 8%);
 }
 .meeting-add-menu .ant-dropdown-menu .ant-dropdown-menu-item {
@@ -183,6 +189,6 @@
 .meeting-navigation-select[data-insert="before"]::after { top: 0; }
 .meeting-navigation-select[data-insert="after"]::after { bottom: 0; }
 
-@media (max-width: 1000px) {
-  .meeting-navigation-add { padding-inline: 10px; margin-block-end: -10px; }
+@media (max-width: 480px) {
+  .authenticated-shell:has(> .meeting-workspace) .top-navigation .source-repository-link { display: none; }
 }

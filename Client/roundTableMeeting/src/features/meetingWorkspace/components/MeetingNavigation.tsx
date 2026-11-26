@@ -3,8 +3,8 @@ import { CSS } from '@dnd-kit/utilities'
 import { useSortable } from '@dnd-kit/sortable'
 import { SortableList } from '@/features/avatars/AvatarLibrarySort'
 import { useMeetingOrder } from '../hooks/useMeetingOrder'
-import { Badge, Button, Dropdown, Empty, Flex, Popover, Segmented, Skeleton, Typography } from 'antd'
-import { RightOutlined, DeleteOutlined, EllipsisOutlined, InfoCircleOutlined, LoginOutlined, PlusOutlined } from '@ant-design/icons'
+import { Badge, Button, Dropdown, Empty, Flex, Input, Popover, Segmented, Skeleton, Typography } from 'antd'
+import { SearchOutlined, RightOutlined, DeleteOutlined, EllipsisOutlined, InfoCircleOutlined, LoginOutlined, PlusOutlined } from '@ant-design/icons'
 import type { MeetingDetails, MeetingListItem } from '../types/meetingWorkspace'
 
 function SortableMeetingButton({ meetingId, ...button }: ButtonHTMLAttributes<HTMLButtonElement> & { meetingId: string }) {
@@ -16,12 +16,14 @@ function SortableMeetingButton({ meetingId, ...button }: ButtonHTMLAttributes<HT
 }
 
 export function MeetingNavigation({ orderOwner, unreadCounts = {}, meetings, historyMeetings, selectedId, details, detailLoading, onDelete, onLeave, onRejoin, onHide, operationLoading, loading, onSelect, onCreate, onJoin, view = 'active', onViewChange }: { orderOwner?: string; unreadCounts?: Record<string, number>; details?: MeetingDetails; detailLoading?: boolean; onRejoin?: (id: string) => void; onHide?: (id: string) => void; operationLoading?: boolean; onDelete?: () => void; onLeave?: () => void; view?: 'active' | 'history'; onViewChange?: (view: 'active' | 'history') => void; meetings: MeetingListItem[]; historyMeetings?: MeetingListItem[]; selectedId?: string; loading?: boolean; onSelect: (id: string) => void; onCreate: () => void; onJoin: () => void }) {
+  const [search, setSearch] = useState('')
+  const query = search.trim().toLocaleLowerCase()
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [infoId, setInfoId] = useState<string>()
   const [menuId, setMenuId] = useState<string>()
   const { ordered, move } = useMeetingOrder(meetings, orderOwner)
   const activate = (id: string) => { if (selectedId !== id) onSelect(id) }
-  const renderList = (rows: MeetingListItem[], history: boolean) => loading ? <Flex vertical gap="small"><Skeleton active paragraph={{ rows: 1 }} title={false} /><Skeleton active paragraph={{ rows: 1 }} title={false} /></Flex> : rows.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={history ? '暂无历史会议' : '还没有会议'} /> : renderRows(rows, history)
+  const renderList = (rows: MeetingListItem[], history: boolean) => loading ? <Flex vertical gap="small"><Skeleton active paragraph={{ rows: 1 }} title={false} /><Skeleton active paragraph={{ rows: 1 }} title={false} /></Flex> : rows.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={history ? '暂无历史会议' : query ? '没有匹配的会议' : '还没有会议'} /> : renderRows(rows, history)
   const renderRows = (rows: MeetingListItem[], history: boolean) => {
     const sortable = Boolean(orderOwner && !history)
     const items = rows.map(meeting => {
@@ -63,15 +65,16 @@ export function MeetingNavigation({ orderOwner, unreadCounts = {}, meetings, his
   return <aside className="meeting-navigation"><Flex vertical gap="middle" className="meeting-navigation-content">
     {!historyMeetings && <Flex align="center" justify="space-between" wrap gap="small" className="meeting-navigation-heading"><Typography.Title level={4} style={{ margin: 0 }}>我的会议</Typography.Title><Flex gap="small"><Button aria-label="创建会议" title="创建会议" icon={<PlusOutlined />} onClick={onCreate} /><Button aria-label="加入会议" title="加入会议" icon={<LoginOutlined />} onClick={onJoin} /></Flex></Flex>}
     {!historyMeetings && <Segmented block value={view} options={[{ label: '当前会议', value: 'active' }, { label: '历史会议', value: 'history' }]} onChange={value => { setInfoId(undefined); setMenuId(undefined); onViewChange?.(value as 'active' | 'history') }} />}
-    <div className="meeting-navigation-scroll" data-sort-viewport>{renderList(ordered, !historyMeetings && view === 'history')}</div>
-    {historyMeetings && <div className="meeting-navigation-add">
-      <Dropdown trigger={['click']} placement="topRight" align={{ offset: [-3, -6] }} classNames={{ root: 'meeting-add-menu' }} menu={{ items: [
+    {historyMeetings && <div className="meeting-list-search">
+      <Input aria-label="搜索会议" placeholder="搜索会议" allowClear prefix={<SearchOutlined />} value={search} onChange={event => setSearch(event.target.value)} />
+      <Dropdown trigger={['click']} placement="bottomRight" classNames={{ root: 'meeting-add-menu' }} menu={{ items: [
         { key: 'join', label: '加入会议', onClick: onJoin },
         { key: 'create', label: '创建会议', onClick: onCreate },
       ] }}>
-        <Button shape="circle" className="meeting-add-trigger" aria-label="加入或创建会议" icon={<PlusOutlined />} />
+        <Button className="meeting-add-trigger" aria-label="加入或创建会议" icon={<PlusOutlined />} />
       </Dropdown>
     </div>}
+    <div className="meeting-navigation-scroll" data-sort-viewport>{renderList(query ? ordered.filter(meeting => meeting.name.toLocaleLowerCase().includes(query)) : ordered, !historyMeetings && view === 'history')}</div>
     {historyMeetings && <div className="meeting-navigation-history">
       <button type="button" className="meeting-history-toggle" aria-expanded={historyExpanded} onClick={() => setHistoryExpanded(open => !open)}>
         <RightOutlined rotate={historyExpanded ? 90 : 0} aria-hidden="true" />历史会议
