@@ -1,4 +1,6 @@
-import { useImperativeHandle, useLayoutEffect, useRef, type ReactNode, type Ref } from 'react'
+import { VoiceRecorder } from './VoiceRecorder'
+import './VoiceRecorder.css'
+import { useImperativeHandle, useLayoutEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import type { MentionsRef } from 'antd/es/mentions'
 import { Button, Mentions, Tag } from 'antd'
 import { SendOutlined } from '@ant-design/icons'
@@ -7,6 +9,7 @@ import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates, groupMentionNames, mentionableParticipants } from '../chat/mentionCandidates'
 export interface MessageComposerHandle { mention: (displayName: string) => void; focus?: () => void; privateChat?: (participantId: string) => void }
 export function MessageComposer({ publicChat = false, placeholder = '输入消息', composerRef, attachments, onCancelReply, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { publicChat?: boolean; placeholder?: string; composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onCancelReply?: () => void; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
+  const [recording, setRecording] = useState(false)
   const inputRef = useRef<MentionsRef>(null)
   const composer = useRef<HTMLDivElement>(null)
   useLayoutEffect(() => {
@@ -113,11 +116,12 @@ export function MessageComposer({ publicChat = false, placeholder = '输入消�
           }
         }
       }}
-      ref={inputRef} variant="borderless" value={value} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder={placeholder} onChange={onChange} onPressEnter={event => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!disabled && (value.trim() || hasAttachments)) onSend(candidates) } }} />
+      ref={inputRef} variant="borderless" value={value} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder={placeholder} onChange={onChange} onPressEnter={event => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!disabled && !recording && (value.trim() || hasAttachments)) onSend(candidates) } }} />
     <div className="message-composer-footer">
       {tools && <div className="message-composer-tools">{tools}</div>}
       <div className="message-composer-actions">
-      <Button type="primary" aria-label="发送" title="发送" icon={<SendOutlined />} loading={send === 'sending'} disabled={disabled || send === 'pending_confirmation' || (!value.trim() && !hasAttachments)} onClick={() => onSend(candidates)}>发送</Button>
+      {onFiles && <VoiceRecorder onActiveChange={setRecording} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} onFile={file => onFiles([file])} />}
+      {!recording && <Button type="primary" aria-label="发送" title="发送" icon={<SendOutlined />} loading={send === 'sending'} disabled={disabled || send === 'pending_confirmation' || (!value.trim() && !hasAttachments)} onClick={() => onSend(candidates)}>发送</Button>}
       </div>
     </div>
   </div>

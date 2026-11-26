@@ -1,0 +1,14 @@
+.voice-recorder { display: inline-flex; align-items: center; gap: 4px; position: relative; font-variant-numeric: tabular-nums; }
+.voice-recorder [role="alert"] { position: absolute; bottom: 100%; right: 0; width: max-content; max-width: min(260px, 80vw); padding: 6px; background: var(--rt-surface); color: var(--rt-text); border: 1px solid var(--rt-border); z-index: 2; }
+.voice-recorder[data-active] { gap: 8px; }
+.voice-recorder-time { display: inline-flex; align-items: center; gap: 6px; }
+.voice-recorder-time::before { content: ""; width: 9px; height: 9px; background: #e74c52; border-radius: 50%; }
+.message-composer .voice-recorder[data-active] .ant-btn { min-width: 48px; min-height: 32px; }
+.message-composer .voice-recorder[data-active] .ant-btn > span { display: inline; }
+@media (max-width: 600px) {
+  .message-composer .message-composer-footer:has(.voice-recorder[data-active]) { flex-wrap: wrap; }
+  .message-composer .message-composer-actions:has(.voice-recorder[data-active]) { flex-basis: 100%; width: 100%; }
+  .voice-recorder[data-active] { width: 100%; padding-block-start: 6px; }
+  .voice-recorder-time { margin-inline-end: auto; }
+  .message-composer .voice-recorder[data-active] .ant-btn { min-width: 60px; min-height: 44px; }
+}

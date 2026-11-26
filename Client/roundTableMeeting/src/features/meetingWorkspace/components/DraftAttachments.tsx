@@ -1,3 +1,4 @@
+import { DraftVoice } from './VoiceRecorder'
 import { useEffect, useState } from 'react'
 import { Alert, Button, Modal, Spin } from 'antd'
 import { CloseOutlined, FileOutlined } from '@ant-design/icons'
@@ -36,10 +37,10 @@ export function DraftAttachments({ attachments, disabled, onChange }: { attachme
   if (!attachments.length) return null
   return <><div className="draft-attachments" role="list" aria-label="待发送附件">
     {attachments.map(file => <div key={file.attachmentId} role="listitem" title={`${file.name} · ${file.sizeBytes.toLocaleString()} 字节`} className={`draft-attachment ${attachmentPreviewKind(file) === 'image' ? 'draft-attachment-image' : 'draft-attachment-file'}`}>
-      <button type="button" className="draft-attachment-preview" aria-label={`预览附件 ${file.name}`} onClick={() => setPreviewId(file.attachmentId)}>
+      {file.localPreviewFile?.type.startsWith('audio/') && /^录音-\d+-\d+s\./.test(file.name) ? <DraftVoice file={file.localPreviewFile} /> : <button type="button" className="draft-attachment-preview" aria-label={`预览附件 ${file.name}`} onClick={() => setPreviewId(file.attachmentId)}>
       {attachmentPreviewKind(file) === 'image' ? <DraftImage file={file} /> : <FileOutlined className="draft-file-icon" />}
         <span className="draft-attachment-name">{file.name}</span>
-      </button>
+      </button>}
       <Button className="draft-attachment-remove" type="text" size="small" icon={<CloseOutlined />} aria-label={`移除附件 ${file.name}`} disabled={disabled} onClick={() => onChange(attachments.filter(item => item.attachmentId !== file.attachmentId))} />
     </div>)}
   </div><Modal open={!!preview} title={preview?.name} footer={null} destroyOnHidden onCancel={() => setPreviewId(undefined)} width="min(900px, 92vw)">
