@@ -1,14 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent } from 'react'
 import { Modal } from 'antd'
-import { ArrowUpOutlined, BorderOutlined, EditOutlined, FieldNumberOutlined, FontSizeOutlined, UndoOutlined } from '@ant-design/icons'
+import { EditOutlined, UndoOutlined } from '@ant-design/icons'
 import './ImageAnnotationEditor.css'
 
+const BoxIcon = () => <span aria-hidden="true">▭</span>
+const NumberIcon = () => <span aria-hidden="true">①</span>
+const TextIcon = () => <span aria-hidden="true">T</span>
+const ArrowIcon = () => <span aria-hidden="true">↗</span>
+
 const tools = [
-  { id: 'box', label: '框选', Icon: BorderOutlined },
+  { id: 'box', label: '框选', Icon: BoxIcon },
   { id: 'pen', label: '画笔', Icon: EditOutlined },
-  { id: 'text', label: '文字', Icon: FontSizeOutlined },
-  { id: 'number', label: '序号', Icon: FieldNumberOutlined },
-  { id: 'arrow', label: '箭头', Icon: ArrowUpOutlined },
+  { id: 'text', label: '文字', Icon: TextIcon },
+  { id: 'number', label: '序号', Icon: NumberIcon },
+  { id: 'arrow', label: '箭头', Icon: ArrowIcon },
 ] as const
 type Tool = typeof tools[number]['id']
 type Point = { x: number; y: number }
@@ -157,6 +162,19 @@ export function ImageAnnotationEditor({ url, name, onAdd, onCancel }: {
       setMarks(previous => [...previous, mark])
     }
   }
+  function zoom(factor: number) {
+    if (!canvas.current) return
+    const { clientWidth, clientHeight } = canvas.current
+    setView(previous => {
+      const scale = Math.max(1, Math.min(8, previous.scale * factor))
+      const ratio = scale / previous.scale
+      const offset = (value: number, size: number) => {
+        const limit = size * (scale - 1) / 2
+        return Math.max(-limit, Math.min(limit, value * ratio))
+      }
+      return { scale, x: offset(previous.x, clientWidth), y: offset(previous.y, clientHeight) }
+    })
+  }
   function save() {
     if (!canvas.current || saving) return
     setSaving(true); setError('')
@@ -175,7 +193,7 @@ export function ImageAnnotationEditor({ url, name, onAdd, onCancel }: {
       {tools.map(({ id, label, Icon }) => <button key={id} title={label} aria-label={label} aria-pressed={tool === id}
         disabled={saving || !!textMark} onClick={() => setTool(id)}><Icon /><small>{label}</small></button>)}
       <button title="撤销" aria-label="撤销" disabled={!marks.length || saving || !!textMark} onClick={() => setMarks(marks.slice(0, -1))}><UndoOutlined /><small>撤销</small></button>
-    </div><div className="annotation-stage" onPointerDown={start} onPointerMove={move}
+    </div><div className="annotation-workarea"><div className="annotation-stage" onPointerDown={start} onPointerMove={move}
       onPointerUp={finish} onPointerCancel={finish} onLostPointerCapture={finish}>
       {image && <canvas ref={canvas} aria-label="批注画布" width={image.naturalWidth} height={image.naturalHeight}
         style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }} />}
@@ -185,6 +203,11 @@ export function ImageAnnotationEditor({ url, name, onAdd, onCancel }: {
       }}><input autoFocus aria-label="批注文字" value={textMark.label} onChange={e => setTextMark({ ...textMark, label: e.target.value })} />
         <button type="submit">确定</button><button type="button" onClick={() => setTextMark(undefined)}>取消</button></form>}
       {error && <span className="annotation-error" role="alert">{error}</span>}
-    </div></div>
+    </div>
+    <div className="annotation-zoom" role="group" aria-label="画布缩放">
+      <button aria-label="缩小画布" disabled={!image || view.scale <= 1} onClick={() => zoom(.8)}>−</button>
+      <button aria-label="恢复适应画面" onClick={() => setView({ x: 0, y: 0, scale: 1 })}>{Math.round(view.scale * 100)}%</button>
+      <button aria-label="放大画布" disabled={!image || view.scale >= 8} onClick={() => zoom(1.25)}>＋</button>
+    </div></div></div>
   </Modal>
 }
