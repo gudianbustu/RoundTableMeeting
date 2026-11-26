@@ -11,7 +11,7 @@ import AttachmentCard, { attachmentPreviewKind } from './AttachmentCard'
 
 
 const sizeLabel = (bytes: number) => bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${bytes} 字节`
-export type AttachmentUploadHandle = { addFiles: (files: File[]) => void }
+export type AttachmentUploadHandle = { addFiles: (files: File[]) => boolean }
 export function AttachmentUpload({ uploadRef, attachments, disabled, onChange }: { uploadRef?: Ref<AttachmentUploadHandle>; attachments: ChatAttachment[]; disabled?: boolean; onChange: (files: ChatAttachment[]) => void }) {
   const input = useRef<HTMLInputElement>(null)
   const currentAttachments = useRef(attachments)
@@ -24,8 +24,8 @@ export function AttachmentUpload({ uploadRef, attachments, disabled, onChange }:
     return () => current.abort()
   }, [])
   const addFiles = (files: File[]) => {
-    if (disabled || !files.length) return
-    if (!limit) { setError('附件大小限制尚未就绪，请稍后重新添加。'); return }
+    if (disabled || !files.length) return false
+    if (!limit) { setError('附件大小限制尚未就绪，请稍后重新添加。'); return false }
     const slots = Math.max(0, 20 - currentAttachments.current.length)
     const accepted: ChatAttachment[] = []; const rejected: string[] = []
     for (const file of files) {
@@ -37,6 +37,7 @@ export function AttachmentUpload({ uploadRef, attachments, disabled, onChange }:
     }
     setError(rejected.join('；'))
     if (accepted.length) { const next = [...currentAttachments.current, ...accepted]; currentAttachments.current = next; onChange(next) }
+    return accepted.length === files.length
   }
   useImperativeHandle(uploadRef, () => ({ addFiles }))
   return <div className="attachment-upload">
@@ -98,6 +99,6 @@ export function MeetingAttachmentList({ meetingId, scope, peerParticipantId, onL
   </Drawer>
     {previewId && <AttachmentViewer key={previewId} initialId={previewId} meetingId={meetingId} scope={scope} peerParticipantId={peerParticipantId}
       beforeSequence={before} entries={items.map(item => ({ file: item.attachment, author: item.author, sequence: item.sequence }))}
-      onClose={() => setPreviewId(undefined)} />}
+      onAdded={() => setOpen(false)} onClose={() => setPreviewId(undefined)} />}
   </>
 }

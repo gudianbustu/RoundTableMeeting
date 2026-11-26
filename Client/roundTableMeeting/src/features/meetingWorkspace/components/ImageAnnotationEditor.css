@@ -1,0 +1,27 @@
+.annotation-dialog.ant-modal { top: 0; max-width: 100%; margin: 0; padding: 0; }
+.annotation-dialog .ant-modal-container { height: 100dvh; display: flex; flex-direction: column; padding: 12px; border-radius: 0; background: #242928; color: white; }
+.annotation-dialog .ant-modal-header { background: transparent; }
+.annotation-dialog .ant-modal-body { flex: 1; min-height: 0; }
+.annotation-heading, .annotation-tools { display: flex; align-items: center; gap: 6px; }
+.annotation-heading { color: white; }
+.annotation-heading strong { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.annotation-dialog button { color: white; border: 1px solid #58615f; background: #323a39; border-radius: 5px; padding: 7px; cursor: pointer; }
+.annotation-dialog button:disabled { opacity: .45; cursor: default; }
+.annotation-dialog .annotation-add { background: #236e64; }
+.annotation-space { display: flex; height: 100%; gap: 10px; }
+.annotation-tools { flex-direction: column; justify-content: center; }
+.annotation-tools button { width: 44px; height: 44px; font-size: 18px; }
+.annotation-tools button[aria-pressed=true] { border-color: #76cdbb; background: #285e55; }
+.annotation-tools small { display: none; }
+.annotation-stage { overflow: hidden; touch-action: none; flex: 1; min-height: 0; min-width: 0; display: flex; align-items: center; justify-content: center; position: relative; }
+.annotation-stage canvas { display: block; max-width: 100%; max-height: 100%; object-fit: contain; touch-action: none; cursor: crosshair; }
+.annotation-error, .annotation-text { position: absolute; bottom: 10px; padding: 6px; color: white; background: #323a39; }
+.annotation-text { display: flex; gap: 4px; max-width: 100%; }
+.annotation-text input { min-width: 0; }
+@media (max-width: 600px) {
+  .annotation-dialog .ant-modal-container { padding: max(8px,env(safe-area-inset-top)) 8px max(8px,env(safe-area-inset-bottom)); }
+  .annotation-space { flex-direction: column-reverse; }
+  .annotation-tools { flex-direction: row; }
+  .annotation-tools button { display: grid; place-items: center; padding: 2px; }
+  .annotation-tools small { display: block; font-size: 10px; }
+}

@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { AnnotationDraftContext } from './AnnotationDraftContext'
+import { ImageAnnotationEditor } from './ImageAnnotationEditor'
+import { useContext, useEffect, useRef, useState } from 'react'
 import { Modal } from 'antd'
 import { attachmentUrl, listAttachments } from '../api/messageResources'
 import type { ChatAttachment, ChatMessage } from '../types/realtimeChat'
@@ -16,7 +18,7 @@ function sameConversation(a: ChatMessage, b: ChatMessage) {
 type ViewerEntry = { file: ChatAttachment; author: string; sequence: number }
 type ViewerProps = {
   entries: ViewerEntry[]; initialId: string; meetingId: string; scope: 'public' | 'private'
-  peerParticipantId?: string; beforeSequence?: number; onClose: () => void
+  peerParticipantId?: string; beforeSequence?: number; onAdded?: () => void; onClose: () => void
 }
 
 export function ConversationAttachmentViewer({ messages, selectedId, onSelect, currentParticipantId, hasEarlierMessages }: {
@@ -36,7 +38,9 @@ export function ConversationAttachmentViewer({ messages, selectedId, onSelect, c
     onClose={() => onSelect(undefined)} />
 }
 
-export function AttachmentViewer({ initialId, entries, scope, meetingId, peerParticipantId, beforeSequence, onClose }: ViewerProps) {
+export function AttachmentViewer({ initialId, entries, scope, meetingId, peerParticipantId, beforeSequence, onAdded, onClose }: ViewerProps) {
+  const addDraft = useContext(AnnotationDraftContext)
+  const [editing, setEditing] = useState(false)
   const [open, setOpen] = useState(true)
   const [selectedId, setSelectedId] = useState(initialId)
   const [older, setOlder] = useState<ViewerEntry[]>([])
@@ -92,6 +96,12 @@ export function AttachmentViewer({ initialId, entries, scope, meetingId, peerPar
   const url = (item: ChatAttachment) => attachmentUrl(meetingId, item.attachmentId, true)
   // Keep the dialog mounted through its exit so Ant Design can restore focus to the opener.
   const close = () => setOpen(false)
+  if (editing && gallery && addDraft) return <ImageAnnotationEditor name={file.name} url={url(file)}
+    onCancel={() => setEditing(false)} onAdd={newFile => {
+      if (!addDraft(newFile)) return false
+      onAdded?.(); onClose()
+      return true
+    }} />
   return <Modal open={open} centered={!gallery} closable={false} footer={null} onCancel={close} afterClose={onClose}
     className={gallery ? 'conversation-gallery' : 'conversation-reader'} width={gallery ? '100%' : 'min(1080px, calc(100% - 18px))'}
     modalRender={modal => <div onKeyDown={event => {
@@ -100,6 +110,7 @@ export function AttachmentViewer({ initialId, entries, scope, meetingId, peerPar
       if (event.key === 'ArrowRight') { event.preventDefault(); move(1) }
     }}>{modal}</div>}
     title={<div className="attachment-viewer-heading"><div><strong>{file.name}</strong><small>{source}</small></div>
+      {gallery && addDraft && <button type="button" onClick={() => setEditing(true)}>批注</button>}
       <a href={attachmentUrl(meetingId, file.attachmentId)} target="_blank" rel="noopener noreferrer">下载</a>
       <button type="button" aria-label="关闭预览" onClick={close}>×</button></div>}>
     <div className="attachment-viewer-center">
