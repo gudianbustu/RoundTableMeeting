@@ -16,8 +16,8 @@ export type AvatarGroup = { name: string; items: AvatarChoice[] }
 export type LibraryDialog = { kind: 'createGroup'; group?: undefined; item?: undefined } | { kind: 'renameGroup' | 'deleteGroup' | 'upload' | 'renameAvatar' | 'deleteAvatar'; group: AvatarGroup; item?: AvatarChoice }
 type Reorder = (from: string, target: string, after: boolean) => void
 
-export function SortableList({ ids, groups = false, onMove, children }: {
-  ids: string[]; groups?: boolean; onMove: Reorder; children: ReactNode
+export function SortableList({ ids, groups = false, listClassName, onMove, children }: {
+  ids: string[]; groups?: boolean; listClassName?: string; onMove: Reorder; children: ReactNode
 }) {
   const container = useRef<HTMLDivElement>(null)
   const sensors = useSensors(
@@ -30,7 +30,8 @@ export function SortableList({ ids, groups = false, onMove, children }: {
   )
   const collision: CollisionDetection = args => {
     const p = args.pointerCoordinates
-    const bounds = container.current?.getBoundingClientRect()
+    const viewport = container.current?.closest('[data-sort-viewport]')
+    const bounds = (viewport ?? container.current)?.getBoundingClientRect()
     if (p && bounds && (p.x < bounds.left || p.x > bounds.right || p.y < bounds.top || p.y > bounds.bottom)) return []
     return closestCenter(args)
   }
@@ -42,7 +43,7 @@ export function SortableList({ ids, groups = false, onMove, children }: {
       if (from >= 0 && to >= 0) onMove(ids[from], ids[to], from < to)
     }}>
     <SortableContext items={ids} strategy={groups ? verticalListSortingStrategy : rectSortingStrategy}>
-      <div ref={container} className={groups ? 'library-groups' : 'library-avatars'}>{children}</div>
+      <div ref={container} className={listClassName ?? (groups ? 'library-groups' : 'library-avatars')}>{children}</div>
     </SortableContext>
   </DndContext>
 }

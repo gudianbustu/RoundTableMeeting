@@ -139,8 +139,20 @@
 }
 .workspace-topic-trigger:hover { text-decoration: underline; }
 
-.meeting-navigation-add { display: flex; justify-content: flex-end; flex: none; padding-inline: 12px; }
-.meeting-navigation-add button { min-width: 40px; min-height: 40px; }
+.meeting-navigation-add { display: flex; justify-content: flex-end; flex: none; padding-inline: 6px; margin-block-end: 6px; }
+.meeting-navigation-add .meeting-add-trigger {
+  width: 40px; height: 40px; min-width: 40px; padding: 0; border-radius: 50%;
+  background: #e4f1ea; border: 1px solid #d9e6df; color: #286457; font-size: 22px; box-shadow: none;
+}
+.meeting-navigation-add .ant-btn.meeting-add-trigger:not(:disabled):is(:hover, :active, .ant-dropdown-open) { background: #e4f1ea; color: #286457; border-color: #d9e6df; }
+:root[data-appearance-mode="dark"] .meeting-navigation-add .ant-btn.meeting-add-trigger:not(:disabled) { background: #2b4238; color: #b8dac7; border-color: #425d4e; }
+.meeting-add-menu .ant-dropdown-menu {
+  min-width: 96px; padding: 8px 0; border: 1px solid var(--rt-border); border-radius: 8px;
+  background: var(--rt-surface); box-shadow: 0 4px 14px rgb(0 0 0 / 8%);
+}
+.meeting-add-menu .ant-dropdown-menu .ant-dropdown-menu-item {
+  min-height: 32px; padding: 4px 15px; font-size: 16px; line-height: 24px;
+}
 .workspace-home { position: relative; }
 .workspace-home-prompt { display: grid; place-items: center; color: var(--rt-secondary); }
 .workspace-home-errors { position: absolute; inset: 0 0 auto; z-index: 1; }
@@ -156,4 +168,16 @@
   .workspace-home > .meeting-navigation .meeting-navigation-list { padding-inline: 0; }
   .workspace-home .meeting-history-toggle { min-height: 44px; }
   .workspace-home-prompt { display: none; }
+}
+
+.meeting-navigation-item:has([data-dragging]) { position: relative; z-index: 3; }
+.meeting-navigation-select[data-dragging] { position: relative; z-index: 1; border-radius: 8px; background: var(--rt-surface); box-shadow: 0 4px 14px #15392c33; }
+.meeting-navigation-select[data-insert]::after {
+  content: ""; position: absolute; inset-inline: 0; height: 6px; background: radial-gradient(circle at 3px center, #39866d 3px, transparent 3.1px), radial-gradient(circle at calc(100% - 3px) center, #39866d 3px, transparent 3.1px), linear-gradient(#39866d, #39866d) center / calc(100% - 6px) 2px no-repeat; pointer-events: none;
+}
+.meeting-navigation-select[data-insert="before"]::after { top: 0; }
+.meeting-navigation-select[data-insert="after"]::after { bottom: 0; }
+
+@media (max-width: 1000px) {
+  .meeting-navigation-add { padding-inline: 10px; margin-block-end: -10px; }
 }

@@ -1,3 +1,4 @@
+import { useAuthentication } from '@/features/authentication'
 import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
@@ -34,6 +35,7 @@ export function hasUnknownAgentActivity(participants: Participant[], activities:
 }
 
 export function MeetingWorkspacePage() {
+  const { state: identity } = useAuthentication()
   const workspace = useMeetingWorkspace()
   const unread = useAccountUnread()
   const unreadStore = unread?.store
@@ -108,7 +110,7 @@ export function MeetingWorkspacePage() {
   const listError = workspace.listError && <Alert type="error" showIcon title={workspace.listError.message}
     action={<Button size="small" loading={workspace.loading} onClick={workspace.refresh}>重试加载会议列表</Button>} />
   const navigation = (
-    <MeetingNavigation unreadCounts={unreadCounts} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} meetings={workspace.lists.active} historyMeetings={workspace.lists.history} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => { setNavigationOpen(false); setCreateOpen(true) }} onJoin={() => { setNavigationOpen(false); setJoinOpen(true) }} />
+    <MeetingNavigation orderOwner={identity.status === 'authenticated' ? identity.user.userId : undefined} unreadCounts={unreadCounts} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} meetings={workspace.lists.active} historyMeetings={workspace.lists.history} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => { setNavigationOpen(false); setCreateOpen(true) }} onJoin={() => { setNavigationOpen(false); setJoinOpen(true) }} />
   )
   const members = workspace.details?.participants.filter(person => person.membershipState !== 'left') ?? []
   const onlineMembers = members.filter(person => presence[person.participantId] === 'online')
