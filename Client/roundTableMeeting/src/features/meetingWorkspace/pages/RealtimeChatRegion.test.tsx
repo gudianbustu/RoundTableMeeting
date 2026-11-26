@@ -3,6 +3,8 @@ import type { MessageComposerHandle } from '../components/MessageComposer'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { ChatConnectionCallbacks } from '../api/meetingChatConnection'
+import * as unreadContext from '../chat/AccountUnreadProvider'
+import { AccountUnreadStore } from '../chat/accountUnreadStore'
 import { createInitialChatState } from '../chat/messageReducer'
 import { RealtimeChatRegion, type ChatSessionCache } from './RealtimeChatRegion'
 
@@ -17,7 +19,7 @@ vi.mock('../api/meetingChatConnection', () => ({ MeetingChatConnection: class {
 } }))
 vi.mock('../components/MessageComposer', () => ({ MessageComposer: ({ value, onChange, onSend, send, disabled }: { value: string; onChange: (value: string) => void; onSend: () => void; send: string; disabled: boolean }) => <><textarea aria-label="draft" disabled={disabled} value={value} onChange={event => onChange(event.target.value)} /><button onClick={onSend}>Send</button><span data-testid="send-state">{send}</span></> }))
 vi.mock('../components/ChatConnectionStatus', () => ({ ChatConnectionStatus: ({ onRetry }: { onRetry: () => void }) => <button onClick={onRetry}>Reconnect</button> }))
-vi.mock('../components/MessageTimeline', () => ({ MessageTimeline: ({ messages, pendingMessage }: { messages: { content: string }[]; pendingMessage?: ReactNode }) => <><div data-testid="messages">{messages.map(m => m.content).join(',')}</div>{pendingMessage}</> }))
+vi.mock('../components/MessageTimeline', () => ({ MessageTimeline: ({ messages, pendingMessage }: { messages: { messageId: string; content: string }[]; pendingMessage?: ReactNode }) => <><div role="log" data-testid="messages">{messages.map(m => <span key={m.messageId} data-message-id={m.messageId}>{m.content}</span>)}</div>{pendingMessage}</> }))
 afterEach(() => { cleanup(); mocks.callbacks.length = 0; vi.clearAllMocks() })
 
 it('retires the previous connection on manual reconnect while preserving the unsent draft', async () => {
@@ -260,4 +262,52 @@ it('keeps a submitted attachment message pending on unmount and confirms it with
   expect(mocks.upload).toHaveBeenCalledOnce()
   expect(mocks.send).toHaveBeenCalledOnce()
   expect(screen.getByLabelText('draft')).toHaveValue('')
+})
+it('hides only the visible current-scope reminder while account counts are still pending', async () => {
+  const room = '11111111-1111-4111-8111-111111111111'
+  const store = new AccountUnreadStore('reader', () => {})
+  const bucket = { count: 1, last: 2, through: 2, read: 0 }
+  const saved = { participantId: 'me', through: 2, scopes: { public: { ...bucket }, bob: { ...bucket } } }
+  store.meetings.set(room, saved)
+  const read = vi.spyOn(store, 'readThrough').mockImplementation(() => undefined)
+  const context = vi.spyOn(unreadContext, 'useAccountUnread').mockReturnValue({ store, revision: 1 })
+  const focus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+  const bounds = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+    return new DOMRect(0, this.dataset.messageId === 'offscreen' ? 300 : 0, 100, 100)
+  })
+  const base = { meetingId: room, visibility: 'public' as const, author: { participantId: 'alice', displayName: 'Alice', kind: 'human' as const }, mentions: [], createdAt: new Date() }
+  const editor = createRef<MessageComposerHandle>()
+  try {
+    mocks.list.mockResolvedValue({ items: [], hasMoreBefore: false, hasMoreAfter: false })
+    const view = () => <RealtimeChatRegion meetingId={room} composerRef={editor} participants={[]} />
+    const page = render(view())
+    await waitFor(() => expect(mocks.list).toHaveBeenCalled())
+    const notify = async (messageId: string, sequence: number) => {
+      await act(async () => { mocks.callbacks.at(-1)!.onMessage({ ...base, messageId, sequence, content: messageId }) })
+    }
+    expect(screen.getByText('公开讨论有新消息')).toBeInTheDocument()
+    await notify('visible', 2)
+    expect(read).toHaveBeenCalledWith(room, 'public', 2)
+    expect(screen.queryByText('公开讨论有新消息')).toBeNull()
+    expect(screen.getByText('参与者发来新私聊')).toBeInTheDocument()
+    saved.scopes.public.last = 3
+    page.rerender(view())
+    await notify('offscreen', 3)
+    expect(screen.getByText('公开讨论有新消息')).toBeInTheDocument()
+    expect(read).not.toHaveBeenCalledWith(room, 'public', 3)
+    await act(async () => {
+      mocks.callbacks.at(-1)!.onMessage({ ...base, messageId: 'own', sequence: 4, content: 'own', author: { ...base.author, participantId: 'me' } })
+    })
+    expect(screen.getByText('公开讨论有新消息')).toBeInTheDocument()
+    focus.mockReturnValue(false)
+    saved.scopes.public.last = 5
+    page.rerender(view())
+    await notify('unfocused', 5)
+    expect(read).not.toHaveBeenCalledWith(room, 'public', 5)
+    await act(async () => { editor.current?.privateChat?.('bob') })
+    expect(screen.getByText('参与者发来新私聊')).toBeInTheDocument()
+    expect(screen.getByText('公开讨论有新消息')).toBeInTheDocument()
+  } finally {
+    bounds.mockRestore(); focus.mockRestore(); context.mockRestore(); store.dispose()
+  }
 })

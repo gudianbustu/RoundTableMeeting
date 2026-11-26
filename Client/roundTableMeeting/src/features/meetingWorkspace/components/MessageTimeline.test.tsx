@@ -89,3 +89,42 @@ it.each([false, true])('keeps the reader in history until a jump is requested (r
     expect(scrollTo).toHaveBeenCalledWith({ top: 800, behavior: reduced ? 'instant' : 'smooth' })
   } finally { media.mockRestore() }
 })
+
+
+it('keeps a restored bottom lock when a delayed scroll event arrives after layout grows', () => {
+  const changed = vi.fn()
+  const props = { loading: false, hasEarlierMessages: false, onLoadEarlier: vi.fn(), newMessageCount: 0,
+    onNewMessageClick: vi.fn(), onScrollPositionChanged: changed, scrollPosition: { atBottom: true } }
+  const view = render(<MessageTimeline {...props} messages={messages} />)
+  const log = screen.getByRole('log')
+  let height = 1000, top = 0
+  Object.defineProperties(log, {
+    scrollHeight: { get: () => height }, clientHeight: { value: 200 },
+    scrollTop: { get: () => top, set: (value: number) => { top = Math.min(value, height - 200) } },
+  })
+  view.rerender(<MessageTimeline {...props} messages={[...messages]} />)
+  expect(top).toBe(800)
+  height = 1100
+  fireEvent.scroll(log)
+  expect(changed).not.toHaveBeenCalled()
+  view.rerender(<MessageTimeline {...props} messages={[...messages]} />)
+  expect(top).toBe(900)
+  expect(screen.queryByRole('button', { name: '最新消息' })).toBeNull()
+})
+
+it('restores the saved history row and offset when a returning conversation reflows', () => {
+  const props = { loading: false, hasEarlierMessages: false, onLoadEarlier: vi.fn(), newMessageCount: 0,
+    onNewMessageClick: vi.fn(), scrollPosition: { atBottom: false, messageId: '1', offset: -12 } }
+  const view = render(<MessageTimeline {...props} messages={messages} />)
+  const log = screen.getByRole('log')
+  const row = screen.getAllByRole('article')[1]
+  let rowTop = 350
+  vi.spyOn(row, 'getBoundingClientRect').mockImplementation(() => new DOMRect(0, rowTop - log.scrollTop, 300, 100))
+  view.rerender(<MessageTimeline {...props} messages={[...messages]} />)
+  expect(log.scrollTop).toBe(362)
+  rowTop += 75
+  fireEvent.scroll(log)
+  view.rerender(<MessageTimeline {...props} messages={[...messages]} />)
+  expect(row.getBoundingClientRect().top).toBe(-12)
+  expect(screen.getByRole('button', { name: '最新消息' })).toBeInTheDocument()
+})

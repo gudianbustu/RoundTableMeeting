@@ -43,6 +43,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
   const processedFocus = useRef<string | undefined>(undefined)
   const itemsRef = useRef<HTMLDivElement>(null)
   const position = useRef<ChatScrollPosition>(scrollPosition ?? { atBottom: true })
+  const restoredTop = useRef<number | undefined>(undefined)
   const jumpTarget = useRef<number | undefined>(undefined)
   const jumpDeadline = useRef<number | undefined>(undefined)
   useEffect(() => () => window.clearTimeout(jumpDeadline.current), [])
@@ -52,6 +53,10 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
   }, [atBottom, newMessageCount, onNewMessageClick])
   const capture = useCallback(() => {
     const element = scrollRef.current; if (!element) return
+    // A scroll event from restore() may arrive after content has grown.
+    // Keep the saved intent until the viewport actually moves independently.
+    if (jumpTarget.current === undefined && restoredTop.current === element.scrollTop) return
+    restoredTop.current = undefined
     if (jumpTarget.current !== undefined) {
       if (element.scrollTop + 2 < Math.min(jumpTarget.current, element.scrollHeight - element.clientHeight)) return
       jumpTarget.current = undefined
@@ -83,6 +88,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
       const row = Array.from(element.querySelectorAll<HTMLElement>('[data-message-id]')).find(item => item.dataset.messageId === position.current.messageId)
       if (row) element.scrollTop += row.getBoundingClientRect().top - element.getBoundingClientRect().top - (position.current.offset ?? 0)
     }
+    restoredTop.current = element.scrollTop
   }, [])
   useLayoutEffect(restore, [messages, pendingMessage, restore])
   useLayoutEffect(() => {
@@ -96,7 +102,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
       row.focus({ preventScroll: true }); onScrollPositionChanged?.(position.current)
     }
   }, [focusMessageId, focusRevision, messages, restore, onScrollPositionChanged])
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = scrollRef.current; if (!element) return
     element.addEventListener('scroll', capture, { passive: true })
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(restore)
@@ -114,6 +120,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
   const jumpToLatest = () => {
     const element = scrollRef.current
     if (!element) return
+    restoredTop.current = undefined
     const target = element.scrollHeight - element.clientHeight
     const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
     jumpTarget.current = smooth ? target : undefined

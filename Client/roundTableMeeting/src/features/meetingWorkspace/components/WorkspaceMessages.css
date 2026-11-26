@@ -5,7 +5,7 @@
   box-shadow: none;
   margin: 0;
 }
-.message-timeline .message-timeline-scroll { padding: 6px clamp(10px, 2vw, 26px); }
+.message-timeline .message-timeline-scroll { overflow-anchor: none; padding: 6px clamp(10px, 2vw, 26px); }
 .message-timeline .message-item[data-message-id] {
   display: flex;
   align-items: flex-start;

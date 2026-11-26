@@ -83,14 +83,14 @@ export function RealtimeChatRegion(props: ChatProps) {
         { key: 'public', label: <span>公开讨论 {notices.publicUnread > 0 && <Badge count={notices.publicUnread} overflowCount={999} title={`公屏未读 ${notices.publicUnread >= 1000 ? "999+" : notices.publicUnread} 条`} />}</span>, closable: false },
         ...(tabs[meetingId] ?? []).map(id => ({ key: id, label: <span className="private-tab-name">{props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'} {privateBadge(id)}</span> })),
       ]} />}
-    <ScopedChat key={`${key}:${props.readOnly ? 'history' : 'active'}`}  {...props} notificationControl={<div aria-live="polite" className="chat-message-notifications">
-      {Object.keys(notices.pending).map(id => <Button key={id} size="small" onClick={() => selectPeer(id === 'public' ? undefined : id)}>{id === 'public' ? '公开讨论有新消息' : `${props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}发来新私聊`}{id !== 'public' && privateBadge(id)}</Button>)}
+    <ScopedChat key={`${key}:${props.readOnly ? 'history' : 'active'}`}  {...props} notificationControl={seenThrough => <div aria-live="polite" className="chat-message-notifications">
+      {Object.keys(notices.pending).filter(id => id !== (peerId ?? 'public') || !shared || (saved?.scopes[id]?.last ?? 0) > seenThrough).map(id => <Button key={id} size="small" onClick={() => selectPeer(id === 'public' ? undefined : id)}>{id === 'public' ? '公开讨论有新消息' : `${props.participants.find(p => p.participantId === id)?.displayName ?? '参与者'}发来新私聊`}{id !== 'public' && privateBadge(id)}</Button>)}
       {notices.failed && <Button size="small" onClick={notices.retry}>新消息提醒同步失败，重试</Button>}
     </div>} onNotificationMessage={notices.receive} onNotificationSnapshot={notices.synchronize} composerRef={editor} peerId={peerId} scopeControl={peerId && <span>私聊 · 仅你与{peer?.displayName ?? '对方'}可见</span>} initialState={cache.current.get(key)} onStateChanged={retain} onPrivateChat={selectPeer} onMeetingUnavailable={unavailable} />
   </div>
 }
 
-function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMeetingDetailsChanged, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { notificationControl: ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
+function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMeetingDetailsChanged, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { notificationControl: (seenThrough: number) => ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
   const [readingWidth, setReadingWidth] = useState<number>()
   const savedInitial = useRef(initialState)
   const generation = useRef(initialState?.generation ?? 1)
@@ -229,15 +229,36 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
   const unreadStore = useAccountUnread()?.store
   const region = useRef<HTMLElement>(null)
   const initialized = unreadStore?.meetings.has(meetingId)
+  const [seenThrough, setSeenThrough] = useState(0)
+  const activeScope = peerId ?? 'public'
+  const pendingSequence = unreadStore?.meetings.get(meetingId)?.scopes[activeScope]?.last
+  const confirmVisible = useCallback((sequence: number) => {
+    if (!unreadStore || document.visibilityState !== 'visible' || !document.hasFocus()) return
+    setSeenThrough(previous => Math.max(previous, sequence))
+    void unreadStore.readThrough(meetingId, activeScope, sequence)
+  }, [meetingId, activeScope, unreadStore])
+
+  // A count refresh can paint before IntersectionObserver delivers the visible row.
+  useLayoutEffect(() => {
+    if (!initialized || readOnly || !pendingSequence || pendingSequence <= seenThrough) return
+    const log = region.current?.querySelector<HTMLElement>('[role="log"]')
+    const message = messages.find(item => item.sequence === pendingSequence)
+    if (!log || !message) return
+    const row = log.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(message.messageId)}"]`)
+    if (!row) return
+    const area = log.getBoundingClientRect()
+    const rect = row.getBoundingClientRect()
+    if (Math.max(area.top, rect.top, 0) < Math.min(area.bottom, rect.bottom, window.innerHeight)
+      && Math.max(area.left, rect.left, 0) < Math.min(area.right, rect.right, window.innerWidth))
+      confirmVisible(pendingSequence)
+  }, [confirmVisible, initialized, messages, pendingSequence, readOnly, seenThrough])
+
   useEffect(() => {
     const log = region.current?.querySelector<HTMLElement>('[role="log"]')
     if (!log || !unreadStore || !initialized || readOnly || !window.IntersectionObserver) return
     const sequences = new Map(messages.map(message => [message.messageId, message.sequence]))
     const visible = new Set<number>()
-    const markRead = () => {
-      if (visible.size && document.visibilityState === 'visible' && document.hasFocus())
-        void unreadStore.readThrough(meetingId, peerId ?? 'public', Math.max(...visible))
-    }
+    const markRead = () => { if (visible.size) confirmVisible(Math.max(...visible)) }
     const observer = new IntersectionObserver(entries => {
       for (const entry of entries) {
         const sequence = sequences.get((entry.target as HTMLElement).dataset.messageId ?? '')
@@ -247,12 +268,12 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
         }
       }
       markRead()
-    }, { root: log })
+    }, { threshold: [0, 0.000001] })
     log.querySelectorAll('[data-message-id]').forEach(row => observer.observe(row))
     document.addEventListener('visibilitychange', markRead)
     window.addEventListener('focus', markRead)
     return () => { observer.disconnect(); document.removeEventListener('visibilitychange', markRead); window.removeEventListener('focus', markRead) }
-  }, [unreadStore, initialized, meetingId, peerId, messages, readOnly])
+  }, [confirmVisible, unreadStore, initialized, messages, readOnly])
   useEffect(() => { lastApplied.current = state.lastAppliedSequence }, [state.lastAppliedSequence])
   useEffect(() => {
     if (readOnly || state.highWatermarkSequence <= state.lastAppliedSequence || state.history !== 'caughtUp' || gapRepairing.current) return
@@ -349,7 +370,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
       onClick: ({ key }) => onPrivateChat(key === 'public' ? undefined : key),
     }}><Button type="text" size="small" aria-label="选择历史会话">{peerId ? '私聊 · ' + (participants.find(p => p.participantId === peerId)?.displayName ?? '参与者') : '历史记录'} · 仅可查看退出前有权访问的消息 ⌄</Button></Dropdown> : scopeControl}</div>}
     <MessageTimeline onWidthChange={setReadingWidth} onLocate={locate} pendingMessage={state.failedSubmission && state.send !== 'idle' ? <PendingMessage key={state.failedSubmission.clientSubmissionId} submission={state.failedSubmission} status={state.send} attachments={state.attachments} readOnly={readOnly} onRetry={retry} /> : undefined} messages={messages} hasEarlierMessages={state.hasEarlierMessages} loading={state.history === 'loading' || state.history === 'appending'} onLoadEarlier={() => { if (state.earliestLoadedSequence) void load({ beforeSequence: state.earliestLoadedSequence, limit: 100 }) }} newMessageCount={state.newMessageCount} onNewMessageClick={clearNewCount} onReply={replyTo} onPrivateChat={onPrivateChat} currentParticipantId={participants.find(p => p.isCurrentUser)?.participantId} focusMessageId={focusMessageId} focusRevision={focusRevision} canReply={!locked} scrollPosition={savedPosition.current} onScrollPositionChanged={retainScroll} />
-    {notificationControl}
+    {notificationControl(seenThrough)}
     {readOnly ? <div className="workspace-history-end">已退出会议，记录截止于退出时。{browseAttachments}</div> : <MessageComposer publicChat={!peerId} placeholder={peerId ? '发给' + (participantNames.get(peerId) ?? '对方') + '…' : '发到公开讨论…'} onCancelReply={state.replyTo ? () => dispatch({ ...scope(), type: 'replyChanged', message: undefined }) : undefined} composerRef={composerRef} onFiles={files => uploader.current?.addFiles(files)} attachments={<> {state.replyTo && <div className="message-reply-context"><Tag>回复 {participantNames.get(state.replyTo.author.participantId ?? '') ?? state.replyTo.author.displayName}</Tag><span>{state.replyTo.content.slice(0, 120) || '附件消息'}</span><Button type="text" size="small" aria-label="取消回复" title="取消回复" icon={<CloseOutlined />} disabled={locked} onClick={() => dispatch({ ...scope(), type: 'replyChanged', message: undefined })} /></div>}<DraftAttachments attachments={state.attachments} disabled={locked} onChange={attachments => dispatch({ ...scope(), type: 'attachmentsChanged', attachments })} /></>} tools={<>{!readOnly && <AttachmentUpload uploadRef={uploader} attachments={state.attachments} disabled={locked} onChange={attachments => dispatch({ ...scope(), type: 'attachmentsChanged', attachments })} />}{browseAttachments}{composerTools}</>} value={state.draft} send={state.send} participants={participants} hasAttachments={state.attachments.length > 0} disabled={locked} onChange={draft => dispatch({ ...scope(), type: 'draftChanged', draft })} onSend={submit} />}
   </section>
 }
