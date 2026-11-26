@@ -30,7 +30,7 @@ it('copies the complete multiline Agent prompt on HTTP', async () => {
   render(<InviteMeetingDialog open invitation={invitation} onCancel={() => {}} mcpUrl="http://test.local/mcp" />)
   fireEvent.click(screen.getByRole('radio', { name: 'AI Agent' }))
   fireEvent.change(screen.getByLabelText('Agent 显示名称'), { target: { value: '助手😀' } })
-  fireEvent.click(await screen.findByRole('radio', { name: '狐狸' }))
+  expect(await screen.findByRole('radio', { name: '狐狸' })).toBeChecked()
   fireEvent.click(screen.getByRole('button', { name: '生成邀请' }))
   expect(bind).toHaveBeenCalledWith(invitation.meetingId, '助手😀', 'fox')
   fireEvent.click(await screen.findByRole('button', { name: '复制 MCP 接入提示词' }))

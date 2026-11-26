@@ -11,6 +11,7 @@ label.rt-avatar-cell { cursor: pointer; }
 .rt-avatar-scroll .rt-avatar-grid { grid-template-columns: repeat(8, minmax(0, 1fr)); justify-items: center; }
 .rt-avatar-scroll .rt-avatar-cell { max-width: 40px; border-radius: 50%; }
 @media (max-width: 600px) { .rt-avatar-scroll .rt-avatar-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.rt-avatar-filter { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; }
 .rt-avatar-form { display: grid; gap: 12px; min-width: 0; }
 .profile-avatar-button { padding: 0; border: 0; cursor: pointer; }
 .rt-avatar-filename { overflow-wrap: anywhere; max-width: 100%; }

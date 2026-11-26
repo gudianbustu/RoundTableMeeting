@@ -13,11 +13,17 @@ export function AgentAvatarInvitation({ meetingId, meetingCode, mcpUrl, onCopy }
 }) {
   const catalog = useAvatarCatalog(true)
   const [name, setName] = useState('')
-  const [selection, setSelection] = useState('')
+  const [filter, setFilter] = useState('')
+  const [randomPosition] = useState(() => Math.random())
+  const [chosenId, setChosenId] = useState('')
   const [prompt, setPrompt] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const selected = catalog.items.find(item => item.id === selection)
+  const selected = catalog.items.find(item => item.id === chosenId)
+    ?? catalog.items[Math.floor(randomPosition * catalog.items.length)]
+  const query = filter.trim().toLowerCase()
+  const visibleItems = query ? catalog.items.filter(item => item.name.toLowerCase().includes(query)) : catalog.items
+
   async function generate() {
     if (busy || !name.trim() || !selected) return
     setBusy(true); setError('')
@@ -31,9 +37,14 @@ export function AgentAvatarInvitation({ meetingId, meetingCode, mcpUrl, onCopy }
     <label htmlFor="invite-agent-name">Agent 显示名称</label>
     <Input id="invite-agent-name" placeholder="输入 Agent 显示名称" maxLength={64} allowClear disabled={busy}
       value={name} onChange={e => { setName(e.target.value); setPrompt(''); setError('') }} />
-    <strong>选择头像</strong>
+    <div className="rt-avatar-filter">
+      <strong>选择头像</strong>
+      <Input size="small" allowClear aria-label="筛选头像" placeholder="按头像名称筛选"
+        value={filter} onChange={e => setFilter(e.target.value)} />
+    </div>
     <AvatarCatalogContent catalog={catalog}><div className="rt-avatar-scroll">
-      <AvatarGrid items={catalog.items} selected={selection} disabled={busy} onSelect={id => { setSelection(id); setPrompt(''); setError('') }} />
+      {visibleItems.length ? <AvatarGrid items={visibleItems} selected={selected?.id} disabled={busy} onSelect={id => { setChosenId(id); setPrompt(''); setError('') }} />
+        : <span role="status">没有匹配的头像</span>}
     </div></AvatarCatalogContent>
     {selected && <Flex align="center" gap="small"><span className="rt-avatar-preview">
       <AvatarImage src={selected.imageUrl} fallback={Array.from(selected.name)[0]} />
