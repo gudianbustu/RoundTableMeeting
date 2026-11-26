@@ -11,20 +11,21 @@ const user = { userId: 'user-1', username: 'alice', nickname: 'Alice', isAdmin: 
 afterEach(cleanup)
 
 describe('user management components', () => {
-  it('binds username conflict and clears only the initial password', async () => {
+  it('submits identity fields and preserves them when the username conflicts', async () => {
     const onSubmit = vi.fn()
     const actor = userEvent.setup()
     const view = render(<ConfigProvider><CreateUserForm open loading={false} onCancel={vi.fn()} onSubmit={onSubmit} /></ConfigProvider>)
     await actor.type(screen.getByLabelText('登录账号'), 'alice')
     await actor.type(screen.getByLabelText('昵称'), 'Alice')
-    await actor.type(screen.getByLabelText('初始密码'), 'secret')
+    expect(screen.queryByLabelText('初始密码')).toBeNull()
+    await actor.click(screen.getByRole('button', { name: '添加账号' }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledWith({ username: 'alice', nickname: 'Alice' }))
 
     view.rerender(<ConfigProvider><CreateUserForm open loading={false} error={{ kind: 'problemDetails', code: 'username_conflict', message: 'conflict' }} onCancel={vi.fn()} onSubmit={onSubmit} /></ConfigProvider>)
 
     await waitFor(() => expect(screen.getByText('这个登录账号已被使用，请换一个。')).toBeInTheDocument())
     expect(screen.getByLabelText('登录账号')).toHaveValue('alice')
     expect(screen.getByLabelText('昵称')).toHaveValue('Alice')
-    expect(screen.getByLabelText('初始密码')).toHaveValue('')
   })
 
   it('applies the frozen field limits', async () => {
@@ -34,7 +35,6 @@ describe('user management components', () => {
     expect(submit).not.toHaveBeenCalled()
     expect(screen.getByLabelText('登录账号')).toHaveAttribute('maxlength', '128')
     expect(screen.getByLabelText('昵称')).toHaveAttribute('maxlength', '64')
-    expect(screen.getByLabelText('初始密码')).toHaveAttribute('maxlength', '256')
   })
 
   it('disables only the busy target row commands', () => {

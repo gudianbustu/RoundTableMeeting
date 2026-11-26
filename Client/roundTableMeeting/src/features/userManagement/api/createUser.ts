@@ -11,7 +11,7 @@ const toUser = (value: Partial<UserSummaryDto>): UserSummaryViewModel => {
 
 export async function createUser(input: CreateUserInput, signal?: AbortSignal): Promise<UserSummaryViewModel> {
   try {
-    const body: CreateUserRequest = { username: input.username, nickname: input.nickname, initialPassword: input.initialPassword }
+    const body: CreateUserRequest = { username: input.username, nickname: input.nickname }
     const value = await getApiClient().api.users.post(body, signal ? { options: [new AbortRequestOption(signal)] } : undefined)
     return toUser(value ?? {})
   } catch (error) { throw toApiError(error) }
