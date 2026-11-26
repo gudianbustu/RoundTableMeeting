@@ -89,6 +89,7 @@ logs/
 .local/
 .agents/skills/generated/
 .agents/skills/gitnexus/
+.agents/skills/gitnexus-*/
 CLAUDE.md
 publish/
 docs/设计图
