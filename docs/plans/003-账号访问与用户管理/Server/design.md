@@ -206,7 +206,7 @@ UsersController 统一使用 AdminOnly 策略，由服务端依据数据库当�
 
 `GET /api/users` 返回按规范化用户名稳定排序的完整数组，元素只包含 `userId`、`username`、`nickname`、`isAdmin`。面向小规模账号管理，不增加分页、搜索或总数元数据。
 
-`POST /api/users` 接收用户名、昵称和初始密码。用户名冲突返回 `409`、`code = username_conflict`；输入错误返回 `400 validation_failed`。成功返回 `201` 和新账号最小 DTO。新账号立即可以登录，创建过程不修改配置种子。
+`POST /api/users` 接收用户名和昵称。管理员开户初始密码通过服务端配置 `Authentication:NewAccountInitialPassword` 提供，可用环境变量 `Authentication__NewAccountInitialPassword` 设置。缺失、全空白或超过 256 个字符时，开户返回 `503 account_initial_password_configuration_invalid`，普通注册继续使用用户提交的密码。用户名冲突返回 `409`、`code = username_conflict`；输入错误返回 `400 validation_failed`。成功返回 `201` 和新账号最小 DTO。新账号立即可以登录，创建过程不修改配置种子。
 
 `username_conflict` 必须登记到统一 `ProblemDetailsFactory`，通过 `ApiProblemDetailsWriter` 输出安全固定标题、detail 和 traceId；Controller 不自行构造 ProblemDetails。OpenAPI operation 必须声明 `400/401/403/409/415/500`，Kiota 生成结果必须包含对应错误映射。
 

@@ -13,6 +13,9 @@ public sealed class AuthenticationOptions
     /// </summary>
     public string? InitialAdminUsername { get; set; }
 
+    /// <summary>管理员创建普通账号时使用的实例初始密码。</summary>
+    public string? NewAccountInitialPassword { get; set; }
+
     public const string SectionName = "Authentication";
 
     /// <summary>

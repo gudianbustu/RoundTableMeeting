@@ -293,9 +293,9 @@ TestApplicationFactory 注入临时数据库、两个测试账号、AllowedOrigi
 | UM-V02 | P1 | 列表网络失败后重试 | 显示 ErrorState；重试成功替换为最新完整列表 |
 | UM-V03 | P1 | StrictMode、重复加载与页面卸载 | 旧请求被取消，晚返回结果不覆盖新状态且无卸载后更新 |
 | UM-V04 | P0 | 添加账号成功 | 只提交一次，关闭弹窗、提示成功并刷新列表 |
-| UM-V05 | P0 | 添加 validation_failed | 字段错误绑定 username、nickname、initialPassword，表单保持可修正 |
+| UM-V05 | P0 | 添加 validation_failed | 字段错误绑定 username、nickname，表单保持可修正 |
 | UM-V06 | P1 | 添加 username_conflict | 显示用户名冲突，不关闭弹窗，不误报网络错误 |
-| UM-V07 | P0 | 添加请求失败 | 初始密码被清空，用户名和昵称保留，不把密码写入日志或持久化状态 |
+| UM-V07 | P0 | 添加请求失败 | 用户名和昵称保留，不把密码写入日志或持久化状态 |
 | UM-V08 | P0 | 修改其他账号昵称成功 | 刷新列表，不调用 refreshCurrentUser |
 | UM-V09 | P0 | 修改当前账号昵称成功 | 刷新列表并调用 refreshCurrentUser，CurrentUserBar 更新昵称 |
 | UM-V10 | P1 | 当前账号昵称成功后的两个刷新 | 列表刷新与 refreshCurrentUser 独立执行；任一失败不阻止另一个、不回滚服务端成功结果，并显示对应同步错误 |
@@ -322,7 +322,7 @@ TestApplicationFactory 注入临时数据库、两个测试账号、AllowedOrigi
 | 编号 | 优先级 | 场景 | 预期 |
 | --- | --- | --- | --- |
 | UM-B01 | P0 | 已登录后从布局进入 /users | 菜单仅管理员可见，页面列表可读；普通用户直达无权限；未登录转到登录页 |
-| UM-B02 | P0 | 账号 A 添加账号 B | B 出现在列表并可用输入的初始密码登录 |
+| UM-B02 | P0 | 账号 A 添加账号 B | B 出现在列表并可用本实例配置的初始密码登录 |
 | UM-B03 | P0 | A 修改 B 昵称 | 列表立即显示新昵称；B 刷新或重新登录后的当前用户栏显示新昵称 |
 | UM-B04 | P0 | A 重置 B 密码 | B 的旧密码新登录失败，123456 成功；重置前已打开的 B 会话仍保持登录 |
 | UM-B05 | P0 | 普通用户 B 管理 A 或新增账号 C | 403 forbidden，不查询目标或写库，不清除 B 的登录 |

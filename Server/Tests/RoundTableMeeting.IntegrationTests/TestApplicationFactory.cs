@@ -102,6 +102,7 @@ public sealed class TestApplicationFactory : WebApplicationFactory<Program>
             {
                 ["Attachment:RootPath"] = Path.Combine(databaseDirectory, "attachments"),
                 ["Database:ConnectionString"] = $"Data Source={DatabasePath};Mode=ReadWriteCreate;Default Timeout=5;Foreign Keys=True;Pooling=False"
+                , ["Authentication:NewAccountInitialPassword"] = Guid.NewGuid().ToString("N")
                 , ["Authentication:InitialAdminUsername"] = "alice"
                 , ["Authentication:AllowedOrigins:0"] = "http://localhost:5173"
                 , ["Authentication:SeedAccounts:0:Username"] = "alice"

@@ -28,6 +28,12 @@ describe('user management components', () => {
     expect(screen.getByLabelText('昵称')).toHaveValue('Alice')
   })
 
+  it('explains an invalid instance password configuration in the form', () => {
+    const error = { kind: 'problemDetails' as const, code: 'account_initial_password_configuration_invalid', message: 'Service unavailable', fieldErrors: { configuration: ['Invalid configuration'] } }
+    render(<ConfigProvider><CreateUserForm open loading={false} error={error} onCancel={vi.fn()} onSubmit={vi.fn()} /></ConfigProvider>)
+    expect(screen.getByText('当前实例尚未配置有效的开户初始密码，请联系部署管理员。')).toBeInTheDocument()
+  })
+
   it('applies the frozen field limits', async () => {
     const submit = vi.fn()
     render(<ConfigProvider><CreateUserForm open loading={false} onCancel={vi.fn()} onSubmit={submit} /></ConfigProvider>)

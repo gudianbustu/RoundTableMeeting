@@ -655,10 +655,6 @@ export function createUpdateNicknameRequestFromDiscriminatorValue(parseNode: Par
 }
 export interface CreateUserRequest extends AdditionalDataHolder, Parsable {
     /**
-     * The initialPassword property
-     */
-    initialPassword?: string | null;
-    /**
      * The nickname property
      */
     nickname?: string | null;
@@ -893,7 +889,6 @@ export function deserializeIntoCreateMeetingResultDto(createMeetingResultDto: Pa
 // @ts-ignore
 export function deserializeIntoCreateUserRequest(createUserRequest: Partial<CreateUserRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
-        "initialPassword": n => { createUserRequest.initialPassword = n.getStringValue(); },
         "nickname": n => { createUserRequest.nickname = n.getStringValue(); },
         "username": n => { createUserRequest.username = n.getStringValue(); },
     }
@@ -2099,7 +2094,6 @@ export function serializeCreateMeetingResultDto(writer: SerializationWriter, cre
 // @ts-ignore
 export function serializeCreateUserRequest(writer: SerializationWriter, createUserRequest: Partial<CreateUserRequest> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
     if (!createUserRequest || isSerializingDerivedType) { return; }
-    writer.writeStringValue("initialPassword", createUserRequest.initialPassword);
     writer.writeStringValue("nickname", createUserRequest.nickname);
     writer.writeStringValue("username", createUserRequest.username);
     writer.writeAdditionalData(createUserRequest.additionalData);

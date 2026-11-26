@@ -41,7 +41,7 @@ features/userManagement/
 - `nickname`；
 - `isAdmin`。
 
-`CreateUserInput` 包含 username、nickname、initialPassword；`UpdateNicknameInput` 只包含 nickname，并通过 PATCH 提交。重置密码不需要输入模型。
+`CreateUserInput` 包含 username、nickname；`UpdateNicknameInput` 只包含 nickname，并通过 PATCH 提交。重置密码不需要输入模型。
 
 ## 4. 数据加载与刷新
 

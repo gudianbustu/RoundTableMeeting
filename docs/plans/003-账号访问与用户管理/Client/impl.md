@@ -106,7 +106,7 @@ userManagement/api 固定：
 - `resetPassword(userId, signal?) -> Promise<void>`；
 - `updateAdmin(userId, input, signal?) -> Promise<UserSummaryViewModel>`。
 
-适配函数统一通过 toApiError 转换 ProblemDetails，不读取响应 detail 作为分支。用户名冲突和目标不存在依据 code 处理。初始密码只存在于请求输入生命周期，失败后由表单清空。
+适配函数统一通过 toApiError 转换 ProblemDetails，不读取响应 detail 作为分支。用户名冲突和目标不存在依据 code 处理。
 
 ## 8. 样式和可访问性
 

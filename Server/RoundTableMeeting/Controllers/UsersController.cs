@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using RoundTableMeeting.Abstraction.Contracts.UserManagement;
 using RoundTableMeeting.Abstraction.Services;
 using RoundTableMeeting.Authentication;
@@ -14,7 +15,7 @@ namespace RoundTableMeeting.Controllers;
 [Route("api/users")]
 [Authorize(Policy = "AdminOnly")]
 [NoStoreResponse]
-public sealed class UsersController(IUserManagementService userManagementService) : ControllerBase
+public sealed class UsersController(IUserManagementService userManagementService, IOptions<AuthenticationOptions> authentication) : ControllerBase
 {
     [HttpGet]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status403Forbidden, "application/problem+json")]
@@ -33,9 +34,25 @@ public sealed class UsersController(IUserManagementService userManagementService
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status415UnsupportedMediaType, "application/problem+json")]
     [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status500InternalServerError, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status503ServiceUnavailable, "application/problem+json")]
     public async Task<IActionResult> Create(CreateUserRequest request, CancellationToken cancellationToken)
     {
-        var result = await userManagementService.CreateUserAsync(request, cancellationToken);
+        var password = authentication.Value.NewAccountInitialPassword;
+        if (string.IsNullOrWhiteSpace(password) || password.Length > 256)
+        {
+            return ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status503ServiceUnavailable,
+                "account_initial_password_configuration_invalid", new Dictionary<string, string[]>
+                {
+                    ["configuration"] = ["请为当前实例配置有效的 Authentication:NewAccountInitialPassword。"]
+                });
+        }
+
+        var result = await userManagementService.CreateUserAsync(new CreateUserRequest
+        {
+            Username = request.Username,
+            Nickname = request.Nickname,
+            InitialPassword = password
+        }, cancellationToken);
         return result.Status switch
         {
             UserManagementStatus.Success => StatusCode(StatusCodes.Status201Created, result.User),

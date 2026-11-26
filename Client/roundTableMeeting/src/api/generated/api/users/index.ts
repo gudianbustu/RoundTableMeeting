@@ -36,6 +36,7 @@ export interface UsersRequestBuilder extends BaseRequestBuilder<UsersRequestBuil
      * @throws {ApiProblemDetails} error when the service returns a 409 status code
      * @throws {ApiProblemDetails} error when the service returns a 415 status code
      * @throws {ApiProblemDetails} error when the service returns a 500 status code
+     * @throws {ApiProblemDetails} error when the service returns a 503 status code
      */
      post(body: CreateUserRequest, requestConfiguration?: RequestConfiguration<object> | undefined) : Promise<UserSummaryDto | undefined>;
     /**
@@ -88,6 +89,7 @@ export const UsersRequestBuilderRequestsMetadata: RequestsMetadata = {
             409: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             415: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
             500: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
+            503: createApiProblemDetailsFromDiscriminatorValue as ParsableFactory<Parsable>,
         },
         adapterMethodName: "send",
         responseBodyFactory:  createUserSummaryDtoFromDiscriminatorValue,

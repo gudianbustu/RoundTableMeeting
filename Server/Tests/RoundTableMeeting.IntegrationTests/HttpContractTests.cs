@@ -522,7 +522,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
 
         using var create = new HttpRequestMessage(HttpMethod.Post, "/api/users");
         create.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
-        create.Content = JsonContent.Create(new { username = "charlie", nickname = "Charlie", initialPassword = "charlie-password" });
+        create.Content = JsonContent.Create(new { username = "charlie", nickname = "Charlie" });
         var created = await client.SendAsync(create);
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
@@ -645,6 +645,9 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         Assert.True(paths.GetProperty("/api/users").TryGetProperty("get", out _));
         var create = paths.GetProperty("/api/users").GetProperty("post").GetProperty("responses");
         Assert.True(create.TryGetProperty("409", out _));
+        Assert.True(create.TryGetProperty("503", out _));
+        var fields = document.GetProperty("components").GetProperty("schemas").GetProperty("CreateUserRequest").GetProperty("properties");
+        Assert.False(fields.TryGetProperty("initialPassword", out _));
         Assert.True(paths.GetProperty("/api/users/{userId}/nickname").GetProperty("patch").GetProperty("responses").TryGetProperty("404", out _));
         Assert.True(paths.GetProperty("/api/users/{userId}/reset-password").GetProperty("post").GetProperty("responses").TryGetProperty("404", out _));
     }
