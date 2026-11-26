@@ -10,7 +10,7 @@
 
 ### 2.1 目录和工作范围
 
-所有命令从仓库根目录 `E:\Project\GDB\RoundTableMeeting` 执行，服务端代码位于 `Server/`，客户端代码位于 `Client/roundTableMeeting/`，文档位于 `docs/`。当前仓库有设计文档和 `Demo/` 预研源码；实施开始后允许创建解决方案和正式源码，但不得把源码放入 `docs/plans/`。
+所有命令从仓库根目录 `E:\Project\GDB\RoundTableMeeting` 执行，服务端代码位于 `Server/`，客户端代码位于 `Client/roundTableMeeting/`，文档位于 `docs/`。源码不得放入 `docs/plans/`。
 
 本主题只交付：
 

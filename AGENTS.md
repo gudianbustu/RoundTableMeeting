@@ -34,16 +34,12 @@ RoundTableMeeting\
 │     └─ <补充图示>.mmd
 ├─ Server\
 │  └─ <后端项目或服务>\
-├─ Client\
-│  └─ <客户端项目>\
-└─ Demo\
-   ├─ <技术主题或预研方向>\
-   │  └─ <示例项目>\
-   └─ <独立示例项目>\
+└─ Client\
+   └─ <客户端项目>\
 ```
 
-- `docs` 存放项目文档，包含 `plans`、`需求分析`、`uml`；`Server` 存放后端项目，`Client` 存放 UI 客户端项目，`Demo` 存放示例和技术预研项目。
-- 客户端项目直接位于 `Client/<客户端项目>`；每个 Demo 独立管理自己的目录结构和文件。
+- `docs` 存放项目文档，包含 `plans`、`需求分析`、`uml`；`Server` 存放后端项目，`Client` 存放 UI 客户端项目。
+- 客户端项目直接位于 `Client/<客户端项目>`。
 - 先在 `docs/需求分析/` 编写并确认需求，再编写 `docs/plans/001-总体计划/design.md`，最后由总体计划拆分业务主题；总体计划只保存总体设计和主题拆分依据。
 - 计划目录命名为 `NNN-业务主题`，`NNN` 仅用于排序；每个业务主题包含 `design.md`、`impl.md`、`testPlan.md`，并按范围拆分 `Client`、`Server`、`Pages`、`Components` 等文档目录。
 - `docs/plans/` 下的所有子目录只存放设计、实现和测试文档，不存放源代码。

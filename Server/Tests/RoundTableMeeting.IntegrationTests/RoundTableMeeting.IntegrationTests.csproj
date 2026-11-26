@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="Fixtures/ReferenceAgent/*.mjs" CopyToOutputDirectory="PreserveNewest" />
     <Using Include="Xunit" />
   </ItemGroup>
 

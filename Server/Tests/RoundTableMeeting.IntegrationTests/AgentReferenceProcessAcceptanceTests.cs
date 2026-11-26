@@ -159,9 +159,7 @@ public sealed partial class McpAgentContractTests
             directory = Path.Combine(root, Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(directory);
             stateFile = Path.Combine(directory, "private", "state.json");
-            var repo = new DirectoryInfo(AppContext.BaseDirectory);
-            while (repo is not null && !File.Exists(Path.Combine(repo.FullName, "Demo", "AI参会联调客户端", "reliable.mjs"))) repo = repo.Parent;
-            if (repo is null) throw new InvalidOperationException("Reference CLI source not found.");
+            var fixture = Path.Combine(AppContext.BaseDirectory, "Fixtures", "ReferenceAgent");
             var start = new ProcessStartInfo("node") { UseShellExecute = false, CreateNoWindow = true,
                 WindowStyle = ProcessWindowStyle.Hidden, WorkingDirectory = directory,
                 RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true };
@@ -174,7 +172,7 @@ public sealed partial class McpAgentContractTests
             }
             if (initialState is not null)
             {
-                var stateModule = new Uri(Path.Combine(repo.FullName, "Demo", "AI参会联调客户端", "reliable-state.mjs")).AbsoluteUri;
+                var stateModule = new Uri(Path.Combine(fixture, "reliable-state.mjs")).AbsoluteUri;
                 var preload = Path.Combine(directory, "seed-state.mjs");
                 File.WriteAllText(preload, "import { PrivateState } from " + JsonSerializer.Serialize(stateModule) + ";\n"
                     + "const store = new PrivateState(process.env.AGENT_STATE_FILE); await store.acquire();\n"
@@ -182,7 +180,7 @@ public sealed partial class McpAgentContractTests
                 start.ArgumentList.Add("--import");
                 start.ArgumentList.Add(new Uri(preload).AbsoluteUri);
             }
-            start.ArgumentList.Add(Path.Combine(repo.FullName, "Demo", "AI参会联调客户端", "reliable.mjs"));
+            start.ArgumentList.Add(Path.Combine(fixture, "reliable.mjs"));
             foreach (var name in start.Environment.Keys.Where(k => k.StartsWith("AGENT_", StringComparison.Ordinal)).ToArray()) start.Environment.Remove(name);
             start.Environment["MCP_URL"] = new Uri(address, "/mcp").ToString();
             start.Environment["MEETING_CODE"] = meetingCode;
