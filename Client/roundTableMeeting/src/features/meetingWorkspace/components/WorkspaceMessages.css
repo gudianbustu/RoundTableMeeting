@@ -162,3 +162,24 @@
   font-size: 11px;
   line-height: 16px;
 }
+
+@media (max-width: 600px), (max-width: 1000px) and (orientation: landscape) and (pointer: coarse) {
+  .authenticated-shell:has(> .meeting-workspace .message-composer) {
+    min-height: 0;
+    height: var(--composer-viewport-height, 100dvh);
+  }
+  .authenticated-shell .meeting-workspace > .meeting-main:has(.message-composer) {
+    padding-inline: 0;
+    padding-bottom: 0;
+  }
+  .meeting-main .scoped-chat .realtime-chat-region > .message-composer,
+  .meeting-main .scoped-chat .realtime-chat-region > .message-composer:focus-within {
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 10px max(8px, env(safe-area-inset-right, 0px))
+      calc(8px + var(--composer-bottom-inset, env(safe-area-inset-bottom, 0px)))
+      max(8px, env(safe-area-inset-left, 0px));
+  }
+}

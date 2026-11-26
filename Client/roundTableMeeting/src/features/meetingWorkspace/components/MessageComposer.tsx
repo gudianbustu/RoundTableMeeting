@@ -8,6 +8,37 @@ import { getMentionCandidates, groupMentionNames, mentionableParticipants } from
 export interface MessageComposerHandle { mention: (displayName: string) => void; privateChat?: (participantId: string) => void }
 export function MessageComposer({ publicChat = false, placeholder = '输入消息', composerRef, attachments, onCancelReply, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { publicChat?: boolean; placeholder?: string; composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onCancelReply?: () => void; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
   const inputRef = useRef<MentionsRef>(null)
+  const composer = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    const node = composer.current
+    const shell = node?.closest<HTMLElement>('.authenticated-shell')
+    const viewport = window.visualViewport
+    if (!node || !shell || !viewport) return
+    const update = () => {
+      const keyboard = viewport.scale === 1 && node.contains(document.activeElement)
+        && window.innerHeight - viewport.height > 100
+      if (keyboard) {
+        shell.style.setProperty('--composer-viewport-height', viewport.height + viewport.offsetTop + 'px')
+        node.style.setProperty('--composer-bottom-inset', '0px')
+      } else {
+        shell.style.removeProperty('--composer-viewport-height')
+        node.style.removeProperty('--composer-bottom-inset')
+      }
+    }
+    update()
+    viewport.addEventListener('resize', update)
+    viewport.addEventListener('scroll', update)
+    node.addEventListener('focusin', update)
+    node.addEventListener('focusout', update)
+    return () => {
+      viewport.removeEventListener('resize', update)
+      viewport.removeEventListener('scroll', update)
+      node.removeEventListener('focusin', update)
+      node.removeEventListener('focusout', update)
+      shell.style.removeProperty('--composer-viewport-height')
+      node.style.removeProperty('--composer-bottom-inset')
+    }
+  }, [])
   const focusPending = useRef(false)
   const mentionPopupRef = useRef<HTMLDivElement>(null)
   useImperativeHandle(composerRef, () => ({
@@ -26,7 +57,7 @@ export function MessageComposer({ publicChat = false, placeholder = '输入消�
     textarea?.setSelectionRange(value.length, value.length)
   }, [value])
   const candidates = getMentionCandidates(value, participants, publicChat)
-  return <div className="message-composer"
+  return <div ref={composer} className="message-composer"
     onPaste={event => {
       const images = Array.from(event.clipboardData.files).filter(file => file.type.startsWith('image/'))
       if (!images.length) return

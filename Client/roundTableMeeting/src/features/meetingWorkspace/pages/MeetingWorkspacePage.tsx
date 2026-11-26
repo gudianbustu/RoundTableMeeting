@@ -113,7 +113,7 @@ export function MeetingWorkspacePage() {
     <MeetingNavigation unreadCounts={unreadCounts} onAll={() => navigate('/')} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} meetings={workspace.lists.active} historyMeetings={workspace.lists.history} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
   )
   const members = workspace.details?.participants.filter(person => person.membershipState !== 'left') ?? []
-  const onlineCount = members.filter(person => presence[person.participantId] === 'online').length
+  const onlineMembers = members.filter(person => presence[person.participantId] === 'online')
   const readOnly = historical || workspace.details?.canSend === false
   const discussionMode = workspace.details && <DiscussionModeControl meeting={workspace.details} onModeChanged={workspace.refreshDetails} />
   const topbarSlot = navigationTrigger?.parentElement?.querySelector('#workspace-topbar-content')
@@ -124,9 +124,9 @@ export function MeetingWorkspacePage() {
     {informationId === workspace.details.meetingId && <MeetingInformationDialog meeting={workspace.details}
       onClose={() => setInformationId(undefined)} onSaved={workspace.refreshDetails} />}
     <div className="workspace-member-tools">
-      <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员，${onlineCount} 位在线`}>
-        <span className="workspace-member-faces" aria-hidden="true">{members.slice(0, 3).map(person =>
-          <i key={person.participantId}><AvatarImage src={person.avatarUrl} colorSlot={person.avatarColorSlot} fallback={Array.from(person.displayName)[0]} /></i>)}</span>{onlineCount}/{members.length} 在线
+      <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员，${onlineMembers.length} 位在线`}>
+        {onlineMembers.length > 0 && <span className="workspace-member-faces" aria-hidden="true">{onlineMembers.slice(0, 3).map(person =>
+          <i key={person.participantId}><AvatarImage src={person.avatarUrl} colorSlot={person.avatarColorSlot} fallback={Array.from(person.displayName)[0]} /></i>)}</span>}{onlineMembers.length}/{members.length} 在线
       </button>
       {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
     </div>
