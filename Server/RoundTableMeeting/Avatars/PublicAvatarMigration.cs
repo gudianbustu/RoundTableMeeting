@@ -125,16 +125,31 @@ public sealed partial class PublicAvatarLibrary
         var names = JsonSerializer.Deserialize<string[]>(File.ReadAllBytes(journal))!;
         var old = Checked(names[0]);
         var next = Checked(names[1]);
-        var source = Path.Combine(Root, old);
-        var dest = Path.Combine(Root, next);
-        if (Directory.Exists(source)) Directory.Move(source, dest);
-        if (!Directory.Exists(dest)) throw new IOException("分组改名未完成");
+        var groupRename = names.Length == 2;
+        var group = groupRename ? null : Checked(names[2]);
+        var parent = groupRename ? Root : Group(group);
+        var source = Path.Combine(parent, old);
+        var dest = Path.Combine(parent, next);
+        Action<string, string> move = groupRename ? Directory.Move : File.Move;
+        Func<string, bool> exists = groupRename ? Directory.Exists : File.Exists;
+        if (old.Equals(next, StringComparison.OrdinalIgnoreCase))
+        {
+            // Stage case-only changes so recovery can distinguish both names on Windows.
+            var intermediate = Path.Combine(parent, ".rename-case-pending");
+            if (Directory.EnumerateFileSystemEntries(parent).Any(p => Path.GetFileName(p) == old))
+                move(source, intermediate);
+            if (exists(intermediate)) move(intermediate, dest);
+        }
+        else if (exists(source)) move(source, dest);
+        if (!exists(dest)) throw new IOException("改名未完成");
         using var db = new SqliteConnection(connection);
         db.Open();
         using var transaction = db.BeginTransaction();
-        Rewrite(db, transaction, Url(old, ""), Url(next, ""), true);
-        var order = ReadOrder(Root).Select(g => g == old ? next : g).ToList();
-        Save(Path.Combine(Root, "index.json"), order);
+        var oldUrl = groupRename ? Url(old, "") : Url(group!, old);
+        var newUrl = groupRename ? Url(next, "") : Url(group!, next);
+        Rewrite(db, transaction, oldUrl, newUrl, groupRename);
+        var order = ReadOrder(parent).Select(item => item == old ? next : item).ToList();
+        Save(Path.Combine(parent, "index.json"), order);
         transaction.Commit();
         File.Delete(journal);
     }

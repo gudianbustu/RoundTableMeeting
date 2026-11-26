@@ -1,17 +1,15 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, Empty, Flex, Input, Modal, Popconfirm, Select, Spin } from 'antd'
-import { Link } from 'react-router-dom'
-import { AvatarGrid } from './AvatarGrid'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Alert, Button, Empty, Input, Modal, Spin } from 'antd'
+import { PlusOutlined } from '@ant-design/icons'
 import { AvatarFileField } from './AvatarFileField'
+import { LibraryGroupCard, SortableList, type AvatarGroup, type LibraryDialog } from './AvatarLibrarySort'
 import { uploadPublicAvatar } from './avatarApi'
 import { notifyUnauthorized } from '@/api/client/authenticationEvents'
-import type { AvatarChoice } from './avatar'
 
-type Group = { name: string; items: AvatarChoice[] }
-type Action = 'createGroup' | 'renameGroup' | 'deleteGroup' | 'moveGroup' | 'moveAvatar' | 'deleteAvatar'
-type Dialog = 'createGroup' | 'renameGroup' | 'upload'
-const titles = { createGroup: '新增分组', renameGroup: '修改分组名称', upload: '上传头像' }
-
+const titles = {
+  createGroup: '新增分组', renameGroup: '编辑分组', deleteGroup: '删除分组',
+  upload: '上传头像', renameAvatar: '修改头像文件名', deleteAvatar: '删除头像',
+}
 async function request(init?: RequestInit) {
   const response = await fetch('/api/avatars/groups', { cache: 'no-store', ...init })
   if (response.status === 401) notifyUnauthorized()
@@ -21,24 +19,27 @@ async function request(init?: RequestInit) {
   }
   return response
 }
+type Edit = { action: string; group: string; name?: string; target?: string; after?: boolean }
+function edit(body: Edit) {
+  return request({ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+}
+const filename = (url: string) => decodeURIComponent(url.slice(url.lastIndexOf('/') + 1))
 
 export function AvatarLibraryPage() {
-  const [groups, setGroups] = useState<Group[]>([])
-  const [active, setActive] = useState('')
+  const [groups, setGroups] = useState<AvatarGroup[]>([])
   const [selected, setSelected] = useState('')
-  const [dialog, setDialog] = useState<Dialog>()
+  const [dialog, setDialog] = useState<LibraryDialog>()
   const [name, setName] = useState('')
   const [file, setFile] = useState<File>()
   const [busy, setBusy] = useState(false)
+  const pending = useRef(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const load = useCallback(async (signal?: AbortSignal) => {
     const response = await request({ signal })
-    const catalog: Group[] = await response.json()
-    if (!signal?.aborted) {
-      setGroups(catalog)
-      setActive(current => catalog.some(g => g.name === current) ? current : catalog[0]?.name ?? '')
-    }
+    const catalog: AvatarGroup[] = await response.json()
+    if (!signal?.aborted) setGroups(catalog)
+    return catalog
   }, [])
   useEffect(() => {
     const controller = new AbortController()
@@ -48,68 +49,77 @@ export function AvatarLibraryPage() {
     return () => controller.abort()
   }, [load])
 
-  const group = groups.find(g => g.name === active) ?? groups[0]
-  const entry = group?.items.find(a => a.id === selected)
-  const groupIndex = groups.indexOf(group)
-  const itemIndex = entry ? group.items.indexOf(entry) : -1
-  function open(kind: Dialog) {
-    setName(kind === 'renameGroup' ? group.name : '')
-    setFile(undefined); setError(''); setDialog(kind)
+  function open(next: LibraryDialog) {
+    setName(next.kind === 'renameGroup' ? next.group.name : next.item?.name ?? '')
+    setFile(undefined); setError(''); setDialog(next)
   }
-  async function run(operation: () => Promise<unknown>) {
-    if (busy) return
-    setBusy(true); setError('')
+  async function run(operation: () => Promise<unknown>, nextSelection?: (catalog: AvatarGroup[]) => string) {
+    if (pending.current) return
+    pending.current = true; setBusy(true); setError('')
     try {
       await operation()
       setDialog(undefined)
-      await load()
+      const catalog = await load()
+      if (nextSelection) setSelected(nextSelection(catalog))
+      else setSelected(current => catalog.some(g => g.items.some(i => i.id === current)) ? current : '')
     } catch (cause) { setError(cause instanceof Error ? cause.message : '操作失败，请重试。') }
-    finally { setBusy(false) }
+    finally { pending.current = false; setBusy(false) }
   }
-  async function edit(action: Action, direction = 0) {
-    const groupName = action === 'createGroup' ? name.trim() : group.name
-    const itemName = entry && decodeURIComponent(entry.imageUrl.split('/').pop()!)
-    await request({ method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, group: groupName, name: action === 'renameGroup' ? name.trim() : itemName, direction }) })
-    if (action === 'createGroup' || action === 'renameGroup') setActive(name.trim())
+  function submit() {
+    if (!dialog) return
+    const value = name.trim()
+    const { kind, group, item } = dialog
+    if (kind === 'upload') {
+      if (file) void run(() => uploadPublicAvatar(value, file, group.name))
+      return
+    }
+    if (kind === 'createGroup') { void run(() => edit({ action: kind, group: value })); return }
+    if (kind === 'renameAvatar' && item) {
+      const old = filename(item.imageUrl)
+      const next = value + old.slice(old.lastIndexOf('.'))
+      void run(() => edit({ action: kind, group: group.name, name: old, target: value }),
+        catalog => catalog.find(g => g.name === group.name)?.items.find(i => filename(i.imageUrl) === next)?.id ?? '')
+      return
+    }
+    const selectedItem = group.items.find(i => i.id === selected)
+    void run(() => edit({ action: kind, group: group.name, name: kind === 'renameGroup' ? value : item && filename(item.imageUrl) }),
+      kind === 'renameGroup' && selectedItem
+        ? catalog => catalog.find(g => g.name === value)?.items.find(i => filename(i.imageUrl) === filename(selectedItem.imageUrl))?.id ?? ''
+        : undefined)
   }
+
+  const deleting = dialog?.kind === 'deleteGroup' || dialog?.kind === 'deleteAvatar'
   const feedback = error && <Alert type="error" title={error} />
-  return <main className="rt-avatar-library">
-    <Link to="/settings/profile">返回个人设置</Link>
-    <header><h1>公共头像库</h1><Button disabled={busy || loading} onClick={() => open('createGroup')}>新增分组</Button></header>
+  return <div className="rt-avatar-library">
+    <header className="library-heading"><div><h1>公共头像库</h1>
+      <p>拖动分组标题调整分组顺序，拖动头像调整组内顺序。</p></div>
+      <Button type="primary" icon={<PlusOutlined />} disabled={busy || loading} onClick={() => open({ kind: 'createGroup' })}>新增分组</Button>
+    </header>
     {!dialog && feedback}
-    {loading ? <Spin aria-label="正在加载头像" /> : !group ? <Empty description="暂无头像分组" /> : <>
-      <Flex align="center" wrap gap="small" className="rt-avatar-tools">
-        <Select aria-label="头像分组" value={group.name} disabled={busy} style={{ minWidth: 160 }}
-          options={groups.map(g => ({ value: g.name, label: g.name }))} onChange={value => { setActive(value); setSelected('') }} />
-        <Button disabled={busy} onClick={() => open('renameGroup')}>修改组名</Button>
-        <Button disabled={busy || groupIndex === 0} onClick={() => void run(() => edit('moveGroup', -1))}>分组前移</Button>
-        <Button disabled={busy || groupIndex === groups.length - 1} onClick={() => void run(() => edit('moveGroup', 1))}>分组后移</Button>
-        <Popconfirm title={`从公共库移除「${group.name}」及组内头像？`} okText="删除" cancelText="取消" onConfirm={() => run(() => edit('deleteGroup'))}>
-          <Button danger disabled={busy}>删除分组</Button>
-        </Popconfirm>
-      </Flex>
-      <Flex align="center" wrap gap="small" className="rt-avatar-tools">
-        <Button type="primary" disabled={busy} onClick={() => open('upload')}>上传头像</Button>
-        <Button disabled={busy || itemIndex <= 0} onClick={() => void run(() => edit('moveAvatar', -1))}>头像前移</Button>
-        <Button disabled={busy || !entry || itemIndex === group.items.length - 1} onClick={() => void run(() => edit('moveAvatar', 1))}>头像后移</Button>
-        <Popconfirm title={`从公共库移除「${entry?.name}」？`} okText="删除" cancelText="取消" onConfirm={() => run(() => edit('deleteAvatar'))}>
-          <Button danger disabled={busy || !entry}>删除头像</Button>
-        </Popconfirm>
-      </Flex>
-      {group.items.length ? <AvatarGrid items={group.items} selected={selected} onSelect={setSelected} disabled={busy} /> : <Empty description="该分组暂无头像" />}
-    </>}
-    <Modal open={!!dialog} title={dialog && titles[dialog]} onCancel={() => { if (!busy) setDialog(undefined) }}
-      okText={dialog === 'upload' ? '上传' : '保存'} cancelText="取消" confirmLoading={busy}
-      okButtonProps={{ disabled: !name.trim() || (dialog === 'upload' && !file) }}
-      onOk={() => { if (dialog) void run(() => dialog === 'upload' ? uploadPublicAvatar(name.trim(), file!, group.name) : edit(dialog)) }}>
+    {loading ? <Spin aria-label="正在加载头像" /> : !groups.length ? <Empty description="暂无头像分组" /> :
+      <SortableList groups ids={groups.map(g => g.name)}
+        onMove={(group, target, after) => void run(() => edit({ action: 'reorderGroup', group, target, after }))}>
+        {groups.map(group => <LibraryGroupCard key={group.name} group={group} selected={selected} select={setSelected} busy={busy} open={open}
+          onMove={(from, to, after) => void run(() => edit({ action: 'reorderAvatar', group: group.name, name: filename(from), target: filename(to), after }))} />)}
+      </SortableList>}
+    <Modal open={!!dialog} title={dialog && titles[dialog.kind]} onCancel={() => { if (!busy) setDialog(undefined) }}
+      okText={deleting ? '删除' : dialog?.kind === 'upload' ? '上传' : '保存'} cancelText="取消" confirmLoading={busy}
+      okButtonProps={{ danger: deleting, disabled: !deleting && (!name.trim() || (dialog?.kind === 'upload' && !file)) }}
+      cancelButtonProps={{ disabled: busy }} onOk={submit}>
       <div className="rt-avatar-form">
-        {dialog === 'upload' && <AvatarFileField file={file} disabled={busy} previewName={name} onChange={next => {
-          setFile(next); if (next && !name.trim()) setName(next.name.replace(/\.[^.]+$/, '').slice(0, 64))
-        }} />}
-        <label>{dialog === 'upload' ? '头像名称' : '分组名称'}<Input value={name} disabled={busy} maxLength={64} onChange={e => setName(e.target.value)} /></label>
+        {dialog?.kind === 'deleteGroup' ? <p>确定从公共库删除「{dialog.group.name}」分组及其中的 {dialog.group.items.length} 张头像？</p> :
+          dialog?.kind === 'deleteAvatar' ? <p>确定从「{dialog.group.name}」删除头像「{dialog.item?.name}」？</p> : <>
+            {dialog?.kind === 'upload' && <AvatarFileField file={file} disabled={busy} previewName={name} onChange={next => {
+              setFile(next); if (next && !name.trim()) setName(next.name.replace(/\.[^.]+$/, '').slice(0, 64))
+            }} />}
+            <label>{dialog?.kind === 'upload' ? '头像名称' : dialog?.kind === 'renameAvatar' ? '文件名' : '分组名称'}
+              <Input value={name} disabled={busy} maxLength={dialog?.kind === 'upload' ? 64 : 180}
+                suffix={dialog?.kind === 'renameAvatar' && dialog.item ? filename(dialog.item.imageUrl).slice(dialog.item.name.length) : undefined}
+                onChange={e => setName(e.target.value)} onPressEnter={() => { if (name.trim() && !busy) submit() }} />
+            </label>
+          </>}
         {feedback}
       </div>
     </Modal>
-  </main>
+  </div>
 }

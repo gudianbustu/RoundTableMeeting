@@ -12,7 +12,8 @@ export function AuthenticatedLayout() {
       {pathname.startsWith('/meetings/') && <span id="workspace-navigation-trigger" />}
       <Link className="app-brand" to="/"><img className="brand-mark" src="/roundtable-mark.png" alt="" />圆桌会议</Link>
       {pathname.startsWith('/meetings/') && <div id="workspace-topbar-content" />}
-      {['/settings/profile', '/users'].includes(pathname.replace(/\/$/, '')) ? <Link to={returnTo}>返回</Link> : <CurrentUserBar />}
+      {pathname.replace(/\/$/, '') === '/admin/avatars' ? <Link to="/settings/profile">返回个人设置 ›</Link> :
+        ['/settings/profile', '/users'].includes(pathname.replace(/\/$/, '')) ? <Link to={returnTo}>返回</Link> : <CurrentUserBar />}
     </header>
     <AccountUnreadProvider><MentionNotificationListener /><Outlet /></AccountUnreadProvider>
   </main>

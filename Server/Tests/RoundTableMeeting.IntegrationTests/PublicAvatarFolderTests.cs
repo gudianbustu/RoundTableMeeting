@@ -33,8 +33,8 @@ public sealed class PublicAvatarFolderTests
             {
                 admin.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
                 (await admin.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" })).EnsureSuccessStatusCode();
-                async Task Edit(string action, string group, string? name = null, int direction = 0) =>
-                    (await admin.PostAsJsonAsync("/api/avatars/groups", new { action, group, name, direction })).EnsureSuccessStatusCode();
+                async Task Edit(string action, string group, string? name = null, int direction = 0, string? target = null, bool after = false) =>
+                    (await admin.PostAsJsonAsync("/api/avatars/groups", new { action, group, name, direction, target, after })).EnsureSuccessStatusCode();
                 async Task<AvatarEntry[]> Catalog() => (await admin.GetFromJsonAsync<AvatarEntry[]>("/api/avatars"))!;
                 var original = (await Catalog()).Where(a => a.Category == "自定义").ToArray();
                 Assert.Equal(2, original.Length);
@@ -50,7 +50,14 @@ public sealed class PublicAvatarFolderTests
                 var groups = await admin.GetFromJsonAsync<RoundTableMeeting.Avatars.AvatarGroup[]>("/api/avatars/groups");
                 Assert.Equal("空组", groups![^2].Name);
                 var first = (await Catalog()).First(a => a.Category == "新名字");
-                await Edit("deleteAvatar", "新名字", "重复.png");
+                await Edit("reorderGroup", "空组", target: "模型");
+                Assert.Equal("空组", (await admin.GetFromJsonAsync<RoundTableMeeting.Avatars.AvatarGroup[]>("/api/avatars/groups"))![0].Name);
+                await Edit("reorderAvatar", "新名字", "重复.png", target: "重复 (2).png", after: true);
+                await Edit("renameAvatar", "新名字", "重复.png", target: "改名");
+                first = (await Catalog()).Last();
+                Assert.Equal("改名", first.Name);
+                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(first.ImageUrl));
+                await Edit("deleteAvatar", "新名字", "改名.png");
                 Assert.DoesNotContain(await Catalog(), a => a.Id == first.Id);
                 Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync(first.ImageUrl)).StatusCode);
                 await Edit("deleteGroup", "新名字");

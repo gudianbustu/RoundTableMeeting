@@ -8,7 +8,7 @@ using RoundTableMeeting.Repository.Sqlite.Configuration;
 namespace RoundTableMeeting.Avatars;
 
 public sealed record AvatarGroup(string Name, IReadOnlyList<AvatarEntry> Items);
-public sealed record LibraryEdit(string Action, string? Group, string? Name, int Direction = 0);
+public sealed record LibraryEdit(string Action, string? Group, string? Name, int Direction = 0, string? Target = null, bool After = false);
 internal sealed class LibraryError(string message, int status = 400) : Exception(message)
 {
     internal int Status { get; } = status;
@@ -120,9 +120,9 @@ public sealed partial class PublicAvatarLibrary(IOptions<SqliteDatabaseOptions> 
         return null;
     }
 
-    private static void RequireAvailable(string dir, string name)
+    private static void RequireAvailable(string dir, string name, string? except = null)
     {
-        if (Directory.EnumerateFileSystemEntries(dir).Select(Path.GetFileName).Any(existing =>
+        if (Directory.EnumerateFileSystemEntries(dir).Select(Path.GetFileName).Where(n => n != except).Any(existing =>
             string.Equals(existing, name, StringComparison.OrdinalIgnoreCase) ||
             string.Equals(existing, Removed + name, StringComparison.OrdinalIgnoreCase)))
             throw new LibraryError("名称已被使用", 409);
@@ -154,7 +154,7 @@ public sealed partial class PublicAvatarLibrary(IOptions<SqliteDatabaseOptions> 
             return;
         }
         var current = Group(group);
-        var groupAction = edit.Action is "renameGroup" or "deleteGroup" or "moveGroup";
+        var groupAction = edit.Action is "renameGroup" or "deleteGroup" or "moveGroup" or "reorderGroup";
         var dirToOrder = groupAction ? Root : current;
         var order = Ordered(dirToOrder, groupAction);
         var name = groupAction ? group : Checked(edit.Name);
@@ -163,12 +163,24 @@ public sealed partial class PublicAvatarLibrary(IOptions<SqliteDatabaseOptions> 
         switch (edit.Action)
         {
             case "renameGroup":
-                var replacement = Checked(edit.Name);
-                if (replacement == group) return;
-                RequireAvailable(Root, replacement);
-                Save(Path.Combine(Root, ".rename.json"), new[] { group, replacement });
+            case "renameAvatar":
+                var replacement = groupAction ? Checked(edit.Name) : Checked(Checked(edit.Target) + Path.GetExtension(name));
+                if (replacement == name) return;
+                RequireAvailable(dirToOrder, replacement, name);
+                // Record the order even for files added directly on disk before moving them.
+                Save(Path.Combine(dirToOrder, "index.json"), order);
+                Save(Path.Combine(Root, ".rename.json"), groupAction
+                    ? new[] { name, replacement } : new[] { name, replacement, group });
                 FinishRename();
                 return;
+            case "reorderGroup":
+            case "reorderAvatar":
+                var anchor = Checked(edit.Target);
+                if (!order.Contains(anchor)) throw new LibraryError("排序目标已变更，请刷新后重试", 409);
+                if (anchor == name) return;
+                order.RemoveAt(index);
+                order.Insert(order.IndexOf(anchor) + (edit.After ? 1 : 0), name);
+                break;
             case "deleteGroup":
                 Directory.Move(current, Path.Combine(Root, Removed + group));
                 order.RemoveAt(index);
