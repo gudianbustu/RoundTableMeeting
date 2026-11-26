@@ -23,7 +23,7 @@ public sealed class MeetingUnreadActivityTests
         foreach (var (client, username) in new[] { (owner, "alice"), (member, "bob"), (peer, "carol") })
         {
             client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-            using var res = await client.PostAsJsonAsync("/api/auth/login", new { username, password = "test-password-" + username });
+            using var res = await client.PostAsJsonAsync("/api/auth/login", new { username, password = "test-password-" + username }, cancellationToken: TestContext.Current.CancellationToken);
             res.EnsureSuccessStatusCode();
         }
         async Task<(Guid Id, Guid Owner, Guid Member, Guid Peer)> Create(string name)
@@ -74,9 +74,9 @@ public sealed class MeetingUnreadActivityTests
         var replay = await Activity(a.Id, start.ThroughSequence);
         Assert.Equal(snapshot.ThroughSequence, replay.ThroughSequence);
         Assert.Equal(snapshot.Scopes.Sum(x => x.Count), replay.Scopes.Sum(x => x.Count));
-        using var removed = await owner.PostAsJsonAsync($"/api/meetings/{a.Id}/participants/{a.Member}/remove", new { operationId = Guid.NewGuid() });
+        using var removed = await owner.PostAsJsonAsync($"/api/meetings/{a.Id}/participants/{a.Member}/remove", new { operationId = Guid.NewGuid() }, cancellationToken: TestContext.Current.CancellationToken);
         removed.EnsureSuccessStatusCode();
-        using var forbidden = await member.GetAsync($"/api/meetings/{a.Id}/unread-activity?afterSequence=0");
+        using var forbidden = await member.GetAsync($"/api/meetings/{a.Id}/unread-activity?afterSequence=0", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, forbidden.StatusCode);
     }
 }

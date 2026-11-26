@@ -43,7 +43,7 @@ public sealed partial class McpAgentContractTests
         var droppedBefore = signals.Dropped;
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker durable work without a signal");
         await EventuallyAsync(factory, db => db.AgentReplyTasks.AnyAsync());
-        var result = (await wait.WaitAsync(TimeSpan.FromSeconds(8))).GetProperty("data");
+        var result = (await wait.WaitAsync(TimeSpan.FromSeconds(8), TestContext.Current.CancellationToken)).GetProperty("data");
         Assert.Equal("mention", result.GetProperty("kind").GetString());
         Assert.True(signals.Dropped > droppedBefore);
         Assert.True(signals.Timeouts >= 1);

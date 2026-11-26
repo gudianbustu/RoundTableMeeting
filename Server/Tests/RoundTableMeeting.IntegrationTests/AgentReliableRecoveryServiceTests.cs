@@ -40,9 +40,9 @@ public sealed partial class McpAgentContractTests
         Assert.Equal("operation_superseded", (await ReliableForTestAsync(factory.Services, service => service.ResumeReliableAsync(request, second))).ErrorCode);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(1, await db.AgentConnectionSessions.CountAsync());
-        Assert.Equal(3, (await db.AgentConnectionSessions.SingleAsync()).BindingVersion);
-        Assert.Equal(3, await db.AgentRecoveryOperations.CountAsync());
+        Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(3, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).BindingVersion);
+        Assert.Equal(3, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -75,7 +75,7 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(expires, (await db.AgentConnectionSessions.SingleAsync()).LeaseExpiresAtUtc);
+            Assert.Equal(expires, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LeaseExpiresAtUtc);
         }
         var renewed = Assert.IsType<AgentLeaseResultDto>((await ReliableForTestAsync(factory.Services,
             service => service.RenewReliableAsync(new(confirm.ConnectionSessionId), transport))).Data);

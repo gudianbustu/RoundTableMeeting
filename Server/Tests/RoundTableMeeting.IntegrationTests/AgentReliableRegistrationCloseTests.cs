@@ -30,13 +30,13 @@ public sealed partial class McpAgentContractTests
         Task? closing = null;
         try
         {
-            await registry.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await registry.Held.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             await EventuallyAsync(factory, db => db.AgentConnectionSessions.AnyAsync(c => c.State == AgentConnectionState.Activating));
             closing = sdk.DisposeAsync().AsTask();
-            await registry.Closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await registry.Closed.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         }
         finally { registry.Release.Set(); }
-        if (closing is not null) await closing.WaitAsync(TimeSpan.FromSeconds(10));
+        if (closing is not null) await closing.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         var failure = await Record.ExceptionAsync(async () =>
         {
             var result = await pending;
@@ -54,8 +54,8 @@ public sealed partial class McpAgentContractTests
         Assert.Equal("resumed", resumed.GetProperty("kind").GetString());
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeeting.Repository.Sqlite.Database.RoundTableMeetingDbContext>();
-        Assert.Equal(2, (await db.AgentConnectionSessions.SingleAsync()).BindingVersion);
-        Assert.Equal(2, await db.AgentRecoveryOperations.CountAsync());
+        Assert.Equal(2, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).BindingVersion);
+        Assert.Equal(2, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         await sdk.DisposeAsync();
     }
 

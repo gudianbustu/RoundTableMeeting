@@ -53,30 +53,30 @@ public sealed class SqliteFrameworkTests
                 context,
                 Options.Create(new SqliteDatabaseOptions { ConnectionString = "Data Source=" + path }),
                 NullLogger<SqliteDatabaseInitializer>.Instance);
-            await initializer.InitializeAsync();
+            await initializer.InitializeAsync(TestContext.Current.CancellationToken);
 
             await using (var connection = new SqliteConnection("Data Source=" + path))
             {
-                await connection.OpenAsync();
+                await connection.OpenAsync(TestContext.Current.CancellationToken);
                 await using var seedCommand = connection.CreateCommand();
                 seedCommand.CommandText = "CREATE TABLE InitializationProbe (Value TEXT NOT NULL); INSERT INTO InitializationProbe VALUES ('preserved');";
-                await seedCommand.ExecuteNonQueryAsync();
+                await seedCommand.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
             }
 
-            await initializer.InitializeAsync();
+            await initializer.InitializeAsync(TestContext.Current.CancellationToken);
 
             Assert.True(File.Exists(path));
             await using var verificationContext = CreateContext(path);
-            await verificationContext.Database.OpenConnectionAsync();
+            await verificationContext.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
             await using var command = verificationContext.Database.GetDbConnection().CreateCommand();
             command.CommandText = "PRAGMA journal_mode;";
-            Assert.Equal("wal", Convert.ToString(await command.ExecuteScalarAsync()), ignoreCase: true);
+            Assert.Equal("wal", Convert.ToString(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken)), ignoreCase: true);
             command.CommandText = "PRAGMA busy_timeout;";
-            Assert.Equal(5000L, Convert.ToInt64(await command.ExecuteScalarAsync()));
+            Assert.Equal(5000L, Convert.ToInt64(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken)));
             command.CommandText = "SELECT Value FROM InitializationProbe;";
-            Assert.Equal("preserved", Convert.ToString(await command.ExecuteScalarAsync()));
+            Assert.Equal("preserved", Convert.ToString(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken)));
             command.CommandText = "SELECT COUNT(*) FROM __EFMigrationsHistory;";
-            Assert.True(Convert.ToInt64(await command.ExecuteScalarAsync()) >= 2L);
+            Assert.True(Convert.ToInt64(await command.ExecuteScalarAsync(TestContext.Current.CancellationToken)) >= 2L);
         }
         finally
         {
@@ -98,7 +98,7 @@ public sealed class SqliteFrameworkTests
                 Options.Create(new SqliteDatabaseOptions { ConnectionString = "Data Source=" + directory }),
                 NullLogger<SqliteDatabaseInitializer>.Instance);
 
-            await Assert.ThrowsAsync<SqliteException>(() => initializer.InitializeAsync());
+            await Assert.ThrowsAsync<SqliteException>(() => initializer.InitializeAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -117,10 +117,10 @@ public sealed class SqliteFrameworkTests
             Directory.CreateDirectory(directory);
             await using (var connection = new SqliteConnection("Data Source=" + path))
             {
-                await connection.OpenAsync();
+                await connection.OpenAsync(TestContext.Current.CancellationToken);
                 await using var command = connection.CreateCommand();
                 command.CommandText = "CREATE TABLE __EFMigrationsHistory (MigrationId INTEGER NOT NULL PRIMARY KEY, ProductVersion TEXT NOT NULL);";
-                await command.ExecuteNonQueryAsync();
+                await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
             }
 
             await using var context = CreateContext(path);
@@ -129,7 +129,7 @@ public sealed class SqliteFrameworkTests
                 Options.Create(new SqliteDatabaseOptions { ConnectionString = "Data Source=" + path }),
                 NullLogger<SqliteDatabaseInitializer>.Instance);
 
-            await Assert.ThrowsAsync<SqliteException>(() => initializer.InitializeAsync());
+            await Assert.ThrowsAsync<SqliteException>(() => initializer.InitializeAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -175,14 +175,14 @@ public sealed class SqliteFrameworkTests
                     context,
                     Options.Create(new SqliteDatabaseOptions { ConnectionString = "Data Source=" + path }),
                     NullLogger<SqliteDatabaseInitializer>.Instance);
-                await initializer.InitializeAsync();
+                await initializer.InitializeAsync(TestContext.Current.CancellationToken);
             }
 
             SqliteConnection.ClearAllPools();
             await using var first = CreateContext(path);
             await using var second = CreateContext(path);
-            await first.Database.OpenConnectionAsync();
-            await second.Database.OpenConnectionAsync();
+            await first.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await second.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
 
             Assert.Equal(5000L, await ReadPragmaAsync(first, "busy_timeout"));
             Assert.Equal(5000L, await ReadPragmaAsync(second, "busy_timeout"));
@@ -205,24 +205,24 @@ public sealed class SqliteFrameworkTests
             Directory.CreateDirectory(directory);
             await using (var seed = CreateTestContext(path))
             {
-                await seed.Database.EnsureCreatedAsync();
+                await seed.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
                 seed.Entities.Add(new TestEntity { Name = "before", Description = "preserve" });
-                await seed.SaveChangesAsync();
+                await seed.SaveChangesAsync(TestContext.Current.CancellationToken);
             }
 
             await using (var query = CreateTestContext(path))
             {
-                var entity = await query.Entities.SingleAsync();
+                var entity = await query.Entities.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(EntityState.Detached, query.Entry(entity).State);
                 entity.Name = "after";
                 var unitOfWork = new EfUnitOfWorkCore<TestDbContext>(query);
                 unitOfWork.RegisterEdit(entity);
                 Assert.Equal(EntityState.Modified, query.Entry(entity).State);
-                Assert.Equal(1, await unitOfWork.CommitAsync());
+                Assert.Equal(1, await unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
             }
 
             await using var verify = CreateTestContext(path);
-            var saved = await verify.Entities.SingleAsync();
+            var saved = await verify.Entities.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal("after", saved.Name);
             Assert.Equal("preserve", saved.Description);
             Assert.Equal(EntityState.Detached, verify.Entry(saved).State);
@@ -238,13 +238,13 @@ public sealed class SqliteFrameworkTests
     public async Task UnitOfWorkTracksDetachedEntityAndClearsAfterCommit()
     {
         await using var context = CreateTestContext(":memory:");
-        await context.Database.OpenConnectionAsync();
-        await context.Database.EnsureCreatedAsync();
+        await context.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await context.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
         var unitOfWork = new EfUnitOfWorkCore<TestDbContext>(context);
         var entity = new TestEntity();
         unitOfWork.RegisterAdd(entity);
         Assert.Equal(EntityState.Added, context.Entry(entity).State);
-        Assert.Equal(1, await unitOfWork.CommitAsync());
+        Assert.Equal(1, await unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
         Assert.Equal(1, context.SaveChangesCalls);
         Assert.Empty(context.ChangeTracker.Entries());
     }
@@ -312,13 +312,13 @@ public sealed class SqliteFrameworkTests
     public async Task CommitWithoutChangesReturnsZeroAndClearsTracking()
     {
         await using var context = CreateTestContext(":memory:");
-        await context.Database.OpenConnectionAsync();
-        await context.Database.EnsureCreatedAsync();
+        await context.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await context.Database.EnsureCreatedAsync(TestContext.Current.CancellationToken);
         var unitOfWork = new EfUnitOfWorkCore<TestDbContext>(context);
         var entity = new TestEntity();
         context.Attach(entity);
 
-        Assert.Equal(0, await unitOfWork.CommitAsync());
+        Assert.Equal(0, await unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
         Assert.Empty(context.ChangeTracker.Entries());
     }
 
@@ -330,7 +330,7 @@ public sealed class SqliteFrameworkTests
         var unitOfWork = new EfUnitOfWorkCore<TestDbContext>(context);
         unitOfWork.RegisterAdd(new TestEntity());
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => unitOfWork.CommitAsync());
+        await Assert.ThrowsAsync<DbUpdateException>(() => unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
         Assert.Empty(context.ChangeTracker.Entries());
         Assert.Equal(1, context.SaveChangesCalls);
     }
@@ -343,7 +343,7 @@ public sealed class SqliteFrameworkTests
         var unitOfWork = new EfUnitOfWorkCore<TestDbContext>(context);
         unitOfWork.RegisterAdd(new TestEntity());
 
-        var exception = await Assert.ThrowsAsync<ConcurrencyConflictException>(() => unitOfWork.CommitAsync());
+        var exception = await Assert.ThrowsAsync<ConcurrencyConflictException>(() => unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
         Assert.IsType<DbUpdateConcurrencyException>(exception.InnerException);
         Assert.Empty(context.ChangeTracker.Entries());
     }
@@ -367,9 +367,9 @@ public sealed class SqliteFrameworkTests
         context.SaveMode = SaveMode.Block;
         var unitOfWork = new EfUnitOfWorkCore<TestDbContext>(context);
         unitOfWork.RegisterAdd(new TestEntity());
-        var first = unitOfWork.CommitAsync();
+        var first = unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
         await context.SaveStarted.Task;
-        var second = unitOfWork.CommitAsync();
+        var second = unitOfWork.CommitAsync(TestContext.Current.CancellationToken);
         context.ReleaseSave.TrySetResult();
         var results = await Task.WhenAll(first.ContinueWith(task => task.Exception?.GetBaseException() ?? (object)task.Result), second.ContinueWith(task => task.Exception?.GetBaseException() ?? (object)task.Result));
 
@@ -383,7 +383,7 @@ public sealed class SqliteFrameworkTests
         await using var context = CreateContext(":memory:");
         var logger = NullLogger<SqliteDatabaseAvailabilityChecker>.Instance;
         var timeoutChecker = new SqliteDatabaseAvailabilityChecker(context, logger, TimeSpan.FromMilliseconds(10), async token => await Task.Delay(Timeout.InfiniteTimeSpan, token));
-        Assert.False(await timeoutChecker.IsAvailableAsync());
+        Assert.False(await timeoutChecker.IsAvailableAsync(TestContext.Current.CancellationToken));
 
         using var callerCancellation = new CancellationTokenSource();
         callerCancellation.Cancel();

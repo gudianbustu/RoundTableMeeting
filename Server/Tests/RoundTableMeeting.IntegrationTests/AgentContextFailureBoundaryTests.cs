@@ -53,20 +53,20 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var tasks = await db.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync();
+            var tasks = await db.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
             taskId = tasks[0].ID;
             Assert.Equal(transient ? replaying ? AgentReplyTaskState.Delivered : AgentReplyTaskState.Queued : AgentReplyTaskState.Failed, tasks[0].State);
             Assert.Equal(AgentReplyTaskState.Queued, tasks[1].State);
             Assert.Equal(attemptId, tasks[0].CurrentAttemptId);
-            Assert.Equal(replaying ? 1 : 0, await db.AgentTaskDeliveryAttempts.CountAsync());
+            Assert.Equal(replaying ? 1 : 0, await db.AgentTaskDeliveryAttempts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal(0, tasks[0].AutomaticRetryCount);
             Assert.Equal(0, tasks[0].RetryCycle);
             Assert.Equal(!transient, tasks[0].RetryExhausted);
             Assert.Equal(transient ? null : "context_unavailable", tasks[0].FailureCode);
-            Assert.Equal(0, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
-            Assert.Equal(2, await db.MeetingMessages.CountAsync());
+            Assert.Equal(0, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
+            Assert.Equal(2, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
             if (replaying)
-                Assert.Equal(!transient, (await db.AgentTaskDeliveryAttempts.SingleAsync()).InvalidatedAtUtc.HasValue);
+                Assert.Equal(!transient, (await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).InvalidatedAtUtc.HasValue);
         }
         fault.Mode = null;
         if (!transient)

@@ -55,7 +55,7 @@ public sealed partial class McpAgentContractTests
         var meeting = await CreateMeetingAsync(browser, "Join error envelopes");
         using var http = factory.CreateClient();
         await using var sdk = await CreateSdkAsync(http);
-        var schema = JsonSchema.FromText((await sdk.ListToolsAsync()).Single(t => t.Name == "join_meeting").ProtocolTool.OutputSchema!.Value.GetRawText());
+        var schema = JsonSchema.FromText((await sdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken)).Single(t => t.Name == "join_meeting").ProtocolTool.OutputSchema!.Value.GetRawText());
         var request = new { meetingCode = meeting.MeetingCode, displayName = "Worker", contextCharacterLimit = 12000,
             reliabilityMode = reliable ? "explicit_ack_v1" : "legacy_v1", operationId = reliable ? (Guid?)Guid.NewGuid() : null,
             recoveryKey = reliable ? new string('A', 43) : null };
@@ -72,8 +72,8 @@ public sealed partial class McpAgentContractTests
         }
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Empty(await db.AgentConnectionSessions.ToListAsync());
-        Assert.Empty(await db.AgentRecoveryOperations.ToListAsync());
+        Assert.Empty(await db.AgentConnectionSessions.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AgentRecoveryOperations.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
         CheckPrivateLog(factory, meeting.MeetingCode, request.recoveryKey);
     }
 
@@ -86,7 +86,7 @@ public sealed partial class McpAgentContractTests
         var meeting = await CreateMeetingAsync(browser, "Reply error envelopes");
         using var http = factory.CreateClient();
         await using var sdk = await CreateSdkAsync(http);
-        var schemas = (await sdk.ListToolsAsync()).ToDictionary(t => t.Name, t => JsonSchema.FromText(t.ProtocolTool.OutputSchema!.Value.GetRawText()));
+        var schemas = (await sdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken)).ToDictionary(t => t.Name, t => JsonSchema.FromText(t.ProtocolTool.OutputSchema!.Value.GetRawText()));
         var key = new string('A', 43);
         var joined = (await ProcessCallAsync(sdk, "join_meeting", new { meetingCode = meeting.MeetingCode, displayName = "Worker",
             contextCharacterLimit = 12000, reliabilityMode = "explicit_ack_v1", operationId = Guid.NewGuid(), recoveryKey = key })).GetProperty("data");
@@ -115,13 +115,13 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var connection = await db.AgentConnectionSessions.SingleAsync();
+            var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             // Reproduce the committed-disconnect / not-yet-retired-registry cut.
             Assert.True(connection.DisconnectBinding(connection.BindingVersion, "transport_closed", DateTimeOffset.UtcNow));
             db.Update(connection);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             db.ChangeTracker.Clear();
-            Assert.Equal(RoundTableMeeting.Domain.Enums.AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync()).State);
+            Assert.Equal(RoundTableMeeting.Domain.Enums.AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         }
         foreach (var tool in new[] { "get_agent_status", "renew_agent_lease", "wait_for_mention" })
             CheckPrivateErrorEnvelope(await ActivationCallAsync(sdk, tool, new { connectionSessionId = id }), schemas[tool],

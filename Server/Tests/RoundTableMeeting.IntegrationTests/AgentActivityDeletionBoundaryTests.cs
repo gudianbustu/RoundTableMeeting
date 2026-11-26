@@ -27,33 +27,33 @@ public sealed partial class McpAgentContractTests
         var hub = new ActivityCaptureHub();
         var notifier = new AgentActivityNotifier(hub, test.Services.GetRequiredService<IServiceScopeFactory>(), gate,
             NullLogger<AgentActivityNotifier>.Instance);
-        await notifier.NotifyAsync(activity, notifyPresence: true);
+        await notifier.NotifyAsync(activity, notifyPresence: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, hub.Proxy.Messages.Count);
         Assert.Equal("agentActivityChangedV1", hub.Proxy.Messages[0].Method);
         Assert.Equal(activity, Assert.IsType<AgentActivityDto>(Assert.Single(hub.Proxy.Messages[0].Args)));
         hub.Proxy.FailNext = true;
-        await notifier.NotifyAsync(activity, notifyPresence: true);
+        await notifier.NotifyAsync(activity, notifyPresence: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, hub.Proxy.Messages.Count);
         // A lost push never mutates the persisted version; a fresh subscription can recover it.
         await using (var scope = test.Services.CreateAsyncScope())
         {
-            using var lease = await gate.AcquireSharedAsync(test.MeetingId);
-            var snapshot = Assert.Single(await scope.ServiceProvider.GetRequiredService<IAgentActivityService>().ListAsync(test.MeetingId));
+            using var lease = await gate.AcquireSharedAsync(test.MeetingId, TestContext.Current.CancellationToken);
+            var snapshot = Assert.Single(await scope.ServiceProvider.GetRequiredService<IAgentActivityService>().ListAsync(test.MeetingId, TestContext.Current.CancellationToken));
             Assert.Equal(activity, snapshot);
         }
         var deletion = DeleteLifecycleMeetingAsync(browser, test.MeetingId, "Reliable ordered races");
         try
         {
-            await gate.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await notifier.NotifyAsync(activity, notifyPresence: true).WaitAsync(TimeSpan.FromSeconds(5));
+            await gate.Held.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await notifier.NotifyAsync(activity, notifyPresence: true, cancellationToken: TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(2, hub.Proxy.Messages.Count);
-            await notifier.NotifyAsync(otherActivity, notifyPresence: true).WaitAsync(TimeSpan.FromSeconds(5));
+            await notifier.NotifyAsync(otherActivity, notifyPresence: true, cancellationToken: TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.Equal(4, hub.Proxy.Messages.Count);
             Assert.Equal(otherActivity, Assert.IsType<AgentActivityDto>(Assert.Single(hub.Proxy.Messages[2].Args)));
         }
         finally { gate.Release.TrySetResult(); }
-        await deletion.WaitAsync(TimeSpan.FromSeconds(10));
-        await notifier.NotifyAsync(activity, notifyPresence: true);
+        await deletion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        await notifier.NotifyAsync(activity, notifyPresence: true, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(4, hub.Proxy.Messages.Count);
         await AssertAgentMeetingGoneAsync(test.Factory, test.MeetingId);
     }

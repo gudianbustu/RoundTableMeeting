@@ -41,7 +41,7 @@ public sealed partial class McpAgentContractTests
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
             db.Add(MeetingMessage.CreateSystem(meeting.MeetingId, 3, "System", "ordinary System history", Guid.NewGuid(), DateTimeOffset.UtcNow));
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await PostHumanMessageAsync(browser, meeting.MeetingId, new string('中', 5000));
         var content = "@Alpha @Beta " + (oversizedTrigger ? new string('文', 2000) : "shared trigger");

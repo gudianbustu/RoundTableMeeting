@@ -46,11 +46,11 @@ public sealed partial class McpAgentContractTests
         Assert.Equal("agent_not_found", missing.GetProperty("errorCode").GetString());
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(2, await db.MeetingParticipants.CountAsync());
-        Assert.Equal(1, await db.AgentConnectionSessions.CountAsync());
-        Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync());
+        Assert.Equal(2, await db.MeetingParticipants.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(joined.GetProperty("agent").GetProperty("participantId").GetGuid(),
-            (await db.MeetingParticipants.SingleAsync(p => p.ParticipantType == ParticipantType.Agent)).ID);
+            (await db.MeetingParticipants.SingleAsync(p => p.ParticipantType == ParticipantType.Agent, cancellationToken: TestContext.Current.CancellationToken)).ID);
     }
 
     [Fact]
@@ -90,9 +90,9 @@ public sealed partial class McpAgentContractTests
             recoveryKey = join.recoveryKey, operationId = Guid.NewGuid() })).GetProperty("errorCode").GetString());
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(2, await db.AgentConnectionSessions.CountAsync());
-        Assert.Equal(3, await db.AgentRecoveryOperations.CountAsync());
-        Assert.Equal(1, await db.AgentContextCursors.CountAsync());
+        Assert.Equal(2, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(3, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.AgentContextCursors.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -125,9 +125,9 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var connection = await db.AgentConnectionSessions.SingleAsync();
+            var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(legacy ? AgentConnectionState.Connected : AgentConnectionState.Disconnected, connection.State);
-            Assert.Equal(legacy ? 0 : 1, await db.AgentRecoveryOperations.CountAsync());
+            Assert.Equal(legacy ? 0 : 1, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
             if (legacy) Assert.Null(connection.LeaseExpiresAtUtc);
         }
         if (legacy) await owner.DisposeAsync();
@@ -163,7 +163,7 @@ public sealed partial class McpAgentContractTests
         var replyKey = mention.GetProperty("replyIdempotencyKey").GetGuid();
         await ActivationCallAsync(sdk, "confirm_context", new { connectionSessionId = id, kind = "task", taskId, deliveryAttemptId = attemptId });
         await using (var scope = factory.Services.CreateAsyncScope())
-            time.Now = (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync()).LeaseExpiresAtUtc!.Value;
+            time.Now = (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LeaseExpiresAtUtc!.Value;
         async Task<string> Facts()
         {
             await using var scope = factory.Services.CreateAsyncScope();

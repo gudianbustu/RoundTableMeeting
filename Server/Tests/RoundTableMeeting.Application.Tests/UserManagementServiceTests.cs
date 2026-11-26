@@ -19,7 +19,7 @@ public sealed class UserManagementServiceTests
         var first = Account("bob", "Bob");
         var second = Account("alice", "Alice");
 
-        var result = await Service(new FakeRepository(first, second), new FakeUnitOfWork()).ListUsersAsync();
+        var result = await Service(new FakeRepository(first, second), new FakeUnitOfWork()).ListUsersAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal([first.ID, second.ID], result.Select(item => item.UserId));
         Assert.All(result, item => Assert.Equal(["UserId", "Username", "Nickname", "IsAdmin"], item.GetType().GetProperties().Select(property => property.Name)));
@@ -29,7 +29,7 @@ public sealed class UserManagementServiceTests
     public async Task CreateNormalizesAndHashesWithoutWritingPlaintext()
     {
         var unitOfWork = new FakeUnitOfWork();
-        var result = await Service(new FakeRepository(), unitOfWork).CreateUserAsync(new CreateUserRequest { Username = " Alice ", Nickname = " Alice ", InitialPassword = " secret " });
+        var result = await Service(new FakeRepository(), unitOfWork).CreateUserAsync(new CreateUserRequest { Username = " Alice ", Nickname = " Alice ", InitialPassword = " secret " }, TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.Success, result.Status);
         Assert.Equal("Alice", result.User?.Username);
@@ -43,7 +43,7 @@ public sealed class UserManagementServiceTests
     public async Task CreateInvalidFieldsReturnFixedErrorsWithoutWrite()
     {
         var unitOfWork = new FakeUnitOfWork();
-        var result = await Service(new FakeRepository(), unitOfWork).CreateUserAsync(new CreateUserRequest { Username = " ", Nickname = " ", InitialPassword = " " });
+        var result = await Service(new FakeRepository(), unitOfWork).CreateUserAsync(new CreateUserRequest { Username = " ", Nickname = " ", InitialPassword = " " }, TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.ValidationFailed, result.Status);
         Assert.Equal(["initialPassword", "nickname", "username"], result.Errors!.Keys.OrderBy(key => key));
@@ -55,7 +55,7 @@ public sealed class UserManagementServiceTests
     public async Task CreateDuplicateReturnsUsernameConflict()
     {
         var existing = Account("alice", "Alice");
-        var result = await Service(new FakeRepository(existing), new FakeUnitOfWork()).CreateUserAsync(new CreateUserRequest { Username = " ALICE ", Nickname = "Other", InitialPassword = "secret" });
+        var result = await Service(new FakeRepository(existing), new FakeUnitOfWork()).CreateUserAsync(new CreateUserRequest { Username = " ALICE ", Nickname = "Other", InitialPassword = "secret" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.UsernameConflict, result.Status);
     }
@@ -66,8 +66,8 @@ public sealed class UserManagementServiceTests
         var account = Account("alice", "Alice");
         var service = Service(new FakeRepository(account), new FakeUnitOfWork());
 
-        var updated = await service.UpdateNicknameAsync(account.ID, new UpdateNicknameRequest { Nickname = " New " });
-        var missing = await service.UpdateNicknameAsync(Guid.NewGuid(), new UpdateNicknameRequest { Nickname = "New" });
+        var updated = await service.UpdateNicknameAsync(account.ID, new UpdateNicknameRequest { Nickname = " New " }, TestContext.Current.CancellationToken);
+        var missing = await service.UpdateNicknameAsync(Guid.NewGuid(), new UpdateNicknameRequest { Nickname = "New" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.Success, updated.Status);
         Assert.Equal("New", account.Nickname);
@@ -77,7 +77,7 @@ public sealed class UserManagementServiceTests
     [Fact]
     public async Task UpdateNicknameValidationReturnsNicknameError()
     {
-        var result = await Service(new FakeRepository(Account("alice", "Alice")), new FakeUnitOfWork()).UpdateNicknameAsync(Guid.NewGuid(), new UpdateNicknameRequest { Nickname = " " });
+        var result = await Service(new FakeRepository(Account("alice", "Alice")), new FakeUnitOfWork()).UpdateNicknameAsync(Guid.NewGuid(), new UpdateNicknameRequest { Nickname = " " }, TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.ValidationFailed, result.Status);
         Assert.Contains("nickname", result.Errors!.Keys);
@@ -87,7 +87,7 @@ public sealed class UserManagementServiceTests
     public async Task ResetPasswordUsesOnlyFixedValue()
     {
         var account = Account("alice", "Alice", "old-hash");
-        var result = await Service(new FakeRepository(account), new FakeUnitOfWork()).ResetPasswordAsync(account.ID);
+        var result = await Service(new FakeRepository(account), new FakeUnitOfWork()).ResetPasswordAsync(account.ID, TestContext.Current.CancellationToken);
         var verifier = new PasswordHasher<UserAccount>();
 
         Assert.Equal(UserManagementStatus.Success, result.Status);
@@ -100,7 +100,7 @@ public sealed class UserManagementServiceTests
     public async Task ResetPasswordMissingAccountDoesNotHash()
     {
         var hasher = new RecordingHasher();
-        var result = await Service(new FakeRepository(), new FakeUnitOfWork(), hasher).ResetPasswordAsync(Guid.NewGuid());
+        var result = await Service(new FakeRepository(), new FakeUnitOfWork(), hasher).ResetPasswordAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.UserNotFound, result.Status);
         Assert.Equal(0, hasher.HashCalls);
@@ -110,7 +110,7 @@ public sealed class UserManagementServiceTests
     public async Task ConcurrentUsernameConflictIsTranslatedToResult()
     {
         var unitOfWork = new FakeUnitOfWork { CommitException = new RoundTableMeeting.Domain.Exceptions.UsernameConflictException("conflict") };
-        var result = await Service(new FakeRepository(), unitOfWork).CreateUserAsync(new CreateUserRequest { Username = "alice", Nickname = "Alice", InitialPassword = "secret" });
+        var result = await Service(new FakeRepository(), unitOfWork).CreateUserAsync(new CreateUserRequest { Username = "alice", Nickname = "Alice", InitialPassword = "secret" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(UserManagementStatus.UsernameConflict, result.Status);
     }

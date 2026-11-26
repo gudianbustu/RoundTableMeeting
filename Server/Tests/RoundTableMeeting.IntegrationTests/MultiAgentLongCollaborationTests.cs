@@ -73,14 +73,14 @@ public sealed partial class McpAgentContractTests
         Assert.True(rounds > 40);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var tasks = await db.AgentReplyTasks.Where(x => x.MeetingId == meeting.MeetingId).ToArrayAsync();
+        var tasks = await db.AgentReplyTasks.Where(x => x.MeetingId == meeting.MeetingId).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(rounds, tasks.Length);
         Assert.All(tasks, task => { Assert.Equal(AgentReplyTaskState.Replied, task.State); Assert.Equal(chainId, task.ChainId); });
         Assert.Single(tasks, task => task.ParentTaskId is null);
         Assert.Contains(tasks.GroupBy(task => task.ParentTaskId), group => group.Key is not null && group.Count() == 2);
         Assert.Contains(tasks, task => task.ParentTaskId is Guid parentId
             && tasks.Single(parent => parent.ID == parentId).AgentParticipantId == task.AgentParticipantId);
-        Assert.Equal(rounds + 1, await db.MeetingMessages.CountAsync(x => x.MeetingId == meeting.MeetingId));
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(rounds + 1, await db.MeetingMessages.CountAsync(x => x.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

@@ -22,10 +22,10 @@ public sealed partial class McpAgentContractTests
         await using (var scope = test.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(AgentReplyTaskState.Delivered, (await db.AgentReplyTasks.SingleAsync()).State);
-            Assert.Null((await db.AgentTaskDeliveryAttempts.SingleAsync()).ConfirmedAtUtc);
-            Assert.Equal(0, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
-            Assert.Equal(AgentConnectionState.Connected, (await db.AgentConnectionSessions.SingleAsync()).State);
+            Assert.Equal(AgentReplyTaskState.Delivered, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+            Assert.Null((await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ConfirmedAtUtc);
+            Assert.Equal(0, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
+            Assert.Equal(AgentConnectionState.Connected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         }
         await test.RejectUnchanged("confirm_context", args, "confirmation_expired");
     }

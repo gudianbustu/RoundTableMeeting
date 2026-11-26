@@ -30,11 +30,11 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(1, agent.Count("generation_started"));
         Assert.Equal(1, agent.Count("replied"));
         await using var db = host.Database();
-        var task = await db.AgentReplyTasks.SingleAsync();
+        var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(AgentReplyTaskState.Replied, task.State);
-        Assert.Single(await db.AgentTaskDeliveryAttempts.ToListAsync());
-        Assert.Equal(2, await db.MeetingMessages.CountAsync());
-        Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync()).State);
+        Assert.Single(await db.AgentTaskDeliveryAttempts.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         agent.AssertPrivateOutput();
     }
 
@@ -77,7 +77,7 @@ public sealed partial class McpAgentContractTests
                 connection.LeaseExpiresAtUtc!.Value);
         }
         var before = await Facts();
-        await Task.Delay(TimeSpan.FromSeconds(leaseSeconds * 2 + 1));
+        await Task.Delay(TimeSpan.FromSeconds(leaseSeconds * 2 + 1), TestContext.Current.CancellationToken);
         var after = await Facts();
         Assert.Equal(before.Decision, after.Decision);
         Assert.True(after.Lease > before.Lease.AddSeconds(leaseSeconds));
@@ -89,8 +89,8 @@ public sealed partial class McpAgentContractTests
         await agent.Command("quit");
         Assert.Equal(0, await agent.Exit());
         await using var final = host.Database();
-        Assert.All(await final.AgentReplyTasks.ToListAsync(), t => Assert.Equal(AgentReplyTaskState.Replied, t.State));
-        Assert.Equal(4, await final.MeetingMessages.CountAsync());
+        Assert.All(await final.AgentReplyTasks.ToListAsync(cancellationToken: TestContext.Current.CancellationToken), t => Assert.Equal(AgentReplyTaskState.Replied, t.State));
+        Assert.Equal(4, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         agent.AssertPrivateOutput();
     }
 
@@ -115,10 +115,10 @@ public sealed partial class McpAgentContractTests
         Assert.Contains("[reliable-reference-agent] failed connection_superseded", agent.Output);
         Assert.Equal(0, agent.Count("resumed"));
         await using var db = host.Database();
-        var current = await db.AgentConnectionSessions.SingleAsync(c => c.State == AgentConnectionState.Connected);
+        var current = await db.AgentConnectionSessions.SingleAsync(c => c.State == AgentConnectionState.Connected, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(replacement.GetProperty("connection").GetProperty("connectionSessionId").GetGuid(), current.ID);
         Assert.Equal(2, current.ConnectionGeneration);
-        Assert.Single(await db.AgentConnectionSessions.Where(c => c.State == AgentConnectionState.Superseded).ToListAsync());
+        Assert.Single(await db.AgentConnectionSessions.Where(c => c.State == AgentConnectionState.Superseded).ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
         agent.AssertPrivateOutput();
     }
 
@@ -139,7 +139,7 @@ public sealed partial class McpAgentContractTests
         await using var db = host.Database();
         // The injected remote 503 prevents DELETE from reaching the real host. Local exit is
         // not durable disconnect evidence; the owner remains connected until lease convergence.
-        Assert.Equal(AgentConnectionState.Connected, (await db.AgentConnectionSessions.SingleAsync()).State);
+        Assert.Equal(AgentConnectionState.Connected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         agent.AssertPrivateOutput();
     }
 

@@ -20,12 +20,12 @@ public sealed class AuthenticationContractTests
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient();
         client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        var created = await client.PostAsJsonAsync("/api/auth/register", new { username = " Visitor ", password = "visitor-password", isAdmin = true });
+        var created = await client.PostAsJsonAsync("/api/auth/register", new { username = " Visitor ", password = "visitor-password", isAdmin = true }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, created.StatusCode);
-        var user = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        var user = await client.GetFromJsonAsync<JsonElement>("/api/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("Visitor", user.GetProperty("nickname").GetString());
         Assert.False(user.GetProperty("isAdmin").GetBoolean());
-        var duplicate = await client.PostAsJsonAsync("/api/auth/register", new { username = "VISITOR", password = "different-password" });
+        var duplicate = await client.PostAsJsonAsync("/api/auth/register", new { username = "VISITOR", password = "different-password" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
     }
 
@@ -73,7 +73,7 @@ public sealed class AuthenticationContractTests
         request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         request.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
         var cookie = response.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("RoundTableMeeting.Auth=", StringComparison.Ordinal));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("Path=/", cookie, StringComparison.OrdinalIgnoreCase);
@@ -82,7 +82,7 @@ public sealed class AuthenticationContractTests
         Assert.DoesNotContain("expires=", cookie, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
 
-        var missing = await client.GetAsync("/api/auth/me");
+        var missing = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
         Assert.Contains("no-store", missing.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -91,7 +91,7 @@ public sealed class AuthenticationContractTests
     {
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient();
-        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", cancellationToken: TestContext.Current.CancellationToken);
         var paths = document.GetProperty("paths");
         foreach (var path in new[] { "/api/auth/login", "/api/auth/me", "/api/auth/logout" }) Assert.True(paths.TryGetProperty(path, out _));
         Assert.Contains("400", paths.GetProperty("/api/auth/login").GetProperty("post").GetProperty("responses").EnumerateObject().Select(p => p.Name));
@@ -109,17 +109,17 @@ public sealed class AuthenticationContractTests
         using var login = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         login.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         login.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(login)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(login, TestContext.Current.CancellationToken)).StatusCode);
 
         await using (var connection = new SqliteConnection("Data Source=" + factory.DatabasePath))
         {
-            await connection.OpenAsync();
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = "DELETE FROM UserAccounts WHERE NormalizedUsername = 'ALICE';";
-            await command.ExecuteNonQueryAsync();
+            await command.ExecuteNonQueryAsync(TestContext.Current.CancellationToken);
         }
 
-        var response = await client.GetAsync("/api/auth/me");
+        var response = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(response.Headers.Location);
         Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -132,12 +132,12 @@ public sealed class AuthenticationContractTests
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var response = await client.GetAsync("/api/auth/test-failure");
+        var response = await client.GetAsync("/api/auth/test-failure", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Contains("no-store", response.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", response.Headers.Pragma.ToString());
-        Assert.Equal("internal_error", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("internal_error", (await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -148,13 +148,13 @@ public sealed class AuthenticationContractTests
         using var login = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         login.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         login.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(login)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(login, TestContext.Current.CancellationToken)).StatusCode);
 
         factory.ManualTimeProvider.Advance(TimeSpan.FromHours(8).Add(TimeSpan.FromSeconds(1)));
 
-        var response = await client.GetAsync("/api/auth/me");
+        var response = await client.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -169,9 +169,9 @@ public sealed class AuthenticationContractTests
         account.InitializePasswordHash("hash");
 
         unitOfWork.RegisterAdd(account);
-        Assert.Equal(1, await unitOfWork.CommitAsync());
+        Assert.Equal(1, await unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
         Assert.Same(context, scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>());
-        Assert.Equal(account.ID, (await repository.FindByNormalizedUsernameAsync("SCOPE-CONTRACT"))?.ID);
+        Assert.Equal(account.ID, (await repository.FindByNormalizedUsernameAsync("SCOPE-CONTRACT", TestContext.Current.CancellationToken))?.ID);
     }
 
     [Fact]
@@ -182,9 +182,9 @@ public sealed class AuthenticationContractTests
         using var login = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         login.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         login.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(login)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.SendAsync(login, TestContext.Current.CancellationToken)).StatusCode);
 
-        var claims = await client.GetFromJsonAsync<JsonElement>("/__test/auth-claims");
+        var claims = await client.GetFromJsonAsync<JsonElement>("/__test/auth-claims", cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(claims.GetProperty("hasCustomUserId").GetBoolean());
         Assert.False(claims.GetProperty("hasNameIdentifier").GetBoolean());
         Assert.Equal(["round_table_meeting_user_id"], claims.GetProperty("claimTypes").EnumerateArray().Select(value => value.GetString()).OfType<string>().ToArray());
@@ -199,7 +199,7 @@ public sealed class AuthenticationContractTests
         using var forbidden = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         forbidden.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
         forbidden.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        var forbiddenResponse = await client.SendAsync(forbidden);
+        var forbiddenResponse = await client.SendAsync(forbidden, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
         Assert.Contains("no-store", forbiddenResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", forbiddenResponse.Headers.Pragma.ToString());
@@ -207,7 +207,7 @@ public sealed class AuthenticationContractTests
         using var unsupported = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         unsupported.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         unsupported.Content = new StringContent("{}", System.Text.Encoding.UTF8, "application/json-patch+json");
-        var unsupportedResponse = await client.SendAsync(unsupported);
+        var unsupportedResponse = await client.SendAsync(unsupported, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, unsupportedResponse.StatusCode);
         Assert.Contains("no-store", unsupportedResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", unsupportedResponse.Headers.Pragma.ToString());
@@ -222,7 +222,7 @@ public sealed class AuthenticationContractTests
         request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         request.Content = new StringContent("logout", System.Text.Encoding.UTF8, "text/plain");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -232,7 +232,7 @@ public sealed class AuthenticationContractTests
     {
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient();
-        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", cancellationToken: TestContext.Current.CancellationToken);
         var paths = document.GetProperty("paths");
         var expected = new Dictionary<string, (string Method, string[] Codes)>
         {

@@ -54,15 +54,15 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(1, await db.MeetingMessages.CountAsync());
-            Assert.Equal(1, await db.MessageMentions.CountAsync());
-            Assert.Equal(1, await db.MessageAppendedEvents.CountAsync());
-            Assert.Equal(2, await db.MessageEventDeliveries.CountAsync());
-            var persisted = await db.AgentReplyTasks.SingleAsync();
+            Assert.Equal(1, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.MessageMentions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.MessageAppendedEvents.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(2, await db.MessageEventDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            var persisted = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentReplyTaskState.Processing, persisted.State);
             Assert.Null(persisted.ReplyMessageId);
             Assert.Equal(attemptId, persisted.CurrentAttemptId);
-            Assert.Equal(AgentTaskDeliveryAttemptState.Confirmed, (await db.AgentTaskDeliveryAttempts.SingleAsync()).State);
+            Assert.Equal(AgentTaskDeliveryAttemptState.Confirmed, (await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         }
         fault.Fail = false;
         var reply = await ActivationCallAsync(sdk, "reply_to_mention", replyArgs);
@@ -70,11 +70,11 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(2, reply.GetProperty("data").GetProperty("message").GetProperty("sequence").GetInt64());
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(2, await final.MeetingMessages.CountAsync());
-        Assert.Equal(2, await final.MessageMentions.CountAsync());
-        Assert.Equal(2, await final.MessageAppendedEvents.CountAsync());
-        Assert.Equal(4, await final.MessageEventDeliveries.CountAsync());
-        Assert.Equal(AgentReplyTaskState.Replied, (await final.AgentReplyTasks.SingleAsync(item => item.ID == taskId)).State);
+        Assert.Equal(2, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await final.MessageMentions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await final.MessageAppendedEvents.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(4, await final.MessageEventDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(AgentReplyTaskState.Replied, (await final.AgentReplyTasks.SingleAsync(item => item.ID == taskId, cancellationToken: TestContext.Current.CancellationToken)).State);
         if (collaborate)
         {
             var child = await CrashMentionAsync(sdk, id);
@@ -83,8 +83,8 @@ public sealed partial class McpAgentContractTests
             Assert.Equal(reply.GetProperty("data").GetProperty("message").GetProperty("messageId").GetGuid(), child.GetProperty("triggerMessageId").GetGuid());
             var replay = await ActivationCallAsync(sdk, "reply_to_mention", replyArgs);
             Assert.True(replay.GetProperty("data").GetProperty("replayed").GetBoolean());
-            Assert.Equal(2, await final.AgentReplyTasks.CountAsync());
-            Assert.Equal(2, await final.MeetingMessages.CountAsync());
+            Assert.Equal(2, await final.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(2, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
     }
 
@@ -129,8 +129,8 @@ public sealed partial class McpAgentContractTests
         await CompleteContinuityTaskAsync(factory.Services, nextId, next, nextTransport);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.All(await db.AgentReplyTasks.ToArrayAsync(), t => Assert.Equal(AgentReplyTaskState.Replied, t.State));
-        Assert.Equal(completeFirstTask ? 2 : 1, await db.AgentReplyTasks.CountAsync());
-        Assert.Equal(completeFirstTask ? 6 : 4, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
+        Assert.All(await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken), t => Assert.Equal(AgentReplyTaskState.Replied, t.State));
+        Assert.Equal(completeFirstTask ? 2 : 1, await db.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(completeFirstTask ? 6 : 4, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
     }
 }

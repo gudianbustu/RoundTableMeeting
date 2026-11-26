@@ -36,15 +36,15 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             UPDATE AgentReplyTasks SET State = {state}, DeliveredAtUtc = {delivered}, ProcessingAtUtc = {processing},
              FailedAtUtc = {failed}, FailureCode = {failureCode}, RepliedAtUtc = {replied}, ReplyMessageId = {replyId}, CancelledAtUtc = {cancelled}
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
         var before = await ReadLegacyColumnsAsync(db);
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(before, await ReadLegacyColumnsAsync(db));
-        var task = await db.AgentReplyTasks.SingleAsync();
+        var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(seed.Message.ID, task.ChainId);
         Assert.Null(task.ParentTaskId);
         Assert.Equal(state, task.State.ToString());
-        Assert.Equal(state == "Replied" ? 2 : 1, (await db.AgentCollaborationBoundaries.SingleAsync()).AgentTriggerStartSequence);
+        Assert.Equal(state == "Replied" ? 2 : 1, (await db.AgentCollaborationBoundaries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AgentTriggerStartSequence);
         Assert.Equal(0, await ForeignKeyErrors(db));
     }
 

@@ -29,7 +29,7 @@ public sealed partial class McpAgentContractTests
         var meeting = await CreateMeetingAsync(browser, "Exception envelope");
         using var http = factory.CreateClient(new() { HandleCookies = false });
         await using var sdk = await CreateSdkAsync(http);
-        var tools = await sdk.ListToolsAsync();
+        var tools = await sdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         var schemas = tools.ToDictionary(tool => tool.Name,
             tool => JsonSchema.FromText(tool.ProtocolTool.OutputSchema!.Value.GetRawText()));
         var joinArguments = new Dictionary<string, object?>
@@ -42,19 +42,18 @@ public sealed partial class McpAgentContractTests
             joinArguments["operationId"] = Guid.NewGuid();
             joinArguments["recoveryKey"] = new string('A', 43);
         }
-        var joined = SdkPayload(await sdk.CallToolAsync("join_meeting", joinArguments));
+        var joined = SdkPayload(await sdk.CallToolAsync("join_meeting", joinArguments, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(joined.GetProperty("succeeded").GetBoolean());
         var id = joined.GetProperty("data").GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         fault.Enabled = true;
         foreach (var (name, arguments) in ExceptionToolArguments(id))
         {
-            var payload = SdkPayload(await sdk.CallToolAsync(name, arguments));
+            var payload = SdkPayload(await sdk.CallToolAsync(name, arguments, cancellationToken: TestContext.Current.CancellationToken));
             AssertExceptionEnvelope(payload, reliable);
-            Assert.True(schemas[name].Evaluate(JsonSerializer.SerializeToNode(payload)).IsValid, name);
+            Assert.True(schemas[name].Evaluate(payload).IsValid, name);
         }
         // A guessed business ID cannot inherit the real connection's mode or diagnostics.
-        AssertExceptionEnvelope(SdkPayload(await sdk.CallToolAsync("get_agent_status",
-            new Dictionary<string, object?> { ["connectionSessionId"] = Guid.NewGuid() })), reliable: false);
+        AssertExceptionEnvelope(SdkPayload(await sdk.CallToolAsync("get_agent_status", new Dictionary<string, object?> { ["connectionSessionId"] = Guid.NewGuid() }, cancellationToken: TestContext.Current.CancellationToken)), reliable: false);
     }
 
     [Theory]
@@ -78,14 +77,14 @@ public sealed partial class McpAgentContractTests
         {
             ["meetingCode"] = Guid.NewGuid().ToString(), ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000,
             ["reliabilityMode"] = mode, ["operationId"] = Guid.NewGuid(), ["recoveryKey"] = new string('A', 43),
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         AssertExceptionEnvelope(payload, reliable);
         if (reliable) Assert.Equal("stop", payload.GetProperty("data").GetProperty("nextAction").GetString());
         // New tools have a declared reliable envelope even before binding or authentication.
         foreach (var (name, arguments) in ExceptionToolArguments(Guid.NewGuid()).Where(item =>
             item.Name is not ("wait_for_mention" or "reply_to_mention" or "get_agent_status")))
         {
-            var anonymous = SdkPayload(await sdk.CallToolAsync(name, arguments));
+            var anonymous = SdkPayload(await sdk.CallToolAsync(name, arguments, cancellationToken: TestContext.Current.CancellationToken));
             AssertExceptionEnvelope(anonymous, reliable: true);
             Assert.Equal("stop", anonymous.GetProperty("data").GetProperty("nextAction").GetString());
         }

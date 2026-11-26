@@ -16,17 +16,17 @@ public sealed class GroupMentionTests
         using var factory = new TestApplicationFactory();
         using var human = factory.CreateClient();
         human.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" });
+        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken);
         login.EnsureSuccessStatusCode();
-        using var create = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "群体提及" });
-        var created = await create.Content.ReadFromJsonAsync<JsonElement>();
+        using var create = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "群体提及" }, cancellationToken: TestContext.Current.CancellationToken);
+        var created = await create.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var id = created.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var code = created.GetProperty("invitation").GetProperty("meetingCode").GetString();
         await using var host = await McpClient.CreateAsync(new HttpClientTransport(new()
         {
             Endpoint = new Uri(human.BaseAddress!, "/mcp"), TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string> { ["X-RoundTable-Mode"] = "rooms" }
-        }, factory.CreateClient()));
+        }, factory.CreateClient()), cancellationToken: TestContext.Current.CancellationToken);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(45));
         async Task<JsonElement> Call(string name, Dictionary<string, object?> args)
         {
@@ -65,7 +65,7 @@ public sealed class GroupMentionTests
             Assert.Equal(directed.GetProperty("messageId").GetGuid(), (await Next(room)).GetProperty("messageId").GetGuid());
             await Call("reply", new() { ["room"] = room, ["messageId"] = directed.GetProperty("messageId").GetGuid(), ["content"] = "到" });
         }
-        using var mode = await human.PutAsJsonAsync($"/api/meetings/{id}/discussion-mode", new { mode = "free" });
+        using var mode = await human.PutAsJsonAsync($"/api/meetings/{id}/discussion-mode", new { mode = "free" }, cancellationToken: TestContext.Current.CancellationToken);
         mode.EnsureSuccessStatusCode();
         await Call("send_public_message", new() { ["room"] = first, ["content"] = "@所有人类", ["clientSubmissionId"] = Guid.NewGuid() });
         await Call("send_public_message", new() { ["room"] = first, ["content"] = "@所有人", ["clientSubmissionId"] = Guid.NewGuid() });

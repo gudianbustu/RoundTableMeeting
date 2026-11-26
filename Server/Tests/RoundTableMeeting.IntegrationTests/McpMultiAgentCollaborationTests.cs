@@ -23,7 +23,7 @@ public sealed partial class McpAgentContractTests
         using var http = CreateAnonymousClient(factory);
         await using var alpha = await CreateSdkAsync(http);
         await using var beta = await CreateSdkAsync(http);
-        var tools = await alpha.ListToolsAsync();
+        var tools = await alpha.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(9, tools.Count);
         Assert.Equal(new[] { "confirm_context", "get_agent_status", "join_meeting", "renew_agent_lease", "reply_to_mention", "report_task_failure", "resume_agent", "retry_task", "wait_for_mention" },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal));
@@ -102,12 +102,12 @@ public sealed partial class McpAgentContractTests
         {
             var requested = await Call(beta, "get_agent_status", new { connectionSessionId = b, taskId = child.GetProperty("taskId").GetGuid() });
             Assert.Equal(source.GetRawText(), requested.GetProperty("requestedTask").GetProperty("collaboration").GetRawText());
-            var blocked = SdkPayload(await beta.CallToolAsync("wait_for_mention", new Dictionary<string, object?> { ["connectionSessionId"] = b }));
+            var blocked = SdkPayload(await beta.CallToolAsync("wait_for_mention", new Dictionary<string, object?> { ["connectionSessionId"] = b }, cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal("task_in_progress", blocked.GetProperty("errorCode").GetString());
             Assert.True(schemas["wait_for_mention"].Evaluate(blocked).IsValid);
             Assert.Equal(source.GetRawText(), blocked.GetProperty("data").GetProperty("taskSummary").GetProperty("collaboration").GetRawText());
             var forbidden = SdkPayload(await beta.CallToolAsync("get_agent_status", new Dictionary<string, object?>
-                { ["connectionSessionId"] = b, ["taskId"] = root.GetProperty("taskId").GetGuid() }));
+                { ["connectionSessionId"] = b, ["taskId"] = root.GetProperty("taskId").GetGuid() }, cancellationToken: TestContext.Current.CancellationToken));
             Assert.False(forbidden.GetProperty("succeeded").GetBoolean());
             Assert.Equal("task_not_available", forbidden.GetProperty("errorCode").GetString());
             Assert.DoesNotContain("collaboration", forbidden.GetRawText());
@@ -129,8 +129,8 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(JsonValueKind.Null, empty.GetProperty("queueHead").ValueKind);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(3, await db.AgentReplyTasks.CountAsync(task => task.MeetingId == meeting.MeetingId));
-        Assert.Equal(4, await db.MeetingMessages.CountAsync(message => message.MeetingId == meeting.MeetingId));
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(3, await db.AgentReplyTasks.CountAsync(task => task.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(4, await db.MeetingMessages.CountAsync(message => message.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

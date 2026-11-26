@@ -23,15 +23,15 @@ public sealed class AccountTransactionTests : IDisposable
         var migrations = context.Database.GetMigrations().ToArray();
         var adminMigration = Array.FindIndex(migrations, item => item.EndsWith("AddUserAccountAdmin", StringComparison.Ordinal));
         Assert.True(adminMigration > 0);
-        await context.GetService<IMigrator>().MigrateAsync(migrations[adminMigration - 1]);
+        await context.GetService<IMigrator>().MigrateAsync(migrations[adminMigration - 1], TestContext.Current.CancellationToken);
         var id = Guid.NewGuid();
-        await context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({id}, {"old"}, {"OLD"}, {"Original"}, {"original-hash"})");
-        await context.Database.MigrateAsync();
-        var account = await context.UserAccounts.SingleAsync();
+        await context.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({id}, {"old"}, {"OLD"}, {"Original"}, {"original-hash"})", cancellationToken: TestContext.Current.CancellationToken);
+        await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var account = await context.UserAccounts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(id, account.ID); Assert.False(account.IsAdmin);
         Assert.Equal("Original", account.Nickname); Assert.Equal("original-hash", account.PasswordHash);
-        await context.Database.MigrateAsync();
-        Assert.Equal(migrations.Length, (await context.Database.GetAppliedMigrationsAsync()).Count());
+        await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(migrations.Length, (await context.Database.GetAppliedMigrationsAsync(cancellationToken: TestContext.Current.CancellationToken)).Count());
     }
 
     [Theory]
@@ -39,10 +39,10 @@ public sealed class AccountTransactionTests : IDisposable
     [InlineData(true)]
     public async Task ExceptionsAndCancellationRollBackAndRunnerCanBeReused(bool cancel)
     {
-        await using var context = Context(); await context.Database.MigrateAsync();
+        await using var context = Context(); await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
         var uow = new UnitOfWorkImpl(context); var runner = new AccountTransactionRunner(context, uow);
         var account = UserAccount.Create("test", "Original"); account.InitializePasswordHash("hash");
-        await runner.RunAsync(token => { uow.RegisterAdd(account); return Task.FromResult(true); });
+        await runner.RunAsync(token => { uow.RegisterAdd(account); return Task.FromResult(true); }, TestContext.Current.CancellationToken);
         var repository = new UserAccountRepository(context);
         using var source = new CancellationTokenSource();
         async Task Execute() => await runner.RunAsync(async token => {
@@ -56,8 +56,8 @@ public sealed class AccountTransactionTests : IDisposable
         if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(Execute);
         else await Assert.ThrowsAsync<InvalidOperationException>(Execute);
         Assert.Null(context.Database.CurrentTransaction); Assert.Empty(context.ChangeTracker.Entries());
-        await using var verify = Context(); Assert.Equal("Original", (await verify.UserAccounts.SingleAsync()).Nickname);
-        await runner.RunAsync(async token => { await repository.UpdateAdministratorAsync(account.ID, true, token); return true; });
-        Assert.True((await verify.UserAccounts.SingleAsync()).IsAdmin);
+        await using var verify = Context(); Assert.Equal("Original", (await verify.UserAccounts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).Nickname);
+        await runner.RunAsync(async token => { await repository.UpdateAdministratorAsync(account.ID, true, token); return true; }, TestContext.Current.CancellationToken);
+        Assert.True((await verify.UserAccounts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).IsAdmin);
     }
 }

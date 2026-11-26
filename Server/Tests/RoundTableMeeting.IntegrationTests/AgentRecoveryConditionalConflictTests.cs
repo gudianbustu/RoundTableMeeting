@@ -45,7 +45,7 @@ public sealed partial class McpAgentContractTests
         object args = takeover ? new { meetingCode = meeting.MeetingCode, displayName = "Worker", contextCharacterLimit = 12000,
             reliabilityMode = "explicit_ack_v1", joinMode = "takeover", operationId = Guid.NewGuid(), recoveryKey = key }
             : new { connectionSessionId = id, recoveryKey = key, operationId = Guid.NewGuid() };
-        var schema = JsonSchema.FromText((await newSdk.ListToolsAsync()).Single(t => t.Name == name).ProtocolTool.OutputSchema!.Value.GetRawText());
+        var schema = JsonSchema.FromText((await newSdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken)).Single(t => t.Name == name).ProtocolTool.OutputSchema!.Value.GetRawText());
         async Task<string> Facts()
         {
             await using var scope = factory.Services.CreateAsyncScope();

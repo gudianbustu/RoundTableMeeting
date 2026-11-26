@@ -34,18 +34,18 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
             }
             db.Add(delivery);
         }
-        await db.SaveChangesAsync();
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET State = 'Replied', ReplyMessageId = {reply.ID}, RepliedAtUtc = {Now.AddSeconds(1)}");
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET State = 'Replied', ReplyMessageId = {reply.ID}, RepliedAtUtc = {Now.AddSeconds(1)}", cancellationToken: TestContext.Current.CancellationToken);
         var events = await SnapshotLegacyTableAsync(db, "MessageAppendedEvents");
         var deliveries = await SnapshotLegacyTableAsync(db, "MessageEventDeliveries");
         db.ChangeTracker.Clear();
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(events, await SnapshotLegacyTableAsync(db, "MessageAppendedEvents"));
         Assert.Equal(deliveries, await SnapshotLegacyTableAsync(db, "MessageEventDeliveries"));
-        Assert.All(await db.MessageEventDeliveries.ToArrayAsync(), delivery => Assert.Equal(state, delivery.State));
-        Assert.Equal(2, (await db.AgentCollaborationBoundaries.SingleAsync()).AgentTriggerStartSequence);
-        Assert.Equal(seed.Message.ID, (await db.AgentReplyTasks.SingleAsync()).ChainId);
-        Assert.False(await db.AgentReplyTasks.AnyAsync(task => task.TriggerMessageId == reply.ID));
+        Assert.All(await db.MessageEventDeliveries.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken), delivery => Assert.Equal(state, delivery.State));
+        Assert.Equal(2, (await db.AgentCollaborationBoundaries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AgentTriggerStartSequence);
+        Assert.Equal(seed.Message.ID, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ChainId);
+        Assert.False(await db.AgentReplyTasks.AnyAsync(task => task.TriggerMessageId == reply.ID, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(0, await ForeignKeyErrors(db));
     }
 }

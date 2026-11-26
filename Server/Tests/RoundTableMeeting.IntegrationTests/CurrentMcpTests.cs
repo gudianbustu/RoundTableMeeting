@@ -66,7 +66,7 @@ public sealed class CurrentMcpTests
         var created = await Post(human, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "MCP preview" });
         var meetingId = created.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var code = created.GetProperty("invitation").GetProperty("meetingCode").GetString();
-        var workspace = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}");
+        var workspace = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}", cancellationToken: TestContext.Current.CancellationToken);
         var humanId = workspace.GetProperty("currentParticipant").GetProperty("participantId").GetGuid();
         var a = await Initialize(c); var b = await Initialize(c);
         var ja = await Call(c, a.Session, "join_meeting", new { meetingCode = code, displayName = "AgentA" });
@@ -108,27 +108,27 @@ public sealed class CurrentMcpTests
         var uploadId = Guid.NewGuid();
         using var upload = new HttpRequestMessage(HttpMethod.Post, $"/mcp-files?uploadRequestId={uploadId}&name=hello.txt") { Content = new StringContent("hello attachment") };
         upload.Headers.Authorization = new("Bearer", ticket.GetProperty("bearerToken").GetString());
-        using var uploaded = await c.SendAsync(upload); Assert.Equal(HttpStatusCode.OK, uploaded.StatusCode);
+        using var uploaded = await c.SendAsync(upload, TestContext.Current.CancellationToken); Assert.Equal(HttpStatusCode.OK, uploaded.StatusCode);
         var fileId = (await Json(uploaded)).GetProperty("attachmentId").GetGuid();
         var withFile = await Call(c, a.Session, "send_message", new { connectionSessionId = aid, request = new { clientSubmissionId = Guid.NewGuid(), content = "file", visibility = "private", recipientParticipantId = humanId, attachmentIds = new[] { fileId } } });
         Assert.Single(withFile.GetProperty("attachments").EnumerateArray());
         var ownDownload = await Call(c, a.Session, "prepare_attachment_transfer", new { connectionSessionId = aid, direction = "download", attachmentId = fileId });
         using var ownRequest = new HttpRequestMessage(HttpMethod.Get, "/mcp-files"); ownRequest.Headers.Authorization = new("Bearer", ownDownload.GetProperty("bearerToken").GetString());
-        using var ownResponse = await c.SendAsync(ownRequest); Assert.Equal(HttpStatusCode.OK, ownResponse.StatusCode);
-        Assert.Equal("hello attachment", await ownResponse.Content.ReadAsStringAsync());
+        using var ownResponse = await c.SendAsync(ownRequest, TestContext.Current.CancellationToken); Assert.Equal(HttpStatusCode.OK, ownResponse.StatusCode);
+        Assert.Equal("hello attachment", await ownResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         using var rangeRequest = new HttpRequestMessage(HttpMethod.Get, "/mcp-files"); rangeRequest.Headers.Authorization = new("Bearer", ownDownload.GetProperty("bearerToken").GetString());
         rangeRequest.Headers.Range = new(0, 4);
-        using var rangeResponse = await c.SendAsync(rangeRequest); Assert.Equal(HttpStatusCode.PartialContent, rangeResponse.StatusCode);
-        Assert.Equal("hello", await rangeResponse.Content.ReadAsStringAsync());        var downloadTicket = await Call(c, b.Session, "prepare_attachment_transfer", new { connectionSessionId = bid, direction = "download", attachmentId = fileId });
+        using var rangeResponse = await c.SendAsync(rangeRequest, TestContext.Current.CancellationToken); Assert.Equal(HttpStatusCode.PartialContent, rangeResponse.StatusCode);
+        Assert.Equal("hello", await rangeResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));        var downloadTicket = await Call(c, b.Session, "prepare_attachment_transfer", new { connectionSessionId = bid, direction = "download", attachmentId = fileId });
         using var download = new HttpRequestMessage(HttpMethod.Get, "/mcp-files"); download.Headers.Authorization = new("Bearer", downloadTicket.GetProperty("bearerToken").GetString());
-        using var unavailable = await c.SendAsync(download); Assert.Equal(HttpStatusCode.NotFound, unavailable.StatusCode);
+        using var unavailable = await c.SendAsync(download, TestContext.Current.CancellationToken); Assert.Equal(HttpStatusCode.NotFound, unavailable.StatusCode);
         var next = await Initialize(c);
         var takeover = await Call(c, next.Session, "join_meeting", new { meetingCode = code, displayName = "AgentA", joinMode = "takeover" });
         Assert.Equal(ap, takeover.GetProperty("participantId").GetGuid());
         await Call(c, a.Session, "send_message", new { connectionSessionId = aid, request = new { clientSubmissionId = Guid.NewGuid(), content = "stale" } }, false);
         using var staleUpload = new HttpRequestMessage(HttpMethod.Post, $"/mcp-files?uploadRequestId={Guid.NewGuid()}&name=x") { Content = new StringContent("bad") };
         staleUpload.Headers.Authorization = new("Bearer", ticket.GetProperty("bearerToken").GetString());
-        using var stale = await c.SendAsync(staleUpload); Assert.Equal(HttpStatusCode.Unauthorized, stale.StatusCode);
+        using var stale = await c.SendAsync(staleUpload, TestContext.Current.CancellationToken); Assert.Equal(HttpStatusCode.Unauthorized, stale.StatusCode);
         var newId = takeover.GetProperty("connectionSessionId").GetGuid();
         await Call(c, next.Session, "disconnect_agent", new { connectionSessionId = newId });
         var unavailableJoin = await Call(c, next.Session, "join_meeting", new { meetingCode = code, displayName = "AgentA", joinMode = "reconnect" }, false);
@@ -137,7 +137,7 @@ public sealed class CurrentMcpTests
         var reconnected = await Call(c, next.Session, "join_meeting", new { meetingCode = code, displayName = "AgentA", joinMode = "reconnect" });
         Assert.Equal(ap, reconnected.GetProperty("participantId").GetGuid()); newId = reconnected.GetProperty("connectionSessionId").GetGuid();        var left = await Call(c, next.Session, "leave_meeting", new { connectionSessionId = newId, operationId = Guid.NewGuid() });
         Assert.Equal("left", left.GetProperty("membershipState").GetString());
-        var roster = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}");
+        var roster = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{meetingId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("left", roster.GetProperty("participants").EnumerateArray().Single(p => p.GetProperty("participantId").GetGuid() == ap).GetProperty("membershipState").GetString());
         var info = await Call(c, b.Session, "get_meeting_info", new { connectionSessionId = bid });
         Assert.Equal(humanId, info.GetProperty("participants").EnumerateArray().Single(p => p.GetProperty("isCreator").GetBoolean()).GetProperty("participantId").GetGuid());
@@ -157,24 +157,24 @@ public sealed class CurrentMcpTests
         await Post(human, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "ordinary" });
         var waiting = Call(c, session.Session, "wait_messages", new { connectionSessionId = connection, timeoutSeconds = 5 });
         await Post(human, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "@AgentA inspect", mentionCandidates = new[] { new { participantId = participant, startOffset = 0, length = 7 } } });
-        var result = await waiting.WaitAsync(TimeSpan.FromSeconds(8));
+        var result = await waiting.WaitAsync(TimeSpan.FromSeconds(8), TestContext.Current.CancellationToken);
         Assert.Single(result.GetProperty("items").EnumerateArray()); Assert.Equal(2, result.GetProperty("nextCursor").GetProperty("afterSequence").GetInt64());
         await using (var scope = f.Services.CreateAsyncScope())
         {
-            var activity = await scope.ServiceProvider.GetRequiredService<IAgentActivityService>().FindAsync(id, participant);
+            var activity = await scope.ServiceProvider.GetRequiredService<IAgentActivityService>().FindAsync(id, participant, TestContext.Current.CancellationToken);
             Assert.Equal("waiting", activity!.State); Assert.Null(activity.ActiveTaskId);
             var online = await scope.ServiceProvider.GetRequiredService<RoundTableMeeting.AgentCollaboration.CurrentMcpSessionService>().GetOnlineAsync(id, CancellationToken.None);
             Assert.Contains(participant, online);
         }
         var deletingWait = Call(c, session.Session, "wait_messages", new { connectionSessionId = connection, afterSequence = 2, timeoutSeconds = 5 }, false);
         await Post(human, $"/api/meetings/{id}/deletion", new { confirmationName = "MCP wait" });
-        await deletingWait.WaitAsync(TimeSpan.FromSeconds(8));
+        await deletingWait.WaitAsync(TimeSpan.FromSeconds(8), TestContext.Current.CancellationToken);
         JsonElement status = default;
         for (var attempt = 0; attempt < 100; attempt++)
         {
             status = await Call(c, session.Session, "get_meeting_status", new { meetingId = id, lifecycleProof = joined.GetProperty("lifecycleProof").GetString() });
             if (status.GetProperty("status").GetString() == "deleted") break;
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
         Assert.Equal("deleted", status.GetProperty("status").GetString());
     }
@@ -245,9 +245,9 @@ public sealed class CurrentMcpTests
         Assert.Equal(new[] { "follow 2", "follow 3", "follow 4" }, latePage.GetProperty("items").EnumerateArray().Select(x => x.GetProperty("message").GetProperty("content").GetString()));
         var lateHistory = await Call(agents, late.Session, "read_messages", new { connectionSessionId = late.Connection });
         Assert.Contains(lateHistory.GetProperty("items").EnumerateArray(), x => x.GetProperty("message").GetProperty("content").GetString() == "optional");
-        var publicHistory = await creator.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/messages");
+        var publicHistory = await creator.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/messages", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(publicHistory.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "已开启自由讨论");
-        var details = await peer.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}");
+        var details = await peer.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(details.GetProperty("freeDiscussion").GetBoolean());
         Assert.Equal(HttpStatusCode.NoContent, await Mode(creator, "directed"));
         var stopped = await Call(agents, late.Session, "send_message", new { connectionSessionId = late.Connection,

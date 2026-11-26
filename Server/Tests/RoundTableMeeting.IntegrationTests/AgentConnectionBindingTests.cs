@@ -9,31 +9,31 @@ public sealed class AgentConnectionBindingTests
     public async Task ReservationSerializesSameTransportButNotOtherTransportsAndCancellationReleasesWaiter()
     {
         var registry = new AgentConnectionRegistry();
-        var first = await registry.ReserveTransportAsync(Session(1));
+        var first = await registry.ReserveTransportAsync(Session(1), TestContext.Current.CancellationToken);
         using var cancellation = new CancellationTokenSource();
         var cancelled = registry.ReserveTransportAsync(Session(1), cancellation.Token).AsTask();
-        var next = registry.ReserveTransportAsync(Session(1)).AsTask();
+        var next = registry.ReserveTransportAsync(Session(1), TestContext.Current.CancellationToken).AsTask();
         Assert.False(cancelled.IsCompleted);
         Assert.False(next.IsCompleted);
-        await using var unrelated = await registry.ReserveTransportAsync(Session(2)).AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await using var unrelated = await registry.ReserveTransportAsync(Session(2), TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         cancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cancelled);
         await first.DisposeAsync();
         await first.DisposeAsync();
-        await using var acquired = await next.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var acquired = await next.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
     }
 
     [Fact]
     public async Task CloseDuringReservationRejectsActivationAndQueuedActivation()
     {
         var registry = new AgentConnectionRegistry();
-        var first = await registry.ReserveTransportAsync(Session(1));
-        var next = registry.ReserveTransportAsync(Session(1)).AsTask();
+        var first = await registry.ReserveTransportAsync(Session(1), TestContext.Current.CancellationToken);
+        var next = registry.ReserveTransportAsync(Session(1), TestContext.Current.CancellationToken).AsTask();
         Assert.Empty(registry.RemoveRegistrations(Session(1)));
         Assert.False(registry.TryActivate(Session(1), Registration(1), null));
         Assert.False(registry.TryRegister(Session(1), Registration(1)));
         await first.DisposeAsync();
-        await using var queued = await next.WaitAsync(TimeSpan.FromSeconds(5));
+        await using var queued = await next.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.False(registry.TryActivate(Session(1), Registration(1), null));
     }
 
@@ -43,10 +43,10 @@ public sealed class AgentConnectionBindingTests
         var registry = new AgentConnectionRegistry();
         var original = Registration(1);
         var resumed = original with { BindingVersion = 2, TransportBinding = "binding-2" };
-        await using var oldReservation = await registry.ReserveTransportAsync(Session(1));
+        await using var oldReservation = await registry.ReserveTransportAsync(Session(1), TestContext.Current.CancellationToken);
         Assert.True(registry.TryActivate(Session(1), original, null));
         var oldToken = registry.GetBindingCancellationToken(Session(1), original);
-        await using var newReservation = await registry.ReserveTransportAsync(Session(2));
+        await using var newReservation = await registry.ReserveTransportAsync(Session(2), TestContext.Current.CancellationToken);
         Assert.True(registry.TryActivate(Session(2), resumed, original));
         Assert.True(oldToken.IsCancellationRequested);
         Assert.True(registry.TryGetRegistration(Session(1), out var tombstone));
@@ -65,7 +65,7 @@ public sealed class AgentConnectionBindingTests
         var original = Registration(1);
         Assert.True(registry.TryRegister(Session(1), original));
         var next = original with { ConnectionSessionId = Guid.NewGuid(), TransportBinding = "binding-2", ConnectionGeneration = 2 };
-        await using var reservation = await registry.ReserveTransportAsync(Session(2));
+        await using var reservation = await registry.ReserveTransportAsync(Session(2), TestContext.Current.CancellationToken);
         Assert.False(registry.TryActivate(Session(2), next, null));
         Assert.False(registry.TryActivate(Session(2), next, original with { BindingVersion = 2 }));
         Assert.False(registry.TryActivate(Session(2), next with { ConnectionGeneration = 1 }, original));
@@ -81,7 +81,7 @@ public sealed class AgentConnectionBindingTests
         var registry = new AgentConnectionRegistry();
         var original = Registration(1);
         var resumed = original with { BindingVersion = 2, TransportBinding = "binding-2" };
-        await using var reservation = await registry.ReserveTransportAsync(Session(2));
+        await using var reservation = await registry.ReserveTransportAsync(Session(2), TestContext.Current.CancellationToken);
         Assert.False(registry.TryActivate(Session(2), resumed with { ConnectionGeneration = 2 }, original));
         Assert.False(registry.TryActivate(Session(2), resumed with { TransportBinding = original.TransportBinding }, original));
         Assert.False(registry.TryActivate(Session(2), resumed with { ParticipantId = Guid.NewGuid() }, original));
@@ -96,7 +96,7 @@ public sealed class AgentConnectionBindingTests
         var other = Registration(2);
         Assert.True(registry.TryRegister(Session(1), original));
         Assert.True(registry.TryRegister(Session(2), other));
-        await using var reservation = await registry.ReserveTransportAsync(Session(2));
+        await using var reservation = await registry.ReserveTransportAsync(Session(2), TestContext.Current.CancellationToken);
         Assert.False(registry.TryActivate(Session(2), original with { BindingVersion = 2, TransportBinding = "binding-2" }, original));
         Assert.False(registry.GetBindingCancellationToken(Session(1), original).IsCancellationRequested);
         Assert.True(registry.Retire(other));
@@ -138,8 +138,8 @@ public sealed class AgentConnectionBindingTests
             var read = Task.Run(() => registry.ContainsTransport(Session(1)));
             callbackRead.TrySetResult(read.Wait(TimeSpan.FromSeconds(3)));
         });
-        Assert.True(await Task.Run(() => registry.Retire(original)).WaitAsync(TimeSpan.FromSeconds(5)));
-        Assert.True(await callbackRead.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(await Task.Run(() => registry.Retire(original)).WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
+        Assert.True(await callbackRead.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -148,7 +148,7 @@ public sealed class AgentConnectionBindingTests
         var registry = new AgentConnectionRegistry();
         var original = Registration(1);
         Assert.False(registry.TryActivate(Session(1), original, null));
-        await using var reservation = await registry.ReserveTransportAsync(Session(1));
+        await using var reservation = await registry.ReserveTransportAsync(Session(1), TestContext.Current.CancellationToken);
         Assert.False(registry.TryActivate(Session(1), original with { BindingVersion = 0 }, null));
         Assert.False(registry.TryActivate(Session(1), original with { ConnectionGeneration = 9007199254740992 }, null));
         Assert.True(registry.TryActivate(Session(1), original, null));

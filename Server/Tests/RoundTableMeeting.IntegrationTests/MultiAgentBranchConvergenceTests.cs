@@ -65,9 +65,9 @@ public sealed partial class McpAgentContractTests
         }
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var tasks = await db.AgentReplyTasks.ToArrayAsync();
+        var tasks = await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(4, tasks.Length);
         Assert.All(tasks, task => { Assert.Equal(chainId, task.ChainId); Assert.Equal(AgentReplyTaskState.Replied, task.State); });
-        Assert.Equal(5, await db.MeetingMessages.CountAsync());
+        Assert.Equal(5, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

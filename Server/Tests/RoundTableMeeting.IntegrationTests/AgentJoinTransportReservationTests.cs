@@ -30,24 +30,24 @@ public sealed partial class McpAgentContractTests
         await using var firstScope = factory.Services.CreateAsyncScope();
         await using var secondScope = factory.Services.CreateAsyncScope();
         var first = firstScope.ServiceProvider.GetRequiredService<IAgentCollaborationService>()
-            .JoinAsync(new AgentJoinRequest(firstMeeting.MeetingCode, "Worker1", 12000), key);
+            .JoinAsync(new AgentJoinRequest(firstMeeting.MeetingCode, "Worker1", 12000), key, TestContext.Current.CancellationToken);
         Task<AgentOperationResult>? second = null;
         try
         {
-            await coordinator.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await coordinator.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             // Direct invocation runs up to its first incomplete await, making this contention deterministic.
             second = secondScope.ServiceProvider.GetRequiredService<IAgentCollaborationService>()
-                .JoinAsync(new AgentJoinRequest(secondMeeting.MeetingCode, "Worker2", 12000), key);
+                .JoinAsync(new AgentJoinRequest(secondMeeting.MeetingCode, "Worker2", 12000), key, TestContext.Current.CancellationToken);
             Assert.False(second.IsCompleted);
             Assert.Equal(1, coordinator.Acquisitions);
         }
         finally { coordinator.Release.TrySetResult(); }
-        Assert.True((await first.WaitAsync(TimeSpan.FromSeconds(10))).Succeeded);
-        Assert.Equal("connection_invalid", (await second!.WaitAsync(TimeSpan.FromSeconds(10))).ErrorCode);
+        Assert.True((await first.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).Succeeded);
+        Assert.Equal("connection_invalid", (await second!.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).ErrorCode);
         await using var readScope = factory.Services.CreateAsyncScope();
         var db = readScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(firstMeeting.MeetingId, (await db.AgentConnectionSessions.SingleAsync()).MeetingId);
-        Assert.False(await db.MeetingParticipants.AnyAsync(item => item.MeetingId == secondMeeting.MeetingId && item.ParticipantType == ParticipantType.Agent));
+        Assert.Equal(firstMeeting.MeetingId, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).MeetingId);
+        Assert.False(await db.MeetingParticipants.AnyAsync(item => item.MeetingId == secondMeeting.MeetingId && item.ParticipantType == ParticipantType.Agent, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(1, coordinator.Acquisitions);
     }
 
@@ -69,10 +69,10 @@ public sealed partial class McpAgentContractTests
         AssertToolFailure(SdkPayload(await sdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000
-        })), "agent_operation_unavailable");
+        }, cancellationToken: TestContext.Current.CancellationToken)), "agent_operation_unavailable");
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync()).State);
+        Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         Assert.Empty(registry.ListRegistrations(meeting.MeetingId));
     }
 
@@ -94,13 +94,13 @@ public sealed partial class McpAgentContractTests
         AssertToolFailure(SdkPayload(await sdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000
-        })), "agent_operation_unavailable");
+        }, cancellationToken: TestContext.Current.CancellationToken)), "agent_operation_unavailable");
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var connection = await db.AgentConnectionSessions.SingleAsync();
+        var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(AgentConnectionState.Disconnected, connection.State);
-        Assert.Equal(connection.ID, (await db.AgentContextCursors.SingleAsync()).CurrentConnectionId);
-        Assert.Equal(InitialContextState.Prepared, (await db.AgentInitialContextDeliveries.SingleAsync()).State);
+        Assert.Equal(connection.ID, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).CurrentConnectionId);
+        Assert.Equal(InitialContextState.Prepared, (await db.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         Assert.Empty(registry.ListRegistrations(meeting.MeetingId));
     }
 

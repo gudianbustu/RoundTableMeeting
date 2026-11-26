@@ -91,15 +91,15 @@ public sealed partial class McpAgentContractTests
         // An event projection never invents a new payload from local clock/registry state.
         Assert.Equal(before, await ReadActivityForTestAsync(factory.Services, meeting.MeetingId, joined.Agent.ParticipantId));
         await using var scope = factory.Services.CreateAsyncScope();
-        using var gate = await scope.ServiceProvider.GetRequiredService<IMeetingRealtimeGate>().AcquireSharedAsync(meeting.MeetingId);
+        using var gate = await scope.ServiceProvider.GetRequiredService<IMeetingRealtimeGate>().AcquireSharedAsync(meeting.MeetingId, TestContext.Current.CancellationToken);
         var activities = scope.ServiceProvider.GetRequiredService<IAgentActivityService>();
-        var snapshot = Assert.Single(await activities.ListAsync(meeting.MeetingId));
+        var snapshot = Assert.Single(await activities.ListAsync(meeting.MeetingId, TestContext.Current.CancellationToken));
         Assert.Equal(before.Revision + 1, snapshot.Revision);
         Assert.Equal("disconnected", snapshot.State);
         Assert.Equal(registryMissing ? "server_restart" : "connection_lease_expired", snapshot.Reason);
-        Assert.Equal(snapshot, await activities.FindAsync(meeting.MeetingId, joined.Agent.ParticipantId));
+        Assert.Equal(snapshot, await activities.FindAsync(meeting.MeetingId, joined.Agent.ParticipantId, TestContext.Current.CancellationToken));
         time.Now = time.Now.AddSeconds(1);
-        Assert.Equal(snapshot, Assert.Single(await activities.ListAsync(meeting.MeetingId)));
+        Assert.Equal(snapshot, Assert.Single(await activities.ListAsync(meeting.MeetingId, TestContext.Current.CancellationToken)));
     }
 
     private static async Task<AgentActivityDto> ReadActivityForTestAsync(IServiceProvider services, Guid meetingId, Guid participantId)

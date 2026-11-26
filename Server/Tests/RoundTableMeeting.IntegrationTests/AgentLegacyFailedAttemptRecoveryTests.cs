@@ -28,17 +28,17 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var task = await db.AgentReplyTasks.SingleAsync();
+            var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             failedAt = DateTimeOffset.UtcNow;
             task.MarkFailed("context_invalid", failedAt);
             db.Update(task);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             // Reproduce the old-format attempts admitted by the transactional migration:
             // no explicit acknowledgment, invalidation timestamp or replacement linkage.
             if (legacyAttemptState == "Prepared")
-                await db.Database.ExecuteSqlRawAsync("UPDATE AgentTaskDeliveryAttempts SET State = 'Prepared', DeliveredFirstSequence = NULL, DeliveredLastSequence = NULL, DeliveredAtUtc = NULL");
+                await db.Database.ExecuteSqlRawAsync("UPDATE AgentTaskDeliveryAttempts SET State = 'Prepared', DeliveredFirstSequence = NULL, DeliveredLastSequence = NULL, DeliveredAtUtc = NULL", cancellationToken: TestContext.Current.CancellationToken);
             else if (legacyAttemptState == "Abandoned")
-                await db.Database.ExecuteSqlRawAsync("UPDATE AgentTaskDeliveryAttempts SET State = 'Abandoned'");
+                await db.Database.ExecuteSqlRawAsync("UPDATE AgentTaskDeliveryAttempts SET State = 'Abandoned'", cancellationToken: TestContext.Current.CancellationToken);
         }
         var transport = RecoveryTransport(231);
         var joined = Assert.IsType<AgentJoinResultDto>((await JoinReliableForTestAsync(factory.Services,
@@ -48,7 +48,7 @@ public sealed partial class McpAgentContractTests
         Assert.Equal("retry_exhausted", (await ReliableForTestAsync(factory.Services, s => s.WaitReliableAsync(new(id), transport))).ErrorCode);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var task = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync();
+            var task = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal("context_invalid", task.FailureCode);
             Assert.Equal(failedAt, task.FailedAtUtc);
             Assert.Equal(0, task.RetryCycle);
@@ -64,14 +64,14 @@ public sealed partial class McpAgentContractTests
             next.DeliveryAttemptId, next.ReplyIdempotencyKey, "Recovered legacy reply"), transport))).Succeeded);
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var finalTask = await final.AgentReplyTasks.SingleAsync();
-        var previous = await final.AgentTaskDeliveryAttempts.SingleAsync(a => a.ID == attemptId);
+        var finalTask = await final.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var previous = await final.AgentTaskDeliveryAttempts.SingleAsync(a => a.ID == attemptId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(AgentReplyTaskState.Replied, finalTask.State);
         Assert.Equal(1, finalTask.RetryCycle);
         Assert.Equal(0, finalTask.AutomaticRetryCount);
         Assert.Equal(AgentTaskDeliveryAttemptState.Abandoned, previous.State);
         Assert.NotNull(previous.InvalidatedAtUtc);
         Assert.Equal(next.DeliveryAttemptId, previous.ReplacementAttemptId);
-        Assert.Equal(2, await final.MeetingMessages.CountAsync());
+        Assert.Equal(2, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

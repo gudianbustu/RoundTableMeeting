@@ -31,7 +31,7 @@ public sealed partial class McpAgentContractTests
         var joined = SdkPayload(await sdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "SdkWorker", ["contextCharacterLimit"] = 12000
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(joined.GetProperty("succeeded").GetBoolean());
         var connectionId = joined.GetProperty("data").GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         var args = new Dictionary<string, object?> { ["connectionSessionId"] = connectionId };
@@ -44,9 +44,9 @@ public sealed partial class McpAgentContractTests
         }, requestId: waitId, cancellationToken: cancellation.Token).AsTask();
         try
         {
-            await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             // Exercise the actual SDK dispatcher, scoped transport accessor and database while wait is held.
-            var status = SdkPayload(await sdk.CallToolAsync("get_agent_status", args).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+            var status = SdkPayload(await sdk.CallToolAsync("get_agent_status", args, cancellationToken: TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             Assert.True(status.GetProperty("succeeded").GetBoolean());
             Assert.Equal(connectionId, status.GetProperty("data").GetProperty("connection").GetProperty("connectionSessionId").GetGuid());
             Assert.False(wait.IsCompleted);
@@ -54,9 +54,9 @@ public sealed partial class McpAgentContractTests
         finally { cancellation.Cancel(); }
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
         // Aborting the HTTP call is not proof that the server cancelled its preserved request.
-        await sdk.SendNotificationAsync("notifications/cancelled", new CancelledNotificationParams { RequestId = waitId });
-        await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        var afterCancellation = SdkPayload(await sdk.CallToolAsync("get_agent_status", args));
+        await sdk.SendNotificationAsync("notifications/cancelled", new CancelledNotificationParams { RequestId = waitId }, cancellationToken: TestContext.Current.CancellationToken);
+        await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var afterCancellation = SdkPayload(await sdk.CallToolAsync("get_agent_status", args, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(afterCancellation.GetProperty("succeeded").GetBoolean());
         Assert.Equal("connected", afterCancellation.GetProperty("data").GetProperty("connection").GetProperty("state").GetString());
     }
@@ -82,13 +82,13 @@ public sealed partial class McpAgentContractTests
             var joined = SdkPayload(await sdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
             {
                 ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "SdkWorker", ["contextCharacterLimit"] = 12000
-            }));
+            }, cancellationToken: TestContext.Current.CancellationToken));
             var connectionId = joined.GetProperty("data").GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
-            wait = sdk.CallToolAsync("wait_for_mention", new Dictionary<string, object?> { ["connectionSessionId"] = connectionId }).AsTask();
-            await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            wait = sdk.CallToolAsync("wait_for_mention", new Dictionary<string, object?> { ["connectionSessionId"] = connectionId }, cancellationToken: TestContext.Current.CancellationToken).AsTask();
+            await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             Assert.False(wait.IsCompleted);
-            await sdk.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
-            await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await sdk.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+            await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             await EventuallyAsync(factory, async db => await db.AgentConnectionSessions.AnyAsync(item =>
                 item.ID == connectionId && item.State == AgentConnectionState.Disconnected));
             Assert.Empty(factory.Services.GetRequiredService<IAgentConnectionRegistry>().ListRegistrations(meeting.MeetingId));
@@ -99,7 +99,7 @@ public sealed partial class McpAgentContractTests
             if (wait is not null)
             {
                 // A closed transport can surface cancellation or a protocol transport error; always settle the request.
-                var completion = await Task.WhenAny(wait, Task.Delay(TimeSpan.FromSeconds(5)));
+                var completion = await Task.WhenAny(wait, Task.Delay(TimeSpan.FromSeconds(5), CancellationToken.None));
                 Assert.Same(wait, completion);
                 _ = await Record.ExceptionAsync(async () => await wait);
             }

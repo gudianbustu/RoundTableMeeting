@@ -22,7 +22,7 @@ public sealed class PrivateMessageTests
         {
             var user = UserAccount.Create("charlie", "Charlie");
             user.InitializePasswordHash(scope.ServiceProvider.GetRequiredService<IPasswordHasher<UserAccount>>().HashPassword(user, "test-password-charlie"));
-            var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>(); db.Add(user); await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>(); db.Add(user); await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await Login(a, "alice"); await Login(b, "bob"); await Login(c, "charlie");
         var created = await Body(await Post(a, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Private scope" }), HttpStatusCode.Created);
@@ -42,23 +42,23 @@ public sealed class PrivateMessageTests
         Assert.Equal(third.GetProperty("currentParticipant").GetProperty("participantId").GetGuid(), mention.GetProperty("participantId").GetGuid());
         var text = message.GetProperty("content").GetString()!;
         Assert.Equal("@Charlie", text.Substring(mention.GetProperty("startOffset").GetInt32(), mention.GetProperty("length").GetInt32()));
-        var recipientView = await b.GetFromJsonAsync<JsonElement>($"{url}/{messageId}");
+        var recipientView = await b.GetFromJsonAsync<JsonElement>($"{url}/{messageId}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(mention.GetRawText(), Assert.Single(recipientView.GetProperty("mentions").EnumerateArray()).GetRawText());
-        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync($"{url}/{messageId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync($"{url}/{messageId}", TestContext.Current.CancellationToken)).StatusCode);
         var replay = await Body(await Post(a, url, body), HttpStatusCode.OK);
         Assert.Equal(messageId, replay.GetProperty("message").GetProperty("messageId").GetGuid());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(a, url, new { clientSubmissionId = submission, content = body.content })).StatusCode);
-        var hidden = await c.GetFromJsonAsync<JsonElement>(url);
+        var hidden = await c.GetFromJsonAsync<JsonElement>(url, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(hidden.GetProperty("items").EnumerateArray());
         Assert.Equal(1, hidden.GetProperty("visibleThroughSequence").GetInt64());
-        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(url + "/" + messageId)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(url + "/" + messageId, TestContext.Current.CancellationToken)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(c, url, new { clientSubmissionId = Guid.NewGuid(), content = "guess", replyToMessageId = messageId })).StatusCode);
         var reply = await Body(await Post(b, url, new { clientSubmissionId = Guid.NewGuid(), content = "reply", replyToMessageId = messageId }), HttpStatusCode.Created);
         Assert.Equal("private", reply.GetProperty("message").GetProperty("visibility").GetString());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(b, url, new { clientSubmissionId = Guid.NewGuid(), content = "expose", visibility = "public", replyToMessageId = messageId })).StatusCode);
-        var ownStatus = await a.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/submissions/{submission}");
+        var ownStatus = await a.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/submissions/{submission}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("saved", ownStatus.GetProperty("status").GetString());
-        var foreignStatus = await c.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/submissions/{submission}");
+        var foreignStatus = await c.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/submissions/{submission}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("not_found", foreignStatus.GetProperty("status").GetString());
         await Body(await Post(b, $"/api/meetings/{id}/leave", new { operationId = Guid.NewGuid() }), HttpStatusCode.OK);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(a, url, new { clientSubmissionId = Guid.NewGuid(), content = "left", visibility = "private", recipientParticipantId = peer })).StatusCode);
@@ -82,17 +82,17 @@ public sealed class PrivateMessageTests
         Assert.Equal(content, sent.GetProperty("message").GetProperty("content").GetString());
         await Body(await Post(a, url, new { clientSubmissionId = Guid.NewGuid(), content = "private gap", visibility = "private", recipientParticipantId = peer }), HttpStatusCode.Created);
         await Body(await Post(a, url, new { clientSubmissionId = Guid.NewGuid(), content = "public last" }), HttpStatusCode.Created);
-        var page = await a.GetFromJsonAsync<JsonElement>(url + "?scope=public&afterSequence=0&limit=1");
+        var page = await a.GetFromJsonAsync<JsonElement>(url + "?scope=public&afterSequence=0&limit=1", cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(page.GetProperty("hasMoreAfter").GetBoolean());
         Assert.Equal(content, page.GetProperty("items")[0].GetProperty("content").GetString());
-        var next = await a.GetFromJsonAsync<JsonElement>(url + "?scope=public&afterSequence=1&limit=1");
+        var next = await a.GetFromJsonAsync<JsonElement>(url + "?scope=public&afterSequence=1&limit=1", cancellationToken: TestContext.Current.CancellationToken);
         Assert.False(next.GetProperty("hasMoreAfter").GetBoolean());
         Assert.Equal(3, next.GetProperty("items")[0].GetProperty("sequence").GetInt64());
-        var privatePage = await a.GetFromJsonAsync<JsonElement>(url + $"?scope=private&peerParticipantId={peer}");
+        var privatePage = await a.GetFromJsonAsync<JsonElement>(url + $"?scope=private&peerParticipantId={peer}", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(privatePage.GetProperty("items").EnumerateArray());
         await Body(await Post(b, $"/api/meetings/{id}/leave", new { operationId = Guid.NewGuid() }), HttpStatusCode.OK);
         await Body(await Post(a, url, new { clientSubmissionId = Guid.NewGuid(), content = "after exit" }), HttpStatusCode.Created);
-        var history = await b.GetFromJsonAsync<JsonElement>(url);
+        var history = await b.GetFromJsonAsync<JsonElement>(url, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(3, history.GetProperty("items").GetArrayLength());
         Assert.Equal(3, history.GetProperty("visibleThroughSequence").GetInt64());
         Assert.Equal(HttpStatusCode.Conflict, (await Post(b, url, new { clientSubmissionId = Guid.NewGuid(), content = "cannot send" })).StatusCode);
@@ -109,9 +109,9 @@ public sealed class PrivateMessageTests
         {
             Assert.Equal(new[] { "realtime-broadcast-v1" }, scope.ServiceProvider.GetRequiredService<IMessageEventConsumerCatalog>().ConsumerNames);
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var evt = await db.MessageAppendedEvents.SingleAsync(x => x.MeetingId == id);
+            var evt = await db.MessageAppendedEvents.SingleAsync(x => x.MeetingId == id, cancellationToken: TestContext.Current.CancellationToken);
             var old = MessageEventDelivery.Create(evt.ID, "agent-mention-task-v1", DateTimeOffset.UtcNow.AddDays(-1));
-            historicalId = old.ID; db.Add(old); await db.SaveChangesAsync();
+            historicalId = old.ID; db.Add(old); await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await Body(await Post(a, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "@Alice second" }), HttpStatusCode.Created);
         var completed = false;
@@ -119,14 +119,14 @@ public sealed class PrivateMessageTests
         {
             await using var scope = factory.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            if (await db.MessageEventDeliveries.CountAsync(x => x.ConsumerName == "realtime-broadcast-v1" && x.State == MessageEventDeliveryState.Completed) == 2) { completed = true; break; }
-            await Task.Delay(50);
+            if (await db.MessageEventDeliveries.CountAsync(x => x.ConsumerName == "realtime-broadcast-v1" && x.State == MessageEventDeliveryState.Completed, cancellationToken: TestContext.Current.CancellationToken) == 2) { completed = true; break; }
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
         Assert.True(completed);
         await using var final = factory.Services.CreateAsyncScope();
         var data = final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(MessageEventDeliveryState.Pending, (await data.MessageEventDeliveries.SingleAsync(x => x.ID == historicalId)).State);
-        Assert.Empty(await data.AgentReplyTasks.ToListAsync());
+        Assert.Equal(MessageEventDeliveryState.Pending, (await data.MessageEventDeliveries.SingleAsync(x => x.ID == historicalId, cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Empty(await data.AgentReplyTasks.ToListAsync(cancellationToken: TestContext.Current.CancellationToken));
         var current = await CurrentMcpTests.Initialize(a);
         Assert.Equal("mcp-preview-v2", current.Result.GetProperty("serverInfo").GetProperty("version").GetString());
     }

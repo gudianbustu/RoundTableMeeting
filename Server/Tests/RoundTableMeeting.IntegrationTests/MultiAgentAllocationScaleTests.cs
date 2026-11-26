@@ -11,7 +11,6 @@ using RoundTableMeeting.Application.AgentCollaboration;
 using RoundTableMeeting.Domain.Entities;
 using MessageAuthorKind = RoundTableMeeting.Domain.Enums.MessageAuthorKind;
 using RoundTableMeeting.Repository.Sqlite.Database;
-using Xunit.Abstractions;
 
 namespace RoundTableMeeting.IntegrationTests;
 

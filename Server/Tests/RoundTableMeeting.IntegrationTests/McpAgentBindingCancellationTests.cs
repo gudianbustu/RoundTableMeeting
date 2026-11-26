@@ -28,22 +28,22 @@ public sealed partial class McpAgentContractTests
         var joined = SdkPayload(await sdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "SdkWorker", ["contextCharacterLimit"] = 12000
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         var connectionId = joined.GetProperty("data").GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         var args = new Dictionary<string, object?> { ["connectionSessionId"] = connectionId };
-        var wait = sdk.CallToolAsync("wait_for_mention", args).AsTask();
-        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var wait = sdk.CallToolAsync("wait_for_mention", args, cancellationToken: TestContext.Current.CancellationToken).AsTask();
+        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         var registry = factory.Services.GetRequiredService<IAgentConnectionRegistry>();
         var registration = Assert.Single(registry.ListRegistrations(meeting.MeetingId));
         Assert.True(registry.Retire(registration));
-        await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        AssertToolFailure(SdkPayload(await wait.WaitAsync(TimeSpan.FromSeconds(5))), "connection_invalid");
-        AssertToolFailure(SdkPayload(await sdk.CallToolAsync("get_agent_status", args)), "connection_invalid");
-        AssertToolFailure(SdkPayload(await sdk.CallToolAsync("wait_for_mention", args)), "connection_invalid");
+        await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        AssertToolFailure(SdkPayload(await wait.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)), "connection_invalid");
+        AssertToolFailure(SdkPayload(await sdk.CallToolAsync("get_agent_status", args, cancellationToken: TestContext.Current.CancellationToken)), "connection_invalid");
+        AssertToolFailure(SdkPayload(await sdk.CallToolAsync("wait_for_mention", args, cancellationToken: TestContext.Current.CancellationToken)), "connection_invalid");
         // This intentionally isolates the registration-to-compensation gap: no database disconnect was requested.
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(AgentConnectionState.Connected, (await db.AgentConnectionSessions.SingleAsync()).State);
-        Assert.Empty(await db.AgentReplyTasks.ToArrayAsync());
+        Assert.Equal(AgentConnectionState.Connected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Empty(await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

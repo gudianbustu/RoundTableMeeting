@@ -73,15 +73,15 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var cursor = await db.AgentContextCursors.SingleAsync();
-            var connection = await db.AgentConnectionSessions.SingleAsync(c => c.ID == cursor.CurrentConnectionId);
+            var cursor = await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
+            var connection = await db.AgentConnectionSessions.SingleAsync(c => c.ID == cursor.CurrentConnectionId, cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentConnectionState.Activating, connection.State);
             Assert.Null(connection.DisconnectedAtUtc);
             Assert.Equal(mode == "resume" ? 2 : 1, connection.BindingVersion);
             Assert.Equal(mode == "takeover" ? 2 : 1, connection.ConnectionGeneration);
             revision = cursor.ActivityRevision;
-            initialId = (await db.AgentInitialContextDeliveries.SingleAsync(i => i.ConnectionSessionId == connection.ID)).ID;
-            receiptCount = await db.AgentRecoveryOperations.CountAsync();
+            initialId = (await db.AgentInitialContextDeliveries.SingleAsync(i => i.ConnectionSessionId == connection.ID, cancellationToken: TestContext.Current.CancellationToken)).ID;
+            receiptCount = await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken);
             pending = new(connection.MeetingId, connection.ParticipantId, connection.ID, connection.McpTransportBinding)
             { ConnectionGeneration = connection.ConnectionGeneration, BindingVersion = connection.BindingVersion,
                 ReliabilityMode = connection.ReliabilityMode };
@@ -91,8 +91,8 @@ public sealed partial class McpAgentContractTests
             await using (var scope = factory.Services.CreateAsyncScope())
             {
                 var service = scope.ServiceProvider.GetRequiredService<AgentCollaborationService>();
-                Assert.True(await service.ReconcileConnectionAsync(pending));
-                Assert.False(await service.ReconcileConnectionAsync(pending));
+                Assert.True(await service.ReconcileConnectionAsync(pending, cancellationToken: TestContext.Current.CancellationToken));
+                Assert.False(await service.ReconcileConnectionAsync(pending, cancellationToken: TestContext.Current.CancellationToken));
             }
             var replay = await ActivationCallAsync(pendingSdk, operationName, operation);
             if (mode == "resume") Assert.Equal("operation_superseded", replay.GetProperty("errorCode").GetString());
@@ -108,7 +108,7 @@ public sealed partial class McpAgentContractTests
             Assert.True(replay.GetProperty("data").GetProperty("replayed").GetBoolean());
             Assert.Equal(initialId, replay.GetProperty("data").GetProperty("initialDeliveryId").GetGuid());
             await using var scope = factory.Services.CreateAsyncScope();
-            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(pending));
+            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(pending, cancellationToken: TestContext.Current.CancellationToken));
         }
         var current = Assert.Single(registry.ListRegistrations(meeting.MeetingId));
         Assert.Equal(pending.ConnectionSessionId, current.ConnectionSessionId);
@@ -121,9 +121,9 @@ public sealed partial class McpAgentContractTests
             .GetProperty("succeeded").GetBoolean());
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(AgentConnectionState.Connected, (await final.AgentConnectionSessions.SingleAsync(c => c.ID == pending.ConnectionSessionId)).State);
-        Assert.Equal(receiptCount + (scanFirst ? 1 : 0), await final.AgentRecoveryOperations.CountAsync());
-        Assert.Equal(revision + (scanFirst ? 3 : 1), (await final.AgentContextCursors.SingleAsync()).ActivityRevision);
+        Assert.Equal(AgentConnectionState.Connected, (await final.AgentConnectionSessions.SingleAsync(c => c.ID == pending.ConnectionSessionId, cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Equal(receiptCount + (scanFirst ? 1 : 0), await final.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(revision + (scanFirst ? 3 : 1), (await final.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ActivityRevision);
     }
 
     private sealed class CompensationTransactionFault

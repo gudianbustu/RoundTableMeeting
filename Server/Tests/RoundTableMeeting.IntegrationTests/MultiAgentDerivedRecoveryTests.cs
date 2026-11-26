@@ -53,7 +53,7 @@ public sealed partial class McpAgentContractTests
                 if (failure == 3) break;
                 var delay = decision.GetProperty("nextRetryAt").GetDateTimeOffset() - DateTimeOffset.UtcNow;
                 Assert.True(delay < TimeSpan.FromSeconds(30));
-                if (delay > TimeSpan.Zero) await Task.Delay(delay);
+                if (delay > TimeSpan.Zero) await Task.Delay(delay, TestContext.Current.CancellationToken);
                 var retry = await CrashMentionAsync(original, oldId);
                 Assert.Equal(source, retry.GetProperty("collaboration").GetRawText());
                 failedAttempt = retry.GetProperty("deliveryAttemptId").GetGuid();
@@ -63,9 +63,9 @@ public sealed partial class McpAgentContractTests
             await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker a new root must not overtake failed head");
             var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
             await using var allocation = host.Database();
-            while (await allocation.AgentReplyTasks.CountAsync() < 3 && DateTimeOffset.UtcNow < deadline)
-                await Task.Delay(50);
-            Assert.Equal(3, await allocation.AgentReplyTasks.CountAsync());
+            while (await allocation.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken) < 3 && DateTimeOffset.UtcNow < deadline)
+                await Task.Delay(50, TestContext.Current.CancellationToken);
+            Assert.Equal(3, await allocation.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         if (crash) { await host.CrashAsync(); await host.StartAsync(); }
         else await original.DisposeAsync();
@@ -91,14 +91,14 @@ public sealed partial class McpAgentContractTests
         {
             await using (var check = host.Database())
             {
-                var blockedTask = await check.AgentReplyTasks.SingleAsync(task => task.ID == taskId);
+                var blockedTask = await check.AgentReplyTasks.SingleAsync(task => task.ID == taskId, cancellationToken: TestContext.Current.CancellationToken);
                 Assert.True(blockedTask.RetryExhausted);
                 Assert.Equal(3, blockedTask.AutomaticRetryCount);
                 Assert.Equal(0, blockedTask.RetryCycle);
                 Assert.Equal(rootId, blockedTask.ParentTaskId);
             }
             var blocked = SdkPayload(await current.CallToolAsync("wait_for_mention", new Dictionary<string, object?>
-                { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 1 }));
+                { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 1 }, cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal("retry_exhausted", blocked.GetProperty("errorCode").GetString());
             await ProcessCallAsync(current, "retry_task", new { connectionSessionId = id, taskId, operationId = Guid.NewGuid() });
         }
@@ -110,24 +110,24 @@ public sealed partial class McpAgentContractTests
         Assert.NotEqual(oldAttempt, attempt);
         var stale = SdkPayload(await current.CallToolAsync("reply_to_mention", new Dictionary<string, object?>
             { ["connectionSessionId"] = id, ["taskId"] = taskId, ["deliveryAttemptId"] = oldAttempt,
-                ["replyIdempotencyKey"] = replyKey, ["content"] = "stale response" }));
+                ["replyIdempotencyKey"] = replyKey, ["content"] = "stale response" }, cancellationToken: TestContext.Current.CancellationToken));
         Assert.False(stale.GetProperty("succeeded").GetBoolean());
         Assert.Equal("delivery_attempt_stale", stale.GetProperty("errorCode").GetString());
         await ProcessCallAsync(current, "confirm_context", new { connectionSessionId = id, kind = "task", taskId, deliveryAttemptId = attempt });
         await ProcessCallAsync(current, "reply_to_mention", new { connectionSessionId = id, taskId, deliveryAttemptId = attempt,
             replyIdempotencyKey = replyKey, content = "recovered response" });
         await using var db = host.Database();
-        var persisted = await db.AgentReplyTasks.SingleAsync(task => task.ID == taskId);
+        var persisted = await db.AgentReplyTasks.SingleAsync(task => task.ID == taskId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(rootId, persisted.ParentTaskId);
         Assert.Equal(root.GetProperty("triggerMessageId").GetGuid(), persisted.ChainId);
         Assert.Equal(AgentReplyTaskState.Replied, persisted.State);
-        Assert.Equal(exhaust ? 3 : 2, await db.AgentReplyTasks.CountAsync());
-        Assert.Equal(exhaust ? 4 : 3, await db.MeetingMessages.CountAsync());
+        Assert.Equal(exhaust ? 3 : 2, await db.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(exhaust ? 4 : 3, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         if (exhaust)
         {
             Assert.Equal(1, persisted.RetryCycle);
             Assert.Equal(0, persisted.AutomaticRetryCount);
-            var tail = await db.AgentReplyTasks.SingleAsync(task => task.ID != taskId && task.ID != rootId);
+            var tail = await db.AgentReplyTasks.SingleAsync(task => task.ID != taskId && task.ID != rootId, cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentReplyTaskState.Queued, tail.State);
             Assert.Null(tail.ParentTaskId);
             Assert.NotEqual(persisted.ChainId, tail.ChainId);
@@ -138,10 +138,10 @@ public sealed partial class McpAgentContractTests
                 taskId = tail.ID, deliveryAttemptId = tailAttempt });
             await ProcessCallAsync(current, "reply_to_mention", new { connectionSessionId = id, taskId = tail.ID,
                 deliveryAttemptId = tailAttempt, replyIdempotencyKey = tail.ReplyIdempotencyKey, content = "next root completed" });
-            await db.Entry(tail).ReloadAsync();
+            await db.Entry(tail).ReloadAsync(TestContext.Current.CancellationToken);
             Assert.Equal(AgentReplyTaskState.Replied, tail.State);
-            Assert.Equal(5, await db.MeetingMessages.CountAsync());
+            Assert.Equal(5, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

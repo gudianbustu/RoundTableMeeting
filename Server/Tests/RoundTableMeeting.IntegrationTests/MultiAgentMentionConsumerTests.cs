@@ -24,18 +24,18 @@ public sealed partial class AgentMentionTaskConsumerTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var parent = await db.AgentReplyTasks.SingleAsync(task => task.MeetingId == seed.MeetingId);
+            var parent = await db.AgentReplyTasks.SingleAsync(task => task.MeetingId == seed.MeetingId, cancellationToken: TestContext.Current.CancellationToken);
             parentId = parent.ID;
             parent.MarkDelivered(parent.CreatedAtUtc); parent.MarkProcessing(parent.CreatedAtUtc);
             parent.MarkReplied(reply.MessageId, parent.CreatedAtUtc);
             db.Update(parent);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => ConsumeAsync(factory, reply.Envelope)));
         await using var verification = factory.Services.CreateAsyncScope();
         var context = verification.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
         var children = await context.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId
-            && task.TriggerMessageId == reply.MessageId).ToArrayAsync();
+            && task.TriggerMessageId == reply.MessageId).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(2, children.Length);
         Assert.All(children, task => { Assert.Equal(parentId, task.ParentTaskId); Assert.Equal(rootMessage.MessageId, task.ChainId); });
         Assert.Equal(reply.MentionIds[0], children.Single(task => task.AgentParticipantId == seed.FirstAgentId).TriggerMentionId);
@@ -56,7 +56,7 @@ public sealed partial class AgentMentionTaskConsumerTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            await db.AgentCollaborationBoundaries.Where(item => item.MeetingId == seed.MeetingId).ExecuteDeleteAsync();
+            await db.AgentCollaborationBoundaries.Where(item => item.MeetingId == seed.MeetingId).ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
         await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(factory, message.Envelope));
         await AssertCursorAsync(factory, seed.MeetingId, seed.FirstAgentId, 0);
@@ -80,15 +80,15 @@ public sealed partial class AgentMentionTaskConsumerTests
         await using (var before = factory.Services.CreateAsyncScope())
         {
             var db = before.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            revisions = await db.AgentContextCursors.ToDictionaryAsync(item => item.ID, item => item.ActivityRevision);
+            revisions = await db.AgentContextCursors.ToDictionaryAsync(item => item.ID, item => item.ActivityRevision, cancellationToken: TestContext.Current.CancellationToken);
         }
         await Assert.ThrowsAsync<InvalidOperationException>(() => ConsumeAsync(factory, fanout.Envelope));
         await using (var rolledBack = factory.Services.CreateAsyncScope())
         {
             var db = rolledBack.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(1, await db.AgentReplyTasks.CountAsync());
-            Assert.False(await db.AgentReplyTasks.AnyAsync(task => task.TriggerMessageId == fanout.MessageId));
-            foreach (var cursor in await db.AgentContextCursors.ToArrayAsync())
+            Assert.Equal(1, await db.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.False(await db.AgentReplyTasks.AnyAsync(task => task.TriggerMessageId == fanout.MessageId, cancellationToken: TestContext.Current.CancellationToken));
+            foreach (var cursor in await db.AgentContextCursors.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken))
                 Assert.Equal(revisions[cursor.ID], cursor.ActivityRevision);
         }
         await AssertCursorAsync(factory, seed.MeetingId, seed.FirstAgentId, 0);
@@ -102,13 +102,13 @@ public sealed partial class AgentMentionTaskConsumerTests
         await using (var repair = factory.Services.CreateAsyncScope())
         {
             var db = repair.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var parent = await db.AgentReplyTasks.SingleAsync(task => task.TriggerMessageId == root.MessageId);
+            var parent = await db.AgentReplyTasks.SingleAsync(task => task.TriggerMessageId == root.MessageId, cancellationToken: TestContext.Current.CancellationToken);
             parentId = parent.ID;
             parent.MarkDelivered(parent.CreatedAtUtc);
             parent.MarkProcessing(parent.CreatedAtUtc);
             parent.MarkReplied(orphan.MessageId, parent.CreatedAtUtc);
             db.Update(parent);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await ConsumeAsync(factory, fanout.Envelope);
         await ConsumeAsync(factory, fanout.Envelope);
@@ -116,7 +116,7 @@ public sealed partial class AgentMentionTaskConsumerTests
         await AssertCursorAsync(factory, seed.MeetingId, seed.SecondAgentId.Value, 3);
         await using var check = factory.Services.CreateAsyncScope();
         var context = check.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var tasks = await context.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId).ToArrayAsync();
+        var tasks = await context.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(5, tasks.Length);
         var derived = Assert.Single(tasks, task => task.TriggerMessageId == orphan.MessageId);
         Assert.Equal(parentId, derived.ParentTaskId);
@@ -138,13 +138,13 @@ public sealed partial class AgentMentionTaskConsumerTests
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
             db.AddRange(Enumerable.Range(2, 260).Select(sequence => MeetingMessage.CreateSystem(seed.MeetingId, sequence,
                 "System", "history", Guid.NewGuid(), DateTimeOffset.UtcNow)));
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         var last = await AddMessageAsync(factory, seed, 262, MessageAuthorKind.Human, "@Analyst", new MentionInput(seed.FirstAgentId, "Analyst", 0, 8));
         await ConsumeAsync(factory, last.Envelope);
         await using var check = factory.Services.CreateAsyncScope();
         var context = check.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var tasks = await context.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId).OrderBy(task => task.TriggerSequence).ToArrayAsync();
+        var tasks = await context.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId).OrderBy(task => task.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(new long[] { 1, 262 }, tasks.Select(task => task.TriggerSequence));
         Assert.Equal(new long[] { 0, 1 }, tasks.Select(task => task.CandidateFromSequenceExclusive));
     }

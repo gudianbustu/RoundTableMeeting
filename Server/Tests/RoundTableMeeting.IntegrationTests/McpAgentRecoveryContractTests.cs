@@ -29,14 +29,14 @@ public sealed partial class McpAgentContractTests
             services.AddMcpServer().WithTools([probe])));
         using var http = factory.CreateClient(new() { AllowAutoRedirect = false, HandleCookies = false });
         await using var sdk = await CreateSdkAsync(http);
-        var tools = await sdk.ListToolsAsync();
+        var tools = await sdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         var advertised = Assert.Single(tools, tool => tool.Name == "probe_recovery_contract").ProtocolTool.OutputSchema!.Value;
         Assert.Equal(2, advertised.GetProperty("oneOf").GetArrayLength());
         AssertAllLocalSchemaReferencesResolve(advertised, advertised);
         var validator = JsonSchema.FromText(advertised.GetRawText());
         foreach (var (name, sample) in samples)
         {
-            var result = SdkPayload(await sdk.CallToolAsync("probe_recovery_contract", new Dictionary<string, object?> { ["sample"] = name }));
+            var result = SdkPayload(await sdk.CallToolAsync("probe_recovery_contract", new Dictionary<string, object?> { ["sample"] = name }, cancellationToken: TestContext.Current.CancellationToken));
             Assert.Equal("agent-messaging-v1", result.GetProperty("protocolVersion").GetString());
             Assert.Equal(sample.Succeeded, result.GetProperty("succeeded").GetBoolean());
             Assert.Equal(sample.ErrorCode, result.GetProperty("errorCode").GetString());
@@ -53,12 +53,10 @@ public sealed partial class McpAgentContractTests
                 AssertRequiredRootFieldsPresent(declared, data);
             }
         }
-        var errorData = SdkPayload(await sdk.CallToolAsync("probe_recovery_contract",
-            new Dictionary<string, object?> { ["sample"] = "anonymous_error" })).GetProperty("data");
+        var errorData = SdkPayload(await sdk.CallToolAsync("probe_recovery_contract", new Dictionary<string, object?> { ["sample"] = "anonymous_error" }, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("data");
         Assert.Equal(new[] { "nextAction" }, errorData.EnumerateObject().Select(property => property.Name));
         Assert.Equal("stop", errorData.GetProperty("nextAction").GetString());
-        var joined = SdkPayload(await sdk.CallToolAsync("probe_recovery_contract",
-            new Dictionary<string, object?> { ["sample"] = "joined" })).GetProperty("data");
+        var joined = SdkPayload(await sdk.CallToolAsync("probe_recovery_contract", new Dictionary<string, object?> { ["sample"] = "joined" }, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("data");
         Assert.Equal("initial", joined.GetProperty("contextPurpose").GetString());
         Assert.False(joined.GetProperty("initialContext").GetProperty("messages")[0].TryGetProperty("contextPurpose", out _));
         Assert.False(joined.GetProperty("initialContext").GetProperty("messages")[0].TryGetProperty("replayReason", out _));
@@ -77,14 +75,14 @@ public sealed partial class McpAgentContractTests
         var result = SdkPayload(await sdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Legacy", ["contextCharacterLimit"] = 12000
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         var data = result.GetProperty("data");
         Assert.Equal(new[] { "agent", "connection", "initialContext", "lifecycleProof", "meeting", "nextAction", "participants", "residentInstruction", "residentInstructionVersion" },
             data.EnumerateObject().Select(property => property.Name).Order());
         Assert.Matches("^[0-9A-Fa-f]{64}$", data.GetProperty("lifecycleProof").GetString()!);
         Assert.Equal(new[] { "connectionSessionId", "declaredContextCharacterLimit", "initialContextState", "state" },
             data.GetProperty("connection").EnumerateObject().Select(property => property.Name).Order());
-        var error = SdkPayload(await sdk.CallToolAsync("get_agent_status", new Dictionary<string, object?> { ["connectionSessionId"] = Guid.NewGuid() }));
+        var error = SdkPayload(await sdk.CallToolAsync("get_agent_status", new Dictionary<string, object?> { ["connectionSessionId"] = Guid.NewGuid() }, cancellationToken: TestContext.Current.CancellationToken));
         AssertToolFailure(error, "connection_invalid");
     }
 

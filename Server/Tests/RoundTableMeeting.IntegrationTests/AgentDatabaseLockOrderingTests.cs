@@ -47,7 +47,7 @@ public sealed partial class McpAgentContractTests
         await ReliableForTestAsync(factory.Services, s => s.ConfirmReliableAsync(new(id, "task", TaskId: mention.TaskId, DeliveryAttemptId: mention.DeliveryAttemptId), transport));
         var registration = Assert.Single(factory.Services.GetRequiredService<IAgentConnectionRegistry>().ListRegistrations(meeting.MeetingId));
         await using var lockConnection = new SqliteConnection($"Data Source={original.DatabasePath};Pooling=False");
-        await lockConnection.OpenAsync();
+        await lockConnection.OpenAsync(TestContext.Current.CancellationToken);
         using var writer = lockConnection.BeginTransaction(deferred: false);
         using var cancellation = new CancellationTokenSource();
         var admitted = Task.Run(async () =>
@@ -68,20 +68,20 @@ public sealed partial class McpAgentContractTests
         Task? deletion = null;
         try
         {
-            await transactionCut.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await transactionCut.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(admitted.IsCompleted);
             deletion = DeleteLifecycleMeetingAsync(browser, meeting.MeetingId, "Database lock ordering");
-            await gate.Closing.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await gate.Closing.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(deletion.IsCompleted);
             if (cancel) cancellation.Cancel();
         }
         finally { writer.Rollback(); }
-        if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => admitted.WaitAsync(TimeSpan.FromSeconds(10)));
-        else Assert.True((await admitted.WaitAsync(TimeSpan.FromSeconds(10))).Succeeded);
-        await deletion!.WaitAsync(TimeSpan.FromSeconds(10));
+        if (cancel) await Assert.ThrowsAnyAsync<OperationCanceledException>(() => admitted.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        else Assert.True((await admitted.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).Succeeded);
+        await deletion!.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         await AssertAgentMeetingGoneAsync(factory, meeting.MeetingId);
         await using (var released = await factory.Services.GetRequiredService<IAgentConnectionRegistry>()
-            .ReserveTransportAsync(RecoveryTransport(231)).AsTask().WaitAsync(TimeSpan.FromSeconds(5))) { }
+            .ReserveTransportAsync(RecoveryTransport(231), TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)) { }
         await PostHumanMessageAsync(browser, other.MeetingId, "Human work continues after the global SQLite writer releases");
         Assert.True((await JoinReliableForTestAsync(factory.Services,
             ReliableJoinRequest(other.MeetingCode, "Worker", "create"), RecoveryTransport(232))).Succeeded);

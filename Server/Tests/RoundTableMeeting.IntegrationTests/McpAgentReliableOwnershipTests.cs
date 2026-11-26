@@ -99,7 +99,7 @@ public sealed partial class McpAgentContractTests
             deliveryAttemptId = ownAttempt, replyIdempotencyKey = ownKey, content = "Own authorized reply" })).GetProperty("succeeded").GetBoolean());
         Assert.True((await test.Run(s => s.ReplyReliableAsync(test.Reply, test.Transport))).Succeeded);
         await using var finalScope = test.Services.CreateAsyncScope();
-        Assert.All(await finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.ToArrayAsync(),
+        Assert.All(await finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken),
             t => Assert.Equal(AgentReplyTaskState.Replied, t.State));
     }
 }

@@ -29,14 +29,14 @@ public sealed partial class McpAgentContractTests
         if (takeoverFirst) Assert.Equal("connection_superseded", second.ErrorCode);
         await using var scope = test.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var current = await db.AgentConnectionSessions.SingleAsync(c => c.State == AgentConnectionState.Connected);
+        var current = await db.AgentConnectionSessions.SingleAsync(c => c.State == AgentConnectionState.Connected, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(test.ConnectionId, current.ID);
         Assert.Equal(2, current.ConnectionGeneration);
         Assert.Equal(test.Clock.Now.AddSeconds(120), current.LeaseExpiresAtUtc);
-        Assert.Equal(AgentConnectionState.Superseded, (await db.AgentConnectionSessions.SingleAsync(c => c.ID == test.ConnectionId)).State);
-        Assert.Equal(current.ID, (await db.AgentContextCursors.SingleAsync()).CurrentConnectionId);
+        Assert.Equal(AgentConnectionState.Superseded, (await db.AgentConnectionSessions.SingleAsync(c => c.ID == test.ConnectionId, cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Equal(current.ID, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).CurrentConnectionId);
         Assert.Equal("connection_superseded", (await Renew()).ErrorCode);
-        Assert.Equal(current.LeaseExpiresAtUtc, (await db.AgentConnectionSessions.AsNoTracking().SingleAsync(c => c.ID == current.ID)).LeaseExpiresAtUtc);
+        Assert.Equal(current.LeaseExpiresAtUtc, (await db.AgentConnectionSessions.AsNoTracking().SingleAsync(c => c.ID == current.ID, cancellationToken: TestContext.Current.CancellationToken)).LeaseExpiresAtUtc);
     }
 
     [Fact]
@@ -84,13 +84,13 @@ public sealed partial class McpAgentContractTests
         Task<JsonElement>? older = null;
         try
         {
-            await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             await EventuallyAsync(factory, async db => await db.AgentConnectionSessions.AnyAsync(c => c.LeaseExpiresAtUtc == start.AddSeconds(330)));
             Assert.Equal(start.AddSeconds(330), await Lease());
             time.Now = start.AddSeconds(220);
             delayed.Armed = true;
             older = ActivationCallAsync(sdk, "renew_agent_lease", new { connectionSessionId = id });
-            await delayed.Captured.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await delayed.Captured.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(older.IsCompleted);
             time.Now = start.AddSeconds(250);
             var newer = await ActivationCallAsync(sdk, "renew_agent_lease", new { connectionSessionId = id });
@@ -106,8 +106,8 @@ public sealed partial class McpAgentContractTests
         }
         finally { delayed.Release.TrySetResult(); cancelWait.Cancel(); }
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
-        await sdk.SendNotificationAsync("notifications/cancelled", new CancelledNotificationParams { RequestId = requestId });
-        await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        await sdk.SendNotificationAsync("notifications/cancelled", new CancelledNotificationParams { RequestId = requestId }, cancellationToken: TestContext.Current.CancellationToken);
+        await signals.Exited.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         Assert.True((await ActivationCallAsync(sdk, "get_agent_status", new { connectionSessionId = id })).GetProperty("succeeded").GetBoolean());
     }
 

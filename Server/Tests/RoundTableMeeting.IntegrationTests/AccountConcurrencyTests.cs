@@ -32,8 +32,8 @@ public sealed class AccountConcurrencyTests
     {
         using var factory = new TestApplicationFactory(); using var init = factory.Services.CreateScope();
         var repo = init.ServiceProvider.GetRequiredService<IUserAccountRepository>();
-        var a = (await repo.FindByNormalizedUsernameAsync("ALICE"))!; var b = (await repo.FindByNormalizedUsernameAsync("BOB"))!;
-        await init.ServiceProvider.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => { await repo.UpdateAdministratorAsync(b.ID, true, token); return true; });
+        var a = (await repo.FindByNormalizedUsernameAsync("ALICE", TestContext.Current.CancellationToken))!; var b = (await repo.FindByNormalizedUsernameAsync("BOB", TestContext.Current.CancellationToken))!;
+        await init.ServiceProvider.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => { await repo.UpdateAdministratorAsync(b.ID, true, token); return true; }, TestContext.Current.CancellationToken);
         using var barrier = new Barrier(2);
         Task<UserManagementResult> Run(Guid actor, Guid target) => Task.Run(async () => {
             using var scope = factory.Services.CreateScope(); barrier.SignalAndWait(TimeSpan.FromSeconds(10));
@@ -42,14 +42,14 @@ public sealed class AccountConcurrencyTests
         var results = await Task.WhenAll(Run(a.ID, self ? a.ID : b.ID), Run(b.ID, self ? b.ID : a.ID));
         Assert.Single(results, result => result.Status == UserManagementStatus.Success);
         Assert.Contains(results, result => result.Status is UserManagementStatus.Forbidden or UserManagementStatus.LastAdminRequired);
-        Assert.Equal(1, await repo.CountAdministratorsAsync());
+        Assert.Equal(1, await repo.CountAdministratorsAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
     public async Task CompetingPasswordChangesVerifyLatestCommittedPassword()
     {
         using var factory = new TestApplicationFactory(); using var init = factory.Services.CreateScope();
-        var repo = init.ServiceProvider.GetRequiredService<IUserAccountRepository>(); var b = (await repo.FindByNormalizedUsernameAsync("BOB"))!;
+        var repo = init.ServiceProvider.GetRequiredService<IUserAccountRepository>(); var b = (await repo.FindByNormalizedUsernameAsync("BOB", TestContext.Current.CancellationToken))!;
         using var barrier = new Barrier(2);
         Task<AccountSettingsResult> Run(string password) => Task.Run(async () => {
             using var scope = factory.Services.CreateScope(); barrier.SignalAndWait(TimeSpan.FromSeconds(10));
@@ -67,13 +67,13 @@ public sealed class AccountConcurrencyTests
     {
         using var factory = new TestApplicationFactory(); using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider; var repo = services.GetRequiredService<IUserAccountRepository>();
-        var a = (await repo.FindByNormalizedUsernameAsync("ALICE"))!; var b = (await repo.FindByNormalizedUsernameAsync("BOB"))!;
+        var a = (await repo.FindByNormalizedUsernameAsync("ALICE", TestContext.Current.CancellationToken))!; var b = (await repo.FindByNormalizedUsernameAsync("BOB", TestContext.Current.CancellationToken))!;
         var management = Management(services, a.ID); var settings = Settings(services, b.ID);
-        if (resetFirst) await management.ResetPasswordAsync(b.ID);
-        var change = await settings.ChangeMyPasswordAsync(new() { CurrentPassword = "test-password-bob", NewPassword = "personal" });
+        if (resetFirst) await management.ResetPasswordAsync(b.ID, TestContext.Current.CancellationToken);
+        var change = await settings.ChangeMyPasswordAsync(new() { CurrentPassword = "test-password-bob", NewPassword = "personal" }, TestContext.Current.CancellationToken);
         Assert.Equal(resetFirst ? AccountSettingsStatus.ValidationFailed : AccountSettingsStatus.Success, change.Status);
-        if (!resetFirst) await management.ResetPasswordAsync(b.ID);
-        b = (await repo.FindByIdAsync(b.ID))!;
+        if (!resetFirst) await management.ResetPasswordAsync(b.ID, TestContext.Current.CancellationToken);
+        b = (await repo.FindByIdAsync(b.ID, TestContext.Current.CancellationToken))!;
         Assert.NotEqual(PasswordVerificationResult.Failed, services.GetRequiredService<IPasswordHasher<UserAccount>>().VerifyHashedPassword(b, b.PasswordHash, "123456"));
     }
 
@@ -82,12 +82,12 @@ public sealed class AccountConcurrencyTests
     {
         using var factory = new TestApplicationFactory(); using var first = factory.Services.CreateScope(); using var second = factory.Services.CreateScope();
         var r1 = first.ServiceProvider.GetRequiredService<IUserAccountRepository>(); var r2 = second.ServiceProvider.GetRequiredService<IUserAccountRepository>();
-        var stale = (await r1.FindByNormalizedUsernameAsync("BOB"))!;
+        var stale = (await r1.FindByNormalizedUsernameAsync("BOB", TestContext.Current.CancellationToken))!;
         await second.ServiceProvider.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => {
             await r2.UpdateAdministratorAsync(stale.ID, true, token); await r2.UpdatePasswordHashAsync(stale.ID, "changed-hash", token); return true;
-        });
-        await Settings(first.ServiceProvider, stale.ID).UpdateMyNicknameAsync(new() { Nickname = "Updated" });
-        var actual = (await r1.FindByIdAsync(stale.ID))!;
+        }, TestContext.Current.CancellationToken);
+        await Settings(first.ServiceProvider, stale.ID).UpdateMyNicknameAsync(new() { Nickname = "Updated" }, TestContext.Current.CancellationToken);
+        var actual = (await r1.FindByIdAsync(stale.ID, TestContext.Current.CancellationToken))!;
         Assert.True(actual.IsAdmin); Assert.Equal("changed-hash", actual.PasswordHash); Assert.Equal("Updated", actual.Nickname);
     }
 
@@ -96,21 +96,21 @@ public sealed class AccountConcurrencyTests
     {
         using var factory = new TestApplicationFactory(); using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider; var repo = services.GetRequiredService<IUserAccountRepository>();
-        var a = (await repo.FindByNormalizedUsernameAsync("ALICE"))!; var originalHash = a.PasswordHash;
-        await services.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => { await repo.UpdateAdministratorAsync(a.ID, false, token); return true; });
+        var a = (await repo.FindByNormalizedUsernameAsync("ALICE", TestContext.Current.CancellationToken))!; var originalHash = a.PasswordHash;
+        await services.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => { await repo.UpdateAdministratorAsync(a.ID, false, token); return true; }, TestContext.Current.CancellationToken);
         using var barrier = new Barrier(2);
         Task Run() => Task.Run(async () => {
             using var child = factory.Services.CreateScope(); barrier.SignalAndWait(TimeSpan.FromSeconds(10));
             await child.ServiceProvider.GetRequiredService<IAccountSeeder>().SeedAsync([new("alice", "Changed", "changed")], initialAdminUsername: "ALICE");
         });
         await Task.WhenAll(Run(), Run());
-        a = (await repo.FindByIdAsync(a.ID))!;
+        a = (await repo.FindByIdAsync(a.ID, TestContext.Current.CancellationToken))!;
         Assert.True(a.IsAdmin); Assert.Equal(originalHash, a.PasswordHash); Assert.Equal("Alice", a.Nickname);
-        var b = (await repo.FindByNormalizedUsernameAsync("BOB"))!;
-        await Management(services, a.ID).UpdateAdminAsync(b.ID, new() { IsAdmin = true });
-        await Management(services, b.ID).UpdateAdminAsync(a.ID, new() { IsAdmin = false });
-        await services.GetRequiredService<IAccountSeeder>().SeedAsync([new("alice", "Changed", "changed")], initialAdminUsername: "alice");
-        Assert.False((await repo.FindByIdAsync(a.ID))!.IsAdmin);
+        var b = (await repo.FindByNormalizedUsernameAsync("BOB", TestContext.Current.CancellationToken))!;
+        await Management(services, a.ID).UpdateAdminAsync(b.ID, new() { IsAdmin = true }, TestContext.Current.CancellationToken);
+        await Management(services, b.ID).UpdateAdminAsync(a.ID, new() { IsAdmin = false }, TestContext.Current.CancellationToken);
+        await services.GetRequiredService<IAccountSeeder>().SeedAsync([new("alice", "Changed", "changed")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken);
+        Assert.False((await repo.FindByIdAsync(a.ID, TestContext.Current.CancellationToken))!.IsAdmin);
     }
 
     [Theory]
@@ -120,10 +120,10 @@ public sealed class AccountConcurrencyTests
     {
         using var factory = new TestApplicationFactory(); using var scope = factory.Services.CreateScope();
         var services = scope.ServiceProvider; var repo = services.GetRequiredService<IUserAccountRepository>();
-        var a = (await repo.FindByNormalizedUsernameAsync("ALICE"))!;
-        await services.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => { await repo.UpdateAdministratorAsync(a.ID, false, token); return true; });
-        await Assert.ThrowsAsync<InvalidOperationException>(() => services.GetRequiredService<IAccountSeeder>().SeedAsync([new("new", "New", "secret")], initialAdminUsername: initialAdmin));
-        Assert.Null(await repo.FindByNormalizedUsernameAsync("NEW"));
-        Assert.Equal(0, await repo.CountAdministratorsAsync());
+        var a = (await repo.FindByNormalizedUsernameAsync("ALICE", TestContext.Current.CancellationToken))!;
+        await services.GetRequiredService<IAccountTransactionRunner>().RunAsync(async token => { await repo.UpdateAdministratorAsync(a.ID, false, token); return true; }, TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => services.GetRequiredService<IAccountSeeder>().SeedAsync([new("new", "New", "secret")], initialAdminUsername: initialAdmin, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Null(await repo.FindByNormalizedUsernameAsync("NEW", TestContext.Current.CancellationToken));
+        Assert.Equal(0, await repo.CountAdministratorsAsync(TestContext.Current.CancellationToken));
     }
 }

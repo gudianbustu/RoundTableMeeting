@@ -50,7 +50,7 @@ public sealed partial class McpAgentContractTests
         Guid secondTaskId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var tasks = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync();
+            var tasks = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
             firstTaskId = tasks[0].ID;
             secondTaskId = tasks[1].ID;
             Assert.Equal(10, tasks[0].CandidateFromSequenceExclusive);
@@ -106,13 +106,13 @@ public sealed partial class McpAgentContractTests
         }
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var all = await final.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync();
+        var all = await final.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(3, all.Length);
         Assert.Equal(AgentReplyTaskState.Replied, all[0].State);
         Assert.Equal(AgentReplyTaskState.Replied, all[1].State);
         Assert.Equal(AgentReplyTaskState.Delivered, all[2].State);
-        Assert.Equal(20, (await final.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
-        Assert.Equal(28, (await final.AgentContextCursors.SingleAsync()).AllocatedThroughSequence);
+        Assert.Equal(20, (await final.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
+        Assert.Equal(28, (await final.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AllocatedThroughSequence);
     }
 
     private static async Task CompleteContinuityTaskAsync(IServiceProvider services, Guid connectionId,

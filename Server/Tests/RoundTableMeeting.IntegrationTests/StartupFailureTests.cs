@@ -33,7 +33,7 @@ public sealed class StartupFailureTests
             Assert.DoesNotContain("Password", output, StringComparison.OrdinalIgnoreCase);
 
             using var client = new TcpClient();
-            await Assert.ThrowsAnyAsync<SocketException>(async () => await client.ConnectAsync("127.0.0.1", port));
+            await Assert.ThrowsAnyAsync<SocketException>(async () => await client.ConnectAsync("127.0.0.1", port, TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -79,7 +79,7 @@ public sealed class StartupFailureTests
             Assert.DoesNotContain("Data Source=", output, StringComparison.OrdinalIgnoreCase);
 
             using var client = new TcpClient();
-            await Assert.ThrowsAnyAsync<SocketException>(async () => await client.ConnectAsync("127.0.0.1", port));
+            await Assert.ThrowsAnyAsync<SocketException>(async () => await client.ConnectAsync("127.0.0.1", port, TestContext.Current.CancellationToken));
         }
         finally
         {

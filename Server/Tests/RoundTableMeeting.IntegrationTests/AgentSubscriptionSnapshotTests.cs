@@ -22,8 +22,8 @@ public sealed partial class McpAgentContractTests
         await JoinReliableForTestAsync(factory.Services, ReliableJoinRequest(meeting.MeetingCode, "Worker", "create"), RecoveryTransport(221));
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var human = await db.MeetingParticipants.SingleAsync(p => p.MeetingId == meeting.MeetingId && p.ParticipantType == ParticipantType.Human);
-        var agent = await db.MeetingParticipants.SingleAsync(p => p.MeetingId == meeting.MeetingId && p.ParticipantType == ParticipantType.Agent);
+        var human = await db.MeetingParticipants.SingleAsync(p => p.MeetingId == meeting.MeetingId && p.ParticipantType == ParticipantType.Human, cancellationToken: TestContext.Current.CancellationToken);
+        var agent = await db.MeetingParticipants.SingleAsync(p => p.MeetingId == meeting.MeetingId && p.ParticipantType == ParticipantType.Agent, cancellationToken: TestContext.Current.CancellationToken);
         using var hub = ActivatorUtilities.CreateInstance<MeetingChatHub>(scope.ServiceProvider);
         hub.Context = new SubscriptionCaller(human.UserId!.Value);
         hub.Clients = new SubscriptionClients();

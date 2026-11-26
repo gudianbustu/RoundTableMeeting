@@ -32,36 +32,36 @@ public sealed class PublicAvatarFolderTests
             using (var admin = app.CreateClient())
             {
                 admin.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-                (await admin.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" })).EnsureSuccessStatusCode();
+                (await admin.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
                 async Task Edit(string action, string group, string? name = null, int direction = 0, string? target = null, bool after = false) =>
                     (await admin.PostAsJsonAsync("/api/avatars/groups", new { action, group, name, direction, target, after })).EnsureSuccessStatusCode();
                 async Task<AvatarEntry[]> Catalog() => (await admin.GetFromJsonAsync<AvatarEntry[]>("/api/avatars"))!;
                 var original = (await Catalog()).Where(a => a.Category == "自定义").ToArray();
                 Assert.Equal(2, original.Length);
-                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(original[0].ImageUrl));
+                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(original[0].ImageUrl, TestContext.Current.CancellationToken));
                 await Edit("renameGroup", "自定义", "新名字");
                 var group = Path.Combine(directory.FullName, "Avatars", "新名字");
-                await File.WriteAllBytesAsync(Path.Combine(group, "手工添加.webp"), [8]);
+                await File.WriteAllBytesAsync(Path.Combine(group, "手工添加.webp"), [8], TestContext.Current.CancellationToken);
                 Assert.Equal("手工添加", (await Catalog()).Last().Name);
                 await Edit("moveAvatar", "新名字", "手工添加.webp", -1);
                 Assert.Equal("手工添加", (await Catalog())[^2].Name);
                 await Edit("createGroup", "空组");
                 await Edit("moveGroup", "空组", direction: -1);
-                var groups = await admin.GetFromJsonAsync<RoundTableMeeting.Avatars.AvatarGroup[]>("/api/avatars/groups");
+                var groups = await admin.GetFromJsonAsync<RoundTableMeeting.Avatars.AvatarGroup[]>("/api/avatars/groups", cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal("空组", groups![^2].Name);
                 var first = (await Catalog()).First(a => a.Category == "新名字");
                 await Edit("reorderGroup", "空组", target: "模型");
-                Assert.Equal("空组", (await admin.GetFromJsonAsync<RoundTableMeeting.Avatars.AvatarGroup[]>("/api/avatars/groups"))![0].Name);
+                Assert.Equal("空组", (await admin.GetFromJsonAsync<RoundTableMeeting.Avatars.AvatarGroup[]>("/api/avatars/groups", cancellationToken: TestContext.Current.CancellationToken))![0].Name);
                 await Edit("reorderAvatar", "新名字", "重复.png", target: "重复 (2).png", after: true);
                 await Edit("renameAvatar", "新名字", "重复.png", target: "改名");
                 first = (await Catalog()).Last();
                 Assert.Equal("改名", first.Name);
-                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(first.ImageUrl));
+                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(first.ImageUrl, TestContext.Current.CancellationToken));
                 await Edit("deleteAvatar", "新名字", "改名.png");
                 Assert.DoesNotContain(await Catalog(), a => a.Id == first.Id);
-                Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync(first.ImageUrl)).StatusCode);
+                Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync(first.ImageUrl, TestContext.Current.CancellationToken)).StatusCode);
                 await Edit("deleteGroup", "新名字");
-                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(first.ImageUrl));
+                Assert.Equal(new byte[] { 1, 2, 3 }, await admin.GetByteArrayAsync(first.ImageUrl, TestContext.Current.CancellationToken));
                 using var inspect = new SqliteConnection($"Data Source={database};Pooling=False");
                 inspect.Open();
                 using var check = inspect.CreateCommand();

@@ -21,9 +21,9 @@ public sealed partial class McpAgentContractTests
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
             if (changedFact == "pointer")
-                await db.Database.ExecuteSqlRawAsync("UPDATE AgentContextCursors SET CurrentConnectionId = NULL, ConnectionGeneration = 0");
+                await db.Database.ExecuteSqlRawAsync("UPDATE AgentContextCursors SET CurrentConnectionId = NULL, ConnectionGeneration = 0", cancellationToken: TestContext.Current.CancellationToken);
             else
-                await db.Database.ExecuteSqlRawAsync("UPDATE AgentConnectionSessions SET BindingVersion = BindingVersion + 1");
+                await db.Database.ExecuteSqlRawAsync("UPDATE AgentConnectionSessions SET BindingVersion = BindingVersion + 1", cancellationToken: TestContext.Current.CancellationToken);
         }
         AssertToolError(await CallToolAsync(agent, joined.Session.TransportSessionId, 3, "get_agent_status",
             new { connectionSessionId = joined.ConnectionId }), "connection_invalid");
@@ -34,7 +34,7 @@ public sealed partial class McpAgentContractTests
                 replyIdempotencyKey = Guid.NewGuid(), content = "Rejected reply" }), "connection_invalid");
         await using var readScope = factory.Services.CreateAsyncScope();
         var read = readScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Null((await read.AgentInitialContextDeliveries.SingleAsync()).ConfirmedAtUtc);
-        Assert.Empty(await read.MeetingMessages.ToArrayAsync());
+        Assert.Null((await read.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ConfirmedAtUtc);
+        Assert.Empty(await read.MeetingMessages.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

@@ -25,11 +25,11 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var task = await db.AgentReplyTasks.SingleAsync();
+            var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             taskId = task.ID;
             task.MarkFailed("context_invalid", DateTimeOffset.UtcNow);
             db.Update(task);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         var transport = RecoveryTransport(84);
         var joined = Assert.IsType<AgentJoinResultDto>((await JoinReliableForTestAsync(factory.Services, ReliableJoinRequest(meeting.MeetingCode, "Worker", "takeover"), transport)).Data);
@@ -69,10 +69,10 @@ public sealed partial class McpAgentContractTests
         Assert.False(factory.Services.GetRequiredService<IAgentConnectionRegistry>().ContainsTransport(otherTransport));
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(1, await db.AgentConnectionSessions.CountAsync());
-        Assert.Equal(1, await db.AgentInitialContextDeliveries.CountAsync());
-        Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync());
-        Assert.Equal("explicit_ack_v1", (await db.AgentContextCursors.SingleAsync()).RequiredReliabilityMode);
+        Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.AgentInitialContextDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal("explicit_ack_v1", (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).RequiredReliabilityMode);
     }
 
     [Theory]
@@ -102,11 +102,11 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(2, joined.Connection.ConnectionGeneration);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var oldConnection = await db.AgentConnectionSessions.SingleAsync(item => item.ID == old.ConnectionId);
+        var oldConnection = await db.AgentConnectionSessions.SingleAsync(item => item.ID == old.ConnectionId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(oldConnection.ParticipantId, joined.Agent.ParticipantId);
         Assert.Equal(AgentConnectionState.Superseded, oldConnection.State);
         Assert.Equal(joined.Connection.ConnectionSessionId, oldConnection.SupersededByConnectionId);
-        var task = await db.AgentReplyTasks.SingleAsync();
+        var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(taskId, task.ID);
         Assert.Equal(attemptId, task.CurrentAttemptId);
         Assert.Equal(AgentReplyTaskState.Failed, task.State);
@@ -114,14 +114,14 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(retryBudget == 0, task.RetryExhausted);
         if (retryBudget > 0) Assert.NotNull(task.NextRetryAtUtc);
         else Assert.Null(task.NextRetryAtUtc);
-        Assert.NotNull((await db.AgentTaskDeliveryAttempts.SingleAsync()).InvalidatedAtUtc);
-        Assert.Equal(1, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
-        Assert.Equal(2, await db.AgentInitialContextDeliveries.CountAsync());
+        Assert.NotNull((await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).InvalidatedAtUtc);
+        Assert.Equal(1, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
+        Assert.Equal(2, await db.AgentInitialContextDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         var nextTransport = McpTransportSessionKey.FromDigest(Enumerable.Repeat((byte)54, 32).ToArray());
         var next = await JoinReliableForTestAsync(factory.Services, ReliableJoinRequest(meeting.MeetingCode, "Worker", "takeover"), nextTransport);
         Assert.True(next.Succeeded, next.ErrorCode);
         db.ChangeTracker.Clear();
-        var preserved = await db.AgentReplyTasks.SingleAsync();
+        var preserved = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(task.FailureCode, preserved.FailureCode);
         Assert.Equal(task.RetryCycle, preserved.RetryCycle);
         Assert.Equal(task.AutomaticRetryCount, preserved.AutomaticRetryCount);

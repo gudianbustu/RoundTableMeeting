@@ -21,6 +21,6 @@ public sealed class AgentRecoveryConfigurationTests
             if (scenario == "backoff") options.RetryBackoffSeconds = [];
         }).ValidateDataAnnotations().ValidateOnStart();
         using var host = builder.Build();
-        await Assert.ThrowsAsync<OptionsValidationException>(() => host.StartAsync());
+        await Assert.ThrowsAsync<OptionsValidationException>(() => host.StartAsync(TestContext.Current.CancellationToken));
     }
 }

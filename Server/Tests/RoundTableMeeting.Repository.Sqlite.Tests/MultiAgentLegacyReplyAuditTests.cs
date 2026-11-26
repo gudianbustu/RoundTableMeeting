@@ -20,21 +20,21 @@ public sealed partial class MultiAgentCollaborationPersistenceTests
         await LegacyMessageSeed.InsertAsync(db, second);
         await LegacyMessageSeed.InsertAsync(db, reply);
         db.Add(mention);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         await db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO AgentReplyTasks (ID, MeetingId, AgentParticipantId, TriggerMessageId, TriggerSequence, TriggerMentionId,
              SourceAuthorKind, SourceParticipantId, CandidateFromSequenceExclusive, CandidateToSequenceInclusive, ReplyIdempotencyKey,
              State, CreatedAtUtc, AutomaticRetryCount, RetryCycle, RetryExhausted)
             VALUES ({Guid.NewGuid()}, {seed.Meeting.ID}, {seed.Agent.ID}, {second.ID}, 2, {mention.ID},
              'Human', {seed.Human.ID}, 1, 2, {Guid.NewGuid()}, 'Queued', {Now}, 0, 0, 0)
-            """);
-        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET State = 'Replied', ReplyMessageId = {reply.ID}, RepliedAtUtc = {Now}");
-        var failure = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync());
+            """, cancellationToken: TestContext.Current.CancellationToken);
+        await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET State = 'Replied', ReplyMessageId = {reply.ID}, RepliedAtUtc = {Now}", cancellationToken: TestContext.Current.CancellationToken);
+        var failure = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Contains("Ambiguous collaboration reply", failure.Message);
         Assert.DoesNotContain(reply.Content, failure.Message);
-        Assert.Equal(Previous, (await db.Database.GetAppliedMigrationsAsync()).Last());
-        Assert.Equal(2, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM AgentReplyTasks WHERE State = 'Replied'").SingleAsync());
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_table_info('AgentReplyTasks') WHERE name = 'ChainId'").SingleAsync());
+        Assert.Equal(Previous, (await db.Database.GetAppliedMigrationsAsync(cancellationToken: TestContext.Current.CancellationToken)).Last());
+        Assert.Equal(2, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM AgentReplyTasks WHERE State = 'Replied'").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_table_info('AgentReplyTasks') WHERE name = 'ChainId'").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(0, await ForeignKeyErrors(db));
     }
 }

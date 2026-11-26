@@ -43,39 +43,38 @@ public sealed partial class McpAgentContractTests
         if (reason == "server_restart") registry.Retire(expected);
         if (reason == "connection_lease_expired") time.Now = joined.Connection.LeaseExpiresAt!.Value;
         await using (var scope = factory.Services.CreateAsyncScope())
-            await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected,
-                reason == "transport_closed" ? AgentTaskFailureCode.TransportClosed : null);
+            await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected, reason == "transport_closed" ? AgentTaskFailureCode.TransportClosed : null, TestContext.Current.CancellationToken);
         DateTimeOffset due;
         long revision;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var connection = await db.AgentConnectionSessions.SingleAsync();
+            var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentConnectionState.Disconnected, connection.State);
             Assert.Equal(reason, connection.DisconnectReason);
-            var tasks = await db.AgentReplyTasks.OrderBy(item => item.TriggerSequence).ToArrayAsync();
+            var tasks = await db.AgentReplyTasks.OrderBy(item => item.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentReplyTaskState.Failed, tasks[0].State);
             Assert.Equal(reason, tasks[0].FailureCode);
             Assert.Equal(0, tasks[0].AutomaticRetryCount);
             due = tasks[0].NextRetryAtUtc!.Value;
             Assert.Equal(AgentReplyTaskState.Queued, tasks[1].State);
-            var attempt = await db.AgentTaskDeliveryAttempts.SingleAsync();
+            var attempt = await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(reason, attempt.InvalidationReason);
             Assert.NotNull(attempt.InvalidatedAtUtc);
-            revision = (await db.AgentContextCursors.SingleAsync()).ActivityRevision;
+            revision = (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ActivityRevision;
         }
         await using (var scope = factory.Services.CreateAsyncScope())
-            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected));
+            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected, cancellationToken: TestContext.Current.CancellationToken));
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(revision, (await db.AgentContextCursors.SingleAsync()).ActivityRevision);
-            Assert.Equal(due, (await db.AgentReplyTasks.SingleAsync(item => item.ID == mention.TaskId)).NextRetryAtUtc);
+            Assert.Equal(revision, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ActivityRevision);
+            Assert.Equal(due, (await db.AgentReplyTasks.SingleAsync(item => item.ID == mention.TaskId, cancellationToken: TestContext.Current.CancellationToken)).NextRetryAtUtc);
         }
         var nextTransport = RecoveryTransport(82);
         Assert.True((await ReliableForTestAsync(factory.Services, service => service.ResumeReliableAsync(new(id, request.RecoveryKey, Guid.NewGuid()), nextTransport))).Succeeded);
         // A delayed close from the previous binding cannot disconnect the resumed connection.
-        Assert.False(await factory.Services.GetRequiredService<IAgentConnectionCompensator>().DisconnectAsync(expected, time.Now));
+        Assert.False(await factory.Services.GetRequiredService<IAgentConnectionCompensator>().DisconnectAsync(expected, time.Now, TestContext.Current.CancellationToken));
         var status = Assert.IsType<AgentStatusResultDto>((await ReliableForTestAsync(factory.Services, service => service.StatusReliableAsync(new(id), nextTransport))).Data);
         Assert.Equal("connected", status.Connection.State);
         Assert.Equal(due, status.QueueHead!.NextRetryAt);
@@ -101,13 +100,13 @@ public sealed partial class McpAgentContractTests
         var registry = factory.Services.GetRequiredService<IAgentConnectionRegistry>();
         Assert.True(registry.TryGetRegistration(transport, out var expected));
         await using (var scope = factory.Services.CreateAsyncScope())
-            await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected);
+            await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected, cancellationToken: TestContext.Current.CancellationToken);
         var status = Assert.IsType<AgentStatusResultDto>((await ReliableForTestAsync(factory.Services, service => service.StatusReliableAsync(new(id), transport))).Data);
         Assert.Equal("connected", status.Connection.State);
         Assert.Equal("confirmation_timeout", status.QueueHead!.FailureCode);
         Assert.Equal(0, status.QueueHead.AutomaticRetryCount);
         await using (var scope = factory.Services.CreateAsyncScope())
-            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected));
+            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(expected, cancellationToken: TestContext.Current.CancellationToken));
         var repeated = Assert.IsType<AgentStatusResultDto>((await ReliableForTestAsync(factory.Services, service => service.StatusReliableAsync(new(id), transport))).Data);
         Assert.Equal(status.QueueHead.NextRetryAt, repeated.QueueHead!.NextRetryAt);
         Assert.Equal(status.Connection.LeaseExpiresAt, repeated.Connection.LeaseExpiresAt);

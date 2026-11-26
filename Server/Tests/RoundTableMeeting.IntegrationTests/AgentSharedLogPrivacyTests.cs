@@ -20,7 +20,7 @@ public sealed partial class McpAgentContractTests
         using var hub = new MeetingChatHub(null!, null!, new SharedPrivacyGate(), TimeProvider.System, logger);
         hub.Context = new SubscriptionCaller(Guid.NewGuid());
         await Assert.ThrowsAsync<InvalidOperationException>(() => hub.SubscribeMeeting(Guid.NewGuid()));
-        AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(5)));
+        AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -29,7 +29,7 @@ public sealed partial class McpAgentContractTests
         var logger = new SharedPrivacyLogger<MessageEventDispatcherService>();
         using var dispatcher = new MessageEventDispatcherService(new SharedPrivacyScopes(), TimeProvider.System, new(), logger);
         await dispatcher.StartAsync(CancellationToken.None);
-        try { AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(5))); }
+        try { AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)); }
         finally { await dispatcher.StopAsync(CancellationToken.None); }
     }
 
@@ -48,10 +48,10 @@ public sealed partial class McpAgentContractTests
         await LoginAsync(browser, "alice", "test-password-alice");
         var meeting = await CreateMeetingAsync(browser, "Private consumer failure");
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker " + SharedLogSecret);
-        AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(10)));
+        AssertPrivateLog(await logger.Written.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
         await using var scope = configured.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var delivery = await db.MessageEventDeliveries.SingleAsync();
+        var delivery = await db.MessageEventDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(1, delivery.AttemptCount);
         Assert.Null(delivery.LeaseId);
         Assert.Equal(RoundTableMeeting.Domain.Enums.MessageEventDeliveryState.Pending, delivery.State);

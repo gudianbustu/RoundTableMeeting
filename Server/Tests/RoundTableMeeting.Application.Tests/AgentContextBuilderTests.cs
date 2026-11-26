@@ -21,18 +21,18 @@ public sealed class AgentContextBuilderTests
         var meeting = Guid.NewGuid();
         var older = MeetingMessage.CreateSystem(meeting, 1, "System", new string('x', 400), Guid.NewGuid(), BaseTime);
         var last = MeetingMessage.CreateSystem(meeting, 2, "系统😀", "中文😀\\value\r\nnext", Guid.NewGuid(), BaseTime);
-        var initial = await new AgentContextBuilder(new MessageRepositoryFake([older, last])).BuildInitialAsync(meeting, 2, 256);
+        var initial = await new AgentContextBuilder(new MessageRepositoryFake([older, last])).BuildInitialAsync(meeting, 2, 256, TestContext.Current.CancellationToken);
         var window = new AgentContextWindow(initial.SnapshotSequence, initial.CandidateFirstSequence, initial.CandidateLastSequence,
             initial.DeliveredFirstSequence, initial.DeliveredLastSequence, initial.DeclaredCharacterLimit,
             initial.DeliveredCharacterCount, initial.Truncated, initial.OverLimit, initial.TruncatedMessageCount, initial.ContextFormatVersion);
         var later = MeetingMessage.CreateSystem(meeting, 3, "System", "later", Guid.NewGuid(), BaseTime);
         // Older truncated history is unnecessary for replay; selection is fixed by the saved window.
-        var replay = await new AgentContextBuilder(new MessageRepositoryFake([last, later])).RebuildFrozenAsync(meeting, window);
+        var replay = await new AgentContextBuilder(new MessageRepositoryFake([last, later])).RebuildFrozenAsync(meeting, window, TestContext.Current.CancellationToken);
         Assert.Equal(initial with { Messages = replay.Messages }, replay);
         Assert.Equal(last.ID, Assert.Single(replay.Messages).MessageId);
-        await Assert.ThrowsAsync<ArgumentException>(() => new AgentContextBuilder(new MessageRepositoryFake([later])).RebuildFrozenAsync(meeting, window));
+        await Assert.ThrowsAsync<ArgumentException>(() => new AgentContextBuilder(new MessageRepositoryFake([later])).RebuildFrozenAsync(meeting, window, TestContext.Current.CancellationToken));
         var unsupported = new AgentContextWindow(0, null, null, null, null, 256, 0, false, false, 0, "future-version");
-        await Assert.ThrowsAsync<ArgumentException>(() => new AgentContextBuilder(new MessageRepositoryFake([])).RebuildFrozenAsync(meeting, unsupported));
+        await Assert.ThrowsAsync<ArgumentException>(() => new AgentContextBuilder(new MessageRepositoryFake([])).RebuildFrozenAsync(meeting, unsupported, TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class AgentContextBuilderTests
         foreach (var candidates in new[] { new[] { first, third }, new[] { first, first }, new[] { foreign }, Array.Empty<MeetingMessage>() })
         {
             var builder = new AgentContextBuilder(new MessageRepositoryFake(candidates));
-            await Assert.ThrowsAsync<ArgumentException>(() => builder.BuildTaskAsync(meeting, 0, 3, 12000));
+            await Assert.ThrowsAsync<ArgumentException>(() => builder.BuildTaskAsync(meeting, 0, 3, 12000, TestContext.Current.CancellationToken));
         }
     }
 
@@ -56,7 +56,7 @@ public sealed class AgentContextBuilderTests
         var older = MeetingMessage.CreateSystem(meeting, 1, "System", "older", Guid.NewGuid(), BaseTime);
         var trigger = MeetingMessage.CreateSystem(meeting, 2, "System", new string('中', 400), Guid.NewGuid(), BaseTime);
         var builder = new AgentContextBuilder(new MessageRepositoryFake([older, trigger]));
-        var result = await builder.BuildTaskAsync(meeting, 0, 2, 256);
+        var result = await builder.BuildTaskAsync(meeting, 0, 2, 256, TestContext.Current.CancellationToken);
         Assert.Equal(trigger.Content, Assert.Single(result.Messages).Content);
         Assert.True(result.OverLimit);
         Assert.True(result.Truncated);
@@ -138,7 +138,7 @@ public sealed class AgentContextBuilderTests
 	[Fact]
 	public async Task EmptyInitialContextKeepsTheSnapshotBoundary()
 	{
-		AgentContextDto result = await new AgentContextBuilder(new MessageRepositoryFake(Array.Empty<MeetingMessage>())).BuildInitialAsync(Guid.NewGuid(), 0L, 256);
+		AgentContextDto result = await new AgentContextBuilder(new MessageRepositoryFake(Array.Empty<MeetingMessage>())).BuildInitialAsync(Guid.NewGuid(), 0L, 256, TestContext.Current.CancellationToken);
 		Assert.Equal("agent-context-v1", result.ContextFormatVersion);
 		Assert.Equal(0L, result.SnapshotSequence);
 		Assert.Empty(result.Messages);
@@ -160,7 +160,7 @@ public sealed class AgentContextBuilderTests
 		};
 		MessageRepositoryFake repository = new MessageRepositoryFake(messages);
 		AgentContextBuilder builder = new AgentContextBuilder(repository);
-		AgentContextDto lastOnly = await builder.BuildInitialAsync(meetingId, 3L, BlockLength(messages[2]));
+		AgentContextDto lastOnly = await builder.BuildInitialAsync(meetingId, 3L, BlockLength(messages[2]), TestContext.Current.CancellationToken);
 		Assert.Equal(new[] { 3L }, lastOnly.Messages.Select(message => message.Sequence));
 		Assert.Equal(1L, lastOnly.CandidateFirstSequence);
 		Assert.Equal(3L, lastOnly.CandidateLastSequence);
@@ -176,7 +176,7 @@ public sealed class AgentContextBuilderTests
 	{
 		Guid meetingId = Guid.NewGuid();
 		MeetingMessage message = MeetingMessage.CreateSystem(meetingId, 1L, "Sys\\tem", "line 1\r\nline 2 \ud83d\ude00", Guid.NewGuid(), BaseTime);
-		AgentContextDto result = await new AgentContextBuilder(new MessageRepositoryFake(new[] { message })).BuildInitialAsync(meetingId, 1L, 1);
+		AgentContextDto result = await new AgentContextBuilder(new MessageRepositoryFake(new[] { message })).BuildInitialAsync(meetingId, 1L, 1, TestContext.Current.CancellationToken);
 		Assert.True(result.OverLimit);
 		Assert.False(result.Truncated);
 		Assert.Equal(BlockLength(message), result.DeliveredCharacterCount);

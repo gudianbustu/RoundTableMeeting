@@ -57,12 +57,12 @@ public sealed partial class McpAgentContractTests
             case "malformed_uuid": args["operationId"] = "not-a-uuid"; break;
             case "malformed_budget": args["contextCharacterLimit"] = "not-a-number"; break;
         }
-        var response = await sdk.CallToolAsync("join_meeting", args);
+        var response = await sdk.CallToolAsync("join_meeting", args, cancellationToken: TestContext.Current.CancellationToken);
         if (scenario is "malformed_uuid" or "malformed_budget") Assert.True(response.IsError);
         else
         {
             var payload = SdkPayload(response);
-            var tool = (await sdk.ListToolsAsync()).Single(t => t.Name == "join_meeting");
+            var tool = (await sdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken)).Single(t => t.Name == "join_meeting");
             Assert.True(JsonSchema.FromText(tool.ProtocolTool.OutputSchema!.Value.GetRawText())
                 .Evaluate(payload, new() { RequireFormatValidation = true }).IsValid);
             Assert.False(payload.GetProperty("succeeded").GetBoolean());
@@ -81,9 +81,9 @@ public sealed partial class McpAgentContractTests
         }
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Empty(await db.AgentConnectionSessions.ToArrayAsync());
-        Assert.Empty(await db.AgentContextCursors.ToArrayAsync());
-        Assert.Empty(await db.AgentInitialContextDeliveries.ToArrayAsync());
-        Assert.Empty(await db.AgentRecoveryOperations.ToArrayAsync());
+        Assert.Empty(await db.AgentConnectionSessions.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AgentContextCursors.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AgentInitialContextDeliveries.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AgentRecoveryOperations.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

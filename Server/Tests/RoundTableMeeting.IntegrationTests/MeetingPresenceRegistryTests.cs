@@ -14,10 +14,10 @@ public sealed class MeetingPresenceRegistryTests
         var meetingId = Guid.NewGuid();
         var participantId = Guid.NewGuid();
         Assert.True(registry.Register("first", meetingId, participantId, () => { }));
-        Assert.True(registry.ScheduleOffline("first"));
-        await Task.Delay(20);
+        Assert.True(registry.ScheduleOffline("first", TestContext.Current.CancellationToken));
+        await Task.Delay(20, TestContext.Current.CancellationToken);
         Assert.False(registry.Register("second", meetingId, participantId, () => { }));
-        await Task.Delay(1100);
+        await Task.Delay(1100, TestContext.Current.CancellationToken);
         Assert.Empty(hub.Proxy.Messages);
         Assert.Contains(participantId, registry.GetOnline(meetingId));
     }
@@ -31,9 +31,9 @@ public sealed class MeetingPresenceRegistryTests
         var participantId = Guid.NewGuid();
         registry.Register("first", meetingId, participantId, () => { });
         registry.Register("second", meetingId, participantId, () => { });
-        registry.ScheduleOffline("first");
-        registry.ScheduleOffline("second");
-        await Task.Delay(1200);
+        registry.ScheduleOffline("first", TestContext.Current.CancellationToken);
+        registry.ScheduleOffline("second", TestContext.Current.CancellationToken);
+        await Task.Delay(1200, TestContext.Current.CancellationToken);
         Assert.Single(hub.Proxy.Messages);
         Assert.Equal("participantPresenceChanged", hub.Proxy.Messages[0].Method);
     }

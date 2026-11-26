@@ -52,14 +52,14 @@ public sealed partial class McpAgentContractTests
         if (stopRenewal)
         {
             await using (var scope = factory.Services.CreateAsyncScope())
-                time.Now = (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync()).LeaseExpiresAtUtc!.Value;
+                time.Now = (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LeaseExpiresAtUtc!.Value;
             Assert.True(time.Now < deadline);
             Assert.Equal("connection_expired", (await ActivationCallAsync(sdk, "confirm_context", confirmArgs)).GetProperty("errorCode").GetString());
             await using var scopeAfter = factory.Services.CreateAsyncScope();
             var db = scopeAfter.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(AgentReplyTaskState.Delivered, (await db.AgentReplyTasks.SingleAsync()).State);
-            Assert.Null((await db.AgentTaskDeliveryAttempts.SingleAsync()).ConfirmedAtUtc);
-            Assert.Equal(1, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
+            Assert.Equal(AgentReplyTaskState.Delivered, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+            Assert.Null((await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ConfirmedAtUtc);
+            Assert.Equal(1, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
             return;
         }
         foreach (var elapsed in new[] { 110, 110, 70 })
@@ -77,9 +77,9 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(confirmedAt, (await db.AgentTaskDeliveryAttempts.SingleAsync()).ConfirmedAtUtc);
-            Assert.Equal(confirmedAt.AddSeconds(120), (await db.AgentConnectionSessions.SingleAsync()).LeaseExpiresAtUtc);
-            Assert.Equal(2, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
+            Assert.Equal(confirmedAt, (await db.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ConfirmedAtUtc);
+            Assert.Equal(confirmedAt.AddSeconds(120), (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LeaseExpiresAtUtc);
+            Assert.Equal(2, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
         }
         Assert.True((await ActivationCallAsync(sdk, "reply_to_mention", new { connectionSessionId = id, taskId,
             deliveryAttemptId = attemptId, replyIdempotencyKey = task.GetProperty("replyIdempotencyKey").GetGuid(),
@@ -89,8 +89,8 @@ public sealed partial class McpAgentContractTests
         Assert.Equal("wait_for_mention", completed.GetProperty("nextAction").GetString());
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(3, await final.MeetingMessages.CountAsync());
-        Assert.Equal(attemptId, (await final.AgentReplyTasks.SingleAsync()).CurrentAttemptId);
-        Assert.Equal(1, await final.AgentTaskDeliveryAttempts.CountAsync());
+        Assert.Equal(3, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(attemptId, (await final.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).CurrentAttemptId);
+        Assert.Equal(1, await final.AgentTaskDeliveryAttempts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

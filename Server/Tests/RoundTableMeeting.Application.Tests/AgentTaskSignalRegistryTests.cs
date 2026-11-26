@@ -56,6 +56,6 @@ public sealed class AgentTaskSignalRegistryTests
 		Guid agentId = Guid.NewGuid();
 		registry.Signal(meetingId, agentId);
 		registry.Signal(meetingId, agentId);
-		Assert.True(await registry.WaitAsync(meetingId, agentId, TimeSpan.FromSeconds(1L)));
+		Assert.True(await registry.WaitAsync(meetingId, agentId, TimeSpan.FromSeconds(1L), TestContext.Current.CancellationToken));
 	}
 }

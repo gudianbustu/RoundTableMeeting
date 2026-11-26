@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -82,6 +83,7 @@ public static class ServiceCollectionExtensions
 #pragma warning disable MCPEXP002
 		.WithHttpTransport(options =>
 		{
+			options.SessionMode = ModelContextProtocol.AspNetCore.HttpServerSessionMode.Stateful;
 			options.ConfigureSessionOptions = (context, sessionOptions, _) =>
             {
                 SimpleMeetingTools.Configure(context, sessionOptions, jsonSerializerOptions);
@@ -171,6 +173,17 @@ public static class ServiceCollectionExtensions
 			options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
 			options.ExpireTimeSpan = TimeSpan.FromHours(8);
 			options.SlidingExpiration = false;
+			options.Events.OnValidatePrincipal = context =>
+			{
+				// MCP binds stateful sessions to the standard identifier, including for existing cookies.
+				if (context.Request.Path.StartsWithSegments("/mcp") && context.Principal?.Identity is ClaimsIdentity identity &&
+					!identity.HasClaim(claim => claim.Type == ClaimTypes.NameIdentifier) &&
+					Guid.TryParse(identity.FindFirst(AuthenticationConstants.ClaimType)?.Value, out var userId))
+				{
+					identity.AddClaim(new Claim(ClaimTypes.NameIdentifier, userId.ToString()));
+				}
+				return Task.CompletedTask;
+			};
 			options.Events.OnRedirectToLogin = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 401, "unauthenticated");
 			options.Events.OnRedirectToAccessDenied = (RedirectContext<CookieAuthenticationOptions> context) => AuthenticationProblemDetailsExtensions.WriteAsync(context.HttpContext, 403, "forbidden");
 		});

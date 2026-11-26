@@ -35,30 +35,30 @@ public sealed partial class McpAgentContractTests
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000,
             ["reliabilityMode"] = "explicit_ack_v1", ["operationId"] = Guid.NewGuid(), ["recoveryKey"] = key
-        })).GetProperty("data");
+        }, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("data");
         var id = joined.GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         Assert.True(SdkPayload(await oldSdk.CallToolAsync("confirm_context", new Dictionary<string, object?>
-        { ["connectionSessionId"] = id, ["kind"] = "initial", ["initialDeliveryId"] = joined.GetProperty("initialDeliveryId").GetGuid() })).GetProperty("succeeded").GetBoolean());
+        { ["connectionSessionId"] = id, ["kind"] = "initial", ["initialDeliveryId"] = joined.GetProperty("initialDeliveryId").GetGuid() }, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("succeeded").GetBoolean());
         var args = new Dictionary<string, object?> { ["connectionSessionId"] = id };
-        var wait = oldSdk.CallToolAsync("wait_for_mention", args).AsTask();
-        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var wait = oldSdk.CallToolAsync("wait_for_mention", args, cancellationToken: TestContext.Current.CancellationToken).AsTask();
+        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         time.Now = time.Now.AddSeconds(30);
-        var renewed = SdkPayload(await oldSdk.CallToolAsync("renew_agent_lease", args).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        var renewed = SdkPayload(await oldSdk.CallToolAsync("renew_agent_lease", args, cancellationToken: TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.True(renewed.GetProperty("succeeded").GetBoolean());
         Assert.False(wait.IsCompleted);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var saved = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync();
+            var saved = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(renewed.GetProperty("data").GetProperty("leaseExpiresAt").GetDateTimeOffset(), saved.LeaseExpiresAtUtc);
         }
         var resumed = SdkPayload(await newSdk.CallToolAsync("resume_agent", new Dictionary<string, object?>
-        { ["connectionSessionId"] = id, ["recoveryKey"] = key, ["operationId"] = Guid.NewGuid() }).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        { ["connectionSessionId"] = id, ["recoveryKey"] = key, ["operationId"] = Guid.NewGuid() }, cancellationToken: TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.True(resumed.GetProperty("succeeded").GetBoolean(), resumed.GetRawText());
-        var oldResult = SdkPayload(await wait.WaitAsync(TimeSpan.FromSeconds(5)));
+        var oldResult = SdkPayload(await wait.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.False(oldResult.GetProperty("succeeded").GetBoolean());
         Assert.Equal("connection_invalid", oldResult.GetProperty("errorCode").GetString());
         await oldSdk.DisposeAsync();
-        Assert.True(SdkPayload(await newSdk.CallToolAsync("get_agent_status", args)).GetProperty("succeeded").GetBoolean());
+        Assert.True(SdkPayload(await newSdk.CallToolAsync("get_agent_status", args, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("succeeded").GetBoolean());
         await newSdk.DisposeAsync();
         await EventuallyAsync(factory, async db => await db.AgentConnectionSessions.AnyAsync(item => item.ID == id && item.State == AgentConnectionState.Disconnected));
     }
@@ -72,7 +72,7 @@ public sealed partial class McpAgentContractTests
         var meeting = await CreateMeetingAsync(browser, "Production reliable SDK");
         using var http = CreateAnonymousClient(factory);
         await using var sdk = await CreateSdkAsync(http);
-        var tools = await sdk.ListToolsAsync();
+        var tools = await sdk.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
         var schemas = tools.ToDictionary(tool => tool.Name, tool => JsonSchema.FromText(tool.ProtocolTool.OutputSchema!.Value.GetRawText()));
         var key = Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).TrimEnd('=').Replace('+', '-').Replace('/', '_');
         async Task<JsonElement> Call(McpClient client, string name, object args, string? error = null)
@@ -133,27 +133,27 @@ public sealed partial class McpAgentContractTests
         using var http = CreateAnonymousClient(factory);
         await using var old = await CreateSdkAsync(http);
         var joined = SdkPayload(await old.CallToolAsync("join_meeting", new Dictionary<string, object?>
-        { ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000 })).GetProperty("data");
+        { ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000 }, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("data");
         var id = joined.GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         foreach (var (name, args) in new[]
         {
             ("wait_for_mention", new Dictionary<string, object?> { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 1 }),
             ("get_agent_status", new Dictionary<string, object?> { ["connectionSessionId"] = id, ["taskId"] = Guid.NewGuid() }),
             ("renew_agent_lease", new Dictionary<string, object?> { ["connectionSessionId"] = id })
-        }) AssertToolFailure(SdkPayload(await old.CallToolAsync(name, args)), "reliability_mode_required");
+        }) AssertToolFailure(SdkPayload(await old.CallToolAsync(name, args, cancellationToken: TestContext.Current.CancellationToken)), "reliability_mode_required");
         await using var replacement = await CreateSdkAsync(http);
         var takeover = SdkPayload(await replacement.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000,
             ["reliabilityMode"] = "explicit_ack_v1", ["joinMode"] = "takeover", ["operationId"] = Guid.NewGuid(),
             ["recoveryKey"] = new string('A', 43)
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(takeover.GetProperty("succeeded").GetBoolean(), takeover.GetRawText());
         foreach (var tool in new[] { "wait_for_mention", "get_agent_status", "reply_to_mention" })
             AssertToolFailure(SdkPayload(await old.CallToolAsync(tool, new Dictionary<string, object?>
-            { ["connectionSessionId"] = id, ["taskId"] = null, ["deliveryAttemptId"] = null, ["replyIdempotencyKey"] = null, ["content"] = null })), "connection_superseded");
+            { ["connectionSessionId"] = id, ["taskId"] = null, ["deliveryAttemptId"] = null, ["replyIdempotencyKey"] = null, ["content"] = null }, cancellationToken: TestContext.Current.CancellationToken)), "connection_superseded");
         await using var downgrade = await CreateSdkAsync(http);
         AssertToolFailure(SdkPayload(await downgrade.CallToolAsync("join_meeting", new Dictionary<string, object?>
-        { ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000 })), "reliability_mode_required");
+        { ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "Worker", ["contextCharacterLimit"] = 12000 }, cancellationToken: TestContext.Current.CancellationToken)), "reliability_mode_required");
     }
 }

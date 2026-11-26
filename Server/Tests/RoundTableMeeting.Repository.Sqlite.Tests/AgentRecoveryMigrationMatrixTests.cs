@@ -36,7 +36,7 @@ public sealed partial class AgentRecoveryMigrationTests
                 DisconnectedAtUtc = {(connected ? (DateTimeOffset?)null : Now)},
                 InitialContextState = {(confirmed ? "Confirmed" : "Prepared")},
                 InitialContextConfirmedAtUtc = {(confirmed ? Now : (DateTimeOffset?)null)}
-            """);
+            """, cancellationToken: TestContext.Current.CancellationToken);
         var taskId = await SeedLegacyTaskAsync(db, seed.AgentId, taskState);
         Guid? currentId = null;
         if (attemptState is not null)
@@ -45,12 +45,12 @@ public sealed partial class AgentRecoveryMigrationTests
             await SeedLegacyAttemptAsync(db, taskId, seed.ConnectionId, "Abandoned", Now.AddSeconds(-1));
             currentId = await SeedLegacyAttemptAsync(db, taskId, seed.ConnectionId, attemptState, Now);
         }
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
-        var connection = await db.AgentConnectionSessions.SingleAsync();
-        var cursor = await db.AgentContextCursors.SingleAsync();
-        var initial = await db.AgentInitialContextDeliveries.SingleAsync();
-        var task = await db.AgentReplyTasks.SingleAsync();
+        var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var cursor = await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var initial = await db.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(seed.ConnectionId, connection.ID);
         Assert.Equal(connected ? AgentConnectionState.Connected : AgentConnectionState.Disconnected, connection.State);
         Assert.Equal("legacy_v1", connection.ReliabilityMode);
@@ -78,7 +78,7 @@ public sealed partial class AgentRecoveryMigrationTests
         Assert.Equal(taskState == "Failed" ? "context_invalid" : null, task.FailureCode);
         Assert.Equal(taskState == "Cancelled" ? Now : (DateTimeOffset?)null, task.CancelledAtUtc);
         Assert.Equal(taskState == "Replied" ? Now : (DateTimeOffset?)null, task.RepliedAtUtc);
-        var attempts = await db.AgentTaskDeliveryAttempts.OrderBy(item => item.ID).ToArrayAsync();
+        var attempts = await db.AgentTaskDeliveryAttempts.OrderBy(item => item.ID).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(attemptState is null ? 0 : 2, attempts.Length);
         foreach (var attempt in attempts)
         {
@@ -97,9 +97,9 @@ public sealed partial class AgentRecoveryMigrationTests
             Assert.Equal(10, attempt.DeliveredCharacterCount);
             Assert.Equal(attempt.ID == currentId && attemptState == "Delivered" ? 2L : null, attempt.DeliveredFirstSequence);
         }
-        Assert.Equal(taskState == "Replied" ? 3 : 2, await db.MeetingMessages.CountAsync());
-        Assert.Empty(await db.AgentRecoveryOperations.ToArrayAsync());
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(taskState == "Replied" ? 3 : 2, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AgentRecoveryOperations.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -128,7 +128,7 @@ public sealed partial class AgentRecoveryMigrationTests
         }
         if (corruption == "cross_agent_attempt")
         {
-            var other = MeetingParticipant.CreateAgent((await db.Meetings.SingleAsync()).ID, "Other", Now);
+            var other = MeetingParticipant.CreateAgent((await db.Meetings.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ID, "Other", Now);
             await LegacyMeetingParticipantSeed.InsertAsync(db, other);
             var connectionId = Guid.NewGuid();
             await db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -136,19 +136,19 @@ public sealed partial class AgentRecoveryMigrationTests
                     State, DeclaredContextCharacterLimit, InitialSnapshotSequence, InitialContextState,
                     InitialContextConfirmedAtUtc, 'other-legacy-binding', ConnectedAtUtc, LastActivityAtUtc,
                     DisconnectedAtUtc, CreatedAtUtc FROM AgentConnectionSessions WHERE ID = {seed.ConnectionId}
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentContextCursors SELECT {Guid.NewGuid()}, MeetingId, {other.ID},
                     DeliveredThroughSequence, AllocatedThroughSequence, UpdatedAtUtc FROM AgentContextCursors
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
             diagnosticId = await SeedLegacyAttemptAsync(db, taskId, connectionId, "Delivered", Now);
         }
-        var error = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync());
+        var error = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Contains(diagnosticId.ToString(), error.Message, StringComparison.OrdinalIgnoreCase);
         await AssertOldSchemaAsync(db);
-        Assert.Equal(1, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM AgentReplyTasks").SingleAsync());
-        Assert.Equal(state == "Replied" ? 3 : 2, await db.MeetingMessages.CountAsync());
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(1, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM AgentReplyTasks").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(state == "Replied" ? 3 : 2, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static async Task<Guid> SeedLegacyTaskAsync(RoundTableMeetingDbContext db, Guid agentId, string state)

@@ -26,11 +26,11 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         var deleting = Meeting.Create("Deleting", null, seed.Meeting.CreatorUserId, Now);
         deleting.BeginDeleting();
         db.Add(deleting);
-        await db.SaveChangesAsync();
-        var before = await db.Database.SqlQueryRaw<string>("SELECT ReplyIdempotencyKey AS Value FROM AgentReplyTasks").SingleAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        var before = await db.Database.SqlQueryRaw<string>("SELECT ReplyIdempotencyKey AS Value FROM AgentReplyTasks").SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         var triggers = await OwnerTriggers(db);
-        await db.Database.MigrateAsync();
-        var task = await db.AgentReplyTasks.SingleAsync();
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(seed.TaskId, task.ID);
         Assert.Equal(seed.Message.ID, task.ChainId);
         Assert.Null(task.ParentTaskId);
@@ -38,12 +38,12 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         Assert.Equal(AgentReplyTaskState.Queued, task.State);
         Assert.Equal(0, task.CandidateFromSequenceExclusive);
         Assert.Equal(1, task.TriggerSequence);
-        Assert.Equal(1, (await db.AgentCollaborationBoundaries.SingleAsync(x => x.MeetingId == seed.Meeting.ID)).AgentTriggerStartSequence);
-        Assert.Equal(0, (await db.AgentCollaborationBoundaries.SingleAsync(x => x.MeetingId == deleting.ID)).AgentTriggerStartSequence);
+        Assert.Equal(1, (await db.AgentCollaborationBoundaries.SingleAsync(x => x.MeetingId == seed.Meeting.ID, cancellationToken: TestContext.Current.CancellationToken)).AgentTriggerStartSequence);
+        Assert.Equal(0, (await db.AgentCollaborationBoundaries.SingleAsync(x => x.MeetingId == deleting.ID, cancellationToken: TestContext.Current.CancellationToken)).AgentTriggerStartSequence);
         Assert.Equal(triggers, await OwnerTriggers(db));
         Assert.Equal(0, await ForeignKeyErrors(db));
-        await db.Database.MigrateAsync();
-        Assert.Equal(2, await db.AgentCollaborationBoundaries.CountAsync());
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+        Assert.Equal(2, await db.AgentCollaborationBoundaries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -58,9 +58,9 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
         await using var db = Open();
         var seed = await SeedOld(db);
         if (defect == "mention")
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MessageMentions SET TargetParticipantId = {seed.Human.ID}");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MessageMentions SET TargetParticipantId = {seed.Human.ID}", cancellationToken: TestContext.Current.CancellationToken);
         else if (defect == "reply")
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ReplyMessageId = {seed.Message.ID}, State = 'Replied', RepliedAtUtc = {Now}");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ReplyMessageId = {seed.Message.ID}, State = 'Replied', RepliedAtUtc = {Now}", cancellationToken: TestContext.Current.CancellationToken);
         else if (defect == "reply-author")
         {
             var other = MeetingParticipant.CreateAgent(seed.Meeting.ID, "Other", Now);
@@ -68,34 +68,34 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
                 "Other", "private fixture reply", Guid.NewGuid(), Now);
             await LegacyMeetingParticipantSeed.InsertAsync(db, other);
             await LegacyMessageSeed.InsertAsync(db, reply);
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ReplyMessageId = {reply.ID}, State = 'Replied', RepliedAtUtc = {Now}");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ReplyMessageId = {reply.ID}, State = 'Replied', RepliedAtUtc = {Now}", cancellationToken: TestContext.Current.CancellationToken);
         }
         else if (defect == "reply-missing")
         {
             // Deliberately corrupt only this isolated fixture; migration runs with checks restored.
-            await db.Database.OpenConnectionAsync();
-            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON");
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET State = 'Replied', RepliedAtUtc = {Now}");
-            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = OFF");
+            await db.Database.OpenConnectionAsync(cancellationToken: TestContext.Current.CancellationToken);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = ON", cancellationToken: TestContext.Current.CancellationToken);
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET State = 'Replied', RepliedAtUtc = {Now}", cancellationToken: TestContext.Current.CancellationToken);
+            await db.Database.ExecuteSqlRawAsync("PRAGMA ignore_check_constraints = OFF", cancellationToken: TestContext.Current.CancellationToken);
         }
         else if (defect == "mention-message")
         {
             var other = MeetingMessage.CreateParticipant(seed.Meeting.ID, 2, seed.Human.ID, MessageAuthorKind.Human,
                 "Owner", "@A", Guid.NewGuid(), Now);
             await LegacyMessageSeed.InsertAsync(db, other);
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MessageMentions SET MessageId = {other.ID}");
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MessageMentions SET MessageId = {other.ID}", cancellationToken: TestContext.Current.CancellationToken);
         }
         else
-            await db.Database.ExecuteSqlRawAsync("UPDATE AgentReplyTasks SET SourceAuthorKind = 'Agent'");
+            await db.Database.ExecuteSqlRawAsync("UPDATE AgentReplyTasks SET SourceAuthorKind = 'Agent'", cancellationToken: TestContext.Current.CancellationToken);
         var before = await ReadLegacyColumnsAsync(db);
-        var failure = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync());
+        var failure = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.DoesNotContain("private fixture reply", failure.Message);
         Assert.DoesNotContain(seed.Message.Content, failure.Message);
         Assert.Equal(before, await ReadLegacyColumnsAsync(db));
-        Assert.Equal(Previous, (await db.Database.GetAppliedMigrationsAsync()).Last());
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_table_info('AgentReplyTasks') WHERE name = 'ChainId'").SingleAsync());
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM sqlite_master WHERE name = 'AgentCollaborationBoundaries'").SingleAsync());
-        Assert.Equal(1, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM AgentReplyTasks").SingleAsync());
+        Assert.Equal(Previous, (await db.Database.GetAppliedMigrationsAsync(cancellationToken: TestContext.Current.CancellationToken)).Last());
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_table_info('AgentReplyTasks') WHERE name = 'ChainId'").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM sqlite_master WHERE name = 'AgentCollaborationBoundaries'").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM AgentReplyTasks").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -103,49 +103,49 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
     {
         await using var db = Open();
         var seed = await SeedOld(db);
-        await db.Database.MigrateAsync();
-        var parent = await db.AgentReplyTasks.SingleAsync();
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var parent = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         var reply = MeetingMessage.CreateParticipant(seed.Meeting.ID, 2, seed.Agent.ID, MessageAuthorKind.Agent,
             "A", "@A", Guid.NewGuid(), Now);
         var mention = MessageMention.Create(seed.Meeting.ID, reply.ID, seed.Agent.ID, "A", 0, 2);
         parent.MarkDelivered(Now); parent.MarkProcessing(Now); parent.MarkReplied(reply.ID, Now);
         db.AddRange(reply, mention);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         var child = AgentReplyTask.CreateDerived(Guid.NewGuid(), seed.Agent.ID, reply, mention, parent, 1, Guid.NewGuid(), Now);
         db.Add(child);
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.ChangeTracker.Clear();
         var repository = new AgentCollaborationRepository(db);
-        Assert.Equal(parent.ID, (await repository.FindTaskByReplyMessageAsync(seed.Meeting.ID, reply.ID))!.ID);
-        Assert.Null(await repository.FindTaskByReplyMessageAsync(Guid.NewGuid(), reply.ID));
-        Assert.Null(await repository.FindBoundaryAsync(Guid.NewGuid()));
-        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ParentTaskId = NULL WHERE ID = {child.ID}"));
-        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ChainId = {reply.ID} WHERE ID = {child.ID}"));
-        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM AgentReplyTasks WHERE ID = {parent.ID}"));
+        Assert.Equal(parent.ID, (await repository.FindTaskByReplyMessageAsync(seed.Meeting.ID, reply.ID, TestContext.Current.CancellationToken))!.ID);
+        Assert.Null(await repository.FindTaskByReplyMessageAsync(Guid.NewGuid(), reply.ID, TestContext.Current.CancellationToken));
+        Assert.Null(await repository.FindBoundaryAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ParentTaskId = NULL WHERE ID = {child.ID}", cancellationToken: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ChainId = {reply.ID} WHERE ID = {child.ID}", cancellationToken: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"DELETE FROM AgentReplyTasks WHERE ID = {parent.ID}", cancellationToken: TestContext.Current.CancellationToken));
         var cleanup = new AgentCollaborationCleanupService(db);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now));
-        await using (var active = await db.Database.BeginTransactionAsync())
+        await Assert.ThrowsAsync<InvalidOperationException>(() => cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now, TestContext.Current.CancellationToken));
+        await using (var active = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken))
         {
-            await Assert.ThrowsAsync<InvalidOperationException>(() => cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now));
-            await active.RollbackAsync();
+            await Assert.ThrowsAsync<InvalidOperationException>(() => cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now, TestContext.Current.CancellationToken));
+            await active.RollbackAsync(TestContext.Current.CancellationToken);
         }
-        await db.Database.ExecuteSqlRawAsync("UPDATE Meetings SET LifecycleState = 'Deleting'");
-        await using (var rollback = await db.Database.BeginTransactionAsync())
+        await db.Database.ExecuteSqlRawAsync("UPDATE Meetings SET LifecycleState = 'Deleting'", cancellationToken: TestContext.Current.CancellationToken);
+        await using (var rollback = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken))
         {
-            await db.AgentReplyTasks.ExecuteUpdateAsync(update => update.SetProperty(x => x.ParentTaskId, (Guid?)null));
-            await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ParentTaskId = {parent.ID} WHERE ID = {child.ID}"));
-            await rollback.RollbackAsync();
+            await db.AgentReplyTasks.ExecuteUpdateAsync(update => update.SetProperty(x => x.ParentTaskId, (Guid?)null), cancellationToken: TestContext.Current.CancellationToken);
+            await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlInterpolatedAsync($"UPDATE AgentReplyTasks SET ParentTaskId = {parent.ID} WHERE ID = {child.ID}", cancellationToken: TestContext.Current.CancellationToken));
+            await rollback.RollbackAsync(TestContext.Current.CancellationToken);
         }
-        Assert.Equal(parent.ID, (await db.AgentReplyTasks.AsNoTracking().SingleAsync(x => x.ID == child.ID)).ParentTaskId);
-        await using (var deletion = await db.Database.BeginTransactionAsync())
+        Assert.Equal(parent.ID, (await db.AgentReplyTasks.AsNoTracking().SingleAsync(x => x.ID == child.ID, cancellationToken: TestContext.Current.CancellationToken)).ParentTaskId);
+        await using (var deletion = await db.Database.BeginTransactionAsync(TestContext.Current.CancellationToken))
         {
-            await cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now);
-            await cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now);
-            await deletion.CommitAsync();
+            await cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now, TestContext.Current.CancellationToken);
+            await cleanup.DeleteForMeetingAsync(seed.Meeting.ID, Now, TestContext.Current.CancellationToken);
+            await deletion.CommitAsync(TestContext.Current.CancellationToken);
         }
-        Assert.Empty(await db.AgentReplyTasks.ToArrayAsync());
-        Assert.Empty(await db.AgentCollaborationBoundaries.ToArrayAsync());
-        Assert.Equal(2, await db.MeetingMessages.CountAsync());
+        Assert.Empty(await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Empty(await db.AgentCollaborationBoundaries.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(0, await ForeignKeyErrors(db));
     }
 
@@ -154,21 +154,21 @@ public sealed partial class MultiAgentCollaborationPersistenceTests : IDisposabl
     {
         await using var db = Open();
         var seed = await SeedOld(db);
-        await db.Database.MigrateAsync();
-        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("UPDATE AgentCollaborationBoundaries SET AgentTriggerStartSequence = 0"));
-        await db.AgentReplyTasks.ExecuteDeleteAsync();
-        await db.AgentCollaborationBoundaries.ExecuteDeleteAsync();
+        await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await Assert.ThrowsAsync<SqliteException>(() => db.Database.ExecuteSqlRawAsync("UPDATE AgentCollaborationBoundaries SET AgentTriggerStartSequence = 0", cancellationToken: TestContext.Current.CancellationToken));
+        await db.AgentReplyTasks.ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
+        await db.AgentCollaborationBoundaries.ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
         var root = AgentReplyTask.Create(Guid.NewGuid(), seed.Meeting.ID, seed.Agent.ID, seed.Message.ID, 1,
             seed.Mention.ID, MessageAuthorKind.Human, seed.Human.ID, 0, Guid.NewGuid(), Now);
         db.Add(root);
-        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync(TestContext.Current.CancellationToken));
         db.ChangeTracker.Clear();
         db.Add(AgentCollaborationBoundary.Create(seed.Meeting.ID, 1));
-        await db.SaveChangesAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         db.Add(root);
-        await db.SaveChangesAsync();
-        Assert.Single(await db.AgentReplyTasks.ToArrayAsync());
-        Assert.Contains(Current, await db.Database.GetAppliedMigrationsAsync());
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        Assert.Single(await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Contains(Current, await db.Database.GetAppliedMigrationsAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static Task<long> ForeignKeyErrors(RoundTableMeetingDbContext db)

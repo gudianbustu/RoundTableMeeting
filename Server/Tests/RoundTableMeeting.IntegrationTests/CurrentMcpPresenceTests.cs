@@ -21,7 +21,7 @@ public sealed class CurrentMcpPresenceTests
         var created = await Post(human, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Connection snapshots" });
         var id = created.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var code = created.GetProperty("invitation").GetProperty("meetingCode").GetString();
-        var details = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}");
+        var details = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}", cancellationToken: TestContext.Current.CancellationToken);
         var humanId = details.GetProperty("currentParticipant").GetProperty("participantId").GetGuid();
         var observer = await CurrentMcpTests.Initialize(client);
         var observerJoin = await CurrentMcpTests.Call(client, observer.Session, "join_meeting", new { meetingCode = code, displayName = "Observer" });

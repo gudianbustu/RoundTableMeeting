@@ -38,15 +38,15 @@ public sealed class AttachmentTests
         static Guid[] FileIds(JsonElement message) => message.GetProperty("attachments").EnumerateArray()
             .Select(file => file.GetProperty("attachmentId").GetGuid()).ToArray();
         Assert.Equal(selected, FileIds(sent.GetProperty("message")));
-        var page = await Body(await client.GetAsync(endpoint), HttpStatusCode.OK);
+        var page = await Body(await client.GetAsync(endpoint, TestContext.Current.CancellationToken), HttpStatusCode.OK);
         Assert.Equal(selected, FileIds(page.GetProperty("items").EnumerateArray().Single()));
         Assert.Equal(HttpStatusCode.OK, (await Post(client, endpoint, submission)).StatusCode);
         Assert.Equal(HttpStatusCode.Conflict, (await Post(client, endpoint, new { clientSubmissionId, content = "", attachmentIds = selected.Reverse() })).StatusCode);
 
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        await db.Set<MeetingAttachment>().Where(file => file.MeetingId == id).ExecuteUpdateAsync(update => update.SetProperty(file => file.MessagePosition, (int?)null));
-        var legacy = await Body(await client.GetAsync(endpoint), HttpStatusCode.OK);
+        await db.Set<MeetingAttachment>().Where(file => file.MeetingId == id).ExecuteUpdateAsync(update => update.SetProperty(file => file.MessagePosition, (int?)null), cancellationToken: TestContext.Current.CancellationToken);
+        var legacy = await Body(await client.GetAsync(endpoint, TestContext.Current.CancellationToken), HttpStatusCode.OK);
         Assert.Equal(files.Order().ToArray(), FileIds(legacy.GetProperty("items").EnumerateArray().Single()));
         Assert.Equal(HttpStatusCode.OK, (await Post(client, endpoint, submission)).StatusCode);
     }
@@ -66,23 +66,23 @@ public sealed class AttachmentTests
             var uploaded = await Body(await Upload(a, id, Guid.NewGuid(), "sample." + extension, "media-bytes"), HttpStatusCode.OK);
             var fileId = uploaded.GetProperty("attachmentId").GetGuid();
             var path = $"/api/meetings/{id}/attachments/{fileId}/content";
-            Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync(path + "?mode=preview")).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync(path + "?mode=preview", TestContext.Current.CancellationToken)).StatusCode);
             await Body(await Post(a, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "", attachmentIds = new[] { fileId } }), HttpStatusCode.Created);
             using var request = new HttpRequestMessage(HttpMethod.Get, path + "?mode=preview"); request.Headers.Range = new(0, 3);
-            using var response = await b.SendAsync(request);
+            using var response = await b.SendAsync(request, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.PartialContent, response.StatusCode);
             Assert.Equal(type, response.Content.Headers.ContentType!.MediaType);
             Assert.Equal("inline", response.Content.Headers.ContentDisposition!.DispositionType);
-            Assert.Equal("medi", await response.Content.ReadAsStringAsync());
+            Assert.Equal("medi", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
             Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
-            using var download = await b.GetAsync(path);
+            using var download = await b.GetAsync(path, TestContext.Current.CancellationToken);
             Assert.Equal("attachment", download.Content.Headers.ContentDisposition!.DispositionType);
         }
         // A nonmember cannot read the same media even when asking for a valid byte range.
         using var outsider = Client(factory);
-        var list = await b.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/attachments");
+        var list = await b.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/attachments", cancellationToken: TestContext.Current.CancellationToken);
         var first = list.GetProperty("items")[0].GetProperty("attachment").GetProperty("attachmentId").GetGuid();
-        Assert.False((await outsider.GetAsync($"/api/meetings/{id}/attachments/{first}/content?mode=preview")).IsSuccessStatusCode);
+        Assert.False((await outsider.GetAsync($"/api/meetings/{id}/attachments/{first}/content?mode=preview", TestContext.Current.CancellationToken)).IsSuccessStatusCode);
     }
     [Fact]
     public async Task TextPreviewTypesStayPlainTextAndPrivateWhileActiveContentIsNotInline()
@@ -101,28 +101,28 @@ public sealed class AttachmentTests
             var fileId = uploaded.GetProperty("attachmentId").GetGuid();
             await Body(await Post(a, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "", attachmentIds = new[] { fileId } }), HttpStatusCode.Created);
             var path = $"/api/meetings/{id}/attachments/{fileId}/content?mode=preview";
-            using var response = await b.GetAsync(path);
+            using var response = await b.GetAsync(path, TestContext.Current.CancellationToken);
             var safeText = Array.IndexOf(names, name) < 11;
             Assert.Equal(HttpStatusCode.OK, response.StatusCode);
             Assert.Equal(safeText ? "text/plain" : "application/octet-stream", response.Content.Headers.ContentType!.MediaType);
             Assert.Equal(safeText ? "inline" : "attachment", response.Content.Headers.ContentDisposition!.DispositionType);
             Assert.Equal("nosniff", response.Headers.GetValues("X-Content-Type-Options").Single());
             Assert.Contains("sandbox", response.Headers.GetValues("Content-Security-Policy").Single());
-            Assert.Equal(content, await response.Content.ReadAsStringAsync());
+            Assert.Equal(content, await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
         }
         var privateUpload = await Body(await Upload(a, id, Guid.NewGuid(), "private.txt", "private"), HttpStatusCode.OK);
         var privateId = privateUpload.GetProperty("attachmentId").GetGuid();
         // Unbound files are never previewable, even by another current member.
-        Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync($"/api/meetings/{id}/attachments/{privateId}/content?mode=preview")).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync($"/api/meetings/{id}/attachments/{privateId}/content?mode=preview")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync($"/api/meetings/{id}/attachments/{privateId}/content?mode=preview", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync($"/api/meetings/{id}/attachments/{privateId}/content?mode=preview", TestContext.Current.CancellationToken)).StatusCode);
         var empty = await Body(await Upload(a, id, Guid.NewGuid(), "empty.txt", ""), HttpStatusCode.OK);
         var emptyId = empty.GetProperty("attachmentId").GetGuid();
         await Body(await Post(a, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "", attachmentIds = new[] { emptyId } }), HttpStatusCode.Created);
         using var range = new HttpRequestMessage(HttpMethod.Get, $"/api/meetings/{id}/attachments/{emptyId}/content?mode=preview");
         // Empty text uses an ordinary preview request because a byte range cannot overlap an empty file.
-        using var emptyResponse = await b.SendAsync(range);
+        using var emptyResponse = await b.SendAsync(range, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, emptyResponse.StatusCode);
-        Assert.Empty(await emptyResponse.Content.ReadAsByteArrayAsync());
+        Assert.Empty(await emptyResponse.Content.ReadAsByteArrayAsync(TestContext.Current.CancellationToken));
     }
     [Fact]
     public async Task UploadBindPrivateRangeAndDeleteEnforceTheMessagePermission()
@@ -133,7 +133,7 @@ public sealed class AttachmentTests
         {
             var user = UserAccount.Create("charlie", "Charlie");
             user.InitializePasswordHash(scope.ServiceProvider.GetRequiredService<IPasswordHasher<UserAccount>>().HashPassword(user, "test-password-charlie"));
-            var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>(); db.Add(user); await db.SaveChangesAsync();
+            var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>(); db.Add(user); await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await Login(a, "alice"); await Login(b, "bob"); await Login(c, "charlie");
         var created = await Body(await Post(a, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Files" }), HttpStatusCode.Created);
@@ -148,7 +148,7 @@ public sealed class AttachmentTests
         var uploaded = await Body(uploadResponse, HttpStatusCode.OK);
         var fileId = uploaded.GetProperty("attachmentId").GetGuid();
         var url = $"/api/meetings/{id}/attachments/{fileId}/content";
-        Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync(url)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await a.GetAsync(url, TestContext.Current.CancellationToken)).StatusCode);
         var replay = await Body(await Upload(a, id, uploadId, "test.svg", content), HttpStatusCode.OK);
         Assert.Equal(fileId, replay.GetProperty("attachmentId").GetGuid());
         Assert.Equal(HttpStatusCode.Conflict, (await Upload(a, id, uploadId, "test.svg", "different")).StatusCode);
@@ -157,27 +157,27 @@ public sealed class AttachmentTests
         Assert.Single(sent.GetProperty("message").GetProperty("attachments").EnumerateArray());
         Assert.Equal(HttpStatusCode.OK, (await Post(a, $"/api/meetings/{id}/messages", request)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Post(a, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "reuse", attachmentIds = new[] { fileId } })).StatusCode);
-        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(url)).StatusCode);
-        var otherFiles = await c.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/attachments");
+        Assert.Equal(HttpStatusCode.NotFound, (await c.GetAsync(url, TestContext.Current.CancellationToken)).StatusCode);
+        var otherFiles = await c.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/attachments", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Empty(otherFiles.GetProperty("items").EnumerateArray());
         using var range = new HttpRequestMessage(HttpMethod.Get, url); range.Headers.Range = new(0, 3);
-        using var partial = await b.SendAsync(range);
-        Assert.Equal(HttpStatusCode.PartialContent, partial.StatusCode); Assert.Equal("<svg", await partial.Content.ReadAsStringAsync());
-        using var preview = await b.GetAsync(url + "?mode=preview");
+        using var partial = await b.SendAsync(range, TestContext.Current.CancellationToken);
+        Assert.Equal(HttpStatusCode.PartialContent, partial.StatusCode); Assert.Equal("<svg", await partial.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        using var preview = await b.GetAsync(url + "?mode=preview", TestContext.Current.CancellationToken);
         Assert.Equal("attachment", preview.Content.Headers.ContentDisposition!.DispositionType);
         Assert.Equal("application/octet-stream", preview.Content.Headers.ContentType!.MediaType);
         Assert.Equal("nosniff", preview.Headers.GetValues("X-Content-Type-Options").Single());
         var delete = await Body(await Post(a, $"/api/meetings/{id}/deletion", new { confirmationName = "Files" }), HttpStatusCode.Accepted);
         for (var i = 0; i < 100; i++)
         {
-            var status = await a.GetFromJsonAsync<JsonElement>(delete.GetProperty("statusUrl").GetString());
+            var status = await a.GetFromJsonAsync<JsonElement>(delete.GetProperty("statusUrl").GetString(), cancellationToken: TestContext.Current.CancellationToken);
             if (status.GetProperty("status").GetString() == "deleted") break;
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
         Assert.False(Directory.Exists(Path.Combine(Path.GetDirectoryName(factory.DatabasePath)!, "attachments", id.ToString("N"))));
         await using var final = factory.Services.CreateAsyncScope();
-        Assert.False(await final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().Set<MeetingAttachment>().AnyAsync());
-        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync(url)).StatusCode);
+        Assert.False(await final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().Set<MeetingAttachment>().AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(HttpStatusCode.NotFound, (await b.GetAsync(url, TestContext.Current.CancellationToken)).StatusCode);
     }
     [Fact]
     public async Task ConfiguredLimitIsAdvertisedAndStreamingUploadRejectsExcessWithoutMetadata()
@@ -185,14 +185,14 @@ public sealed class AttachmentTests
         using var factory = new TestApplicationFactory();
         using var configured = factory.WithWebHostBuilder(builder => builder.ConfigureServices(services => services.Configure<AttachmentOptions>(o => o.MaxFileBytes = 4)));
         using var client = Client(configured); await Login(client, "alice");
-        var capability = await client.GetFromJsonAsync<JsonElement>("/api/system/capabilities");
+        var capability = await client.GetFromJsonAsync<JsonElement>("/api/system/capabilities", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(4, capability.GetProperty("maxFileBytes").GetInt64());
         var created = await Body(await Post(client, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Limit" }), HttpStatusCode.Created);
         var id = created.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var rejected = await Body(await Upload(client, id, Guid.NewGuid(), "large.exe", "12345"), HttpStatusCode.RequestEntityTooLarge);
         Assert.Equal("attachment_too_large", rejected.GetProperty("code").GetString()); Assert.Equal(4, rejected.GetProperty("limitBytes").GetInt64());
         await using var scope = configured.Services.CreateAsyncScope();
-        Assert.False(await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().Set<MeetingAttachment>().AnyAsync());
+        Assert.False(await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().Set<MeetingAttachment>().AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(HttpStatusCode.OK, (await Upload(client, id, Guid.NewGuid(), "allowed.exe", "1234")).StatusCode);
     }
     [Fact]
@@ -200,11 +200,11 @@ public sealed class AttachmentTests
     {
         var gate = new MeetingRealtimeGate(); var id = Guid.NewGuid();
         using var file = gate.Acquire(id)!;
-        using var close = await gate.AcquireExclusiveCloseAsync(id, TimeSpan.FromSeconds(1));
+        using var close = await gate.AcquireExclusiveCloseAsync(id, TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
         Assert.NotNull(close); close.CommitClosed(); Assert.True(file.CancellationToken.IsCancellationRequested);
         Assert.Null(gate.Acquire(id));
-        var drain = gate.CancelAndDrainAsync(id); Assert.False(drain.IsCompleted);
-        file.Dispose(); await drain.WaitAsync(TimeSpan.FromSeconds(1));
+        var drain = gate.CancelAndDrainAsync(id, TestContext.Current.CancellationToken); Assert.False(drain.IsCompleted);
+        file.Dispose(); await drain.WaitAsync(TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken);
     }
     [Fact]
     public async Task DefaultHundredMegabyteBoundaryAndInterruptedStreamLeaveNoPartialFiles()
@@ -234,9 +234,9 @@ public sealed class AttachmentTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            foreach (var file in await db.Set<MeetingAttachment>().AsTracking().ToListAsync())
+            foreach (var file in await db.Set<MeetingAttachment>().AsTracking().ToListAsync(cancellationToken: TestContext.Current.CancellationToken))
                 db.Entry(file).Property(x => x.CreatedAtUtc).CurrentValue = DateTimeOffset.UtcNow.AddDays(-2);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         var store = factory.Services.GetRequiredService<IAttachmentStore>();
         var orphan = await store.WriteAsync(id, new MemoryStream([1, 2, 3]), CancellationToken.None);
@@ -245,10 +245,10 @@ public sealed class AttachmentTests
         var cleanup = new AttachmentMaintenanceService(factory.Services.GetRequiredService<IServiceScopeFactory>(), store, TimeProvider.System, NullLogger<AttachmentMaintenanceService>.Instance);
         await cleanup.CleanAsync(CancellationToken.None);
         await using var final = factory.Services.CreateAsyncScope();
-        var remaining = await final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().Set<MeetingAttachment>().ToListAsync();
+        var remaining = await final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().Set<MeetingAttachment>().ToListAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(boundId, Assert.Single(remaining).ID);
         Assert.Single(Directory.EnumerateFiles(directory));
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/meetings/{id}/attachments/{boundId}/content")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/api/meetings/{id}/attachments/{boundId}/content", TestContext.Current.CancellationToken)).StatusCode);
     }
     private sealed class GeneratedStream : Stream
     {

@@ -30,7 +30,7 @@ public sealed class MeetingNicknameTests
         site.UseKestrel(0);
         using var human = site.CreateClient();
         human.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" });
+        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken);
         login.EnsureSuccessStatusCode();
         async Task<(Guid Id, string Code)> Create(string name)
         {
@@ -49,7 +49,7 @@ public sealed class MeetingNicknameTests
         {
             Endpoint = new Uri(http.BaseAddress!, "mcp"), TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string> { ["X-RoundTable-Mode"] = "rooms" }
-        }, http));
+        }, http), cancellationToken: TestContext.Current.CancellationToken);
         async Task<string> Call(string tool, Dictionary<string, object?> args)
         {
             var result = await client.CallToolAsync(tool, args);
@@ -74,21 +74,21 @@ public sealed class MeetingNicknameTests
         var humanId = person.GetProperty("participantId").GetGuid();
         await Call("send_public_message", new() { ["room"] = room, ["clientSubmissionId"] = Guid.NewGuid(), ["content"] = "Public before rename" });
         await Call("send_private_message", new() { ["room"] = room, ["clientSubmissionId"] = Guid.NewGuid(), ["recipientParticipantId"] = humanId, ["content"] = "Private before rename" });
-        using var posted = await human.PostAsJsonAsync($"/api/meetings/{first.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "Human before rename" });
+        using var posted = await human.PostAsJsonAsync($"/api/meetings/{first.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "Human before rename" }, cancellationToken: TestContext.Current.CancellationToken);
         posted.EnsureSuccessStatusCode();
         var endpoint = $"/api/meetings/{first.Id}/participants/me/display-name";
         using (var foreignRequest = new HttpRequestMessage(HttpMethod.Put, endpoint) { Content = JsonContent.Create(new { displayName = "Denied name" }) })
         {
             foreignRequest.Headers.Add("Origin", "https://other.example");
-            using var foreignResponse = await human.SendAsync(foreignRequest);
+            using var foreignResponse = await human.SendAsync(foreignRequest, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Forbidden, foreignResponse.StatusCode);
         }
-        using var conflict = await human.PutAsJsonAsync(endpoint, new { displayName = "Agent one" });
+        using var conflict = await human.PutAsJsonAsync(endpoint, new { displayName = "Agent one" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
-        using var renamed = await human.PutAsJsonAsync(endpoint, new { displayName = "Alice here" });
+        using var renamed = await human.PutAsJsonAsync(endpoint, new { displayName = "Alice here" }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, renamed.StatusCode);
-        Assert.True((await client.CallToolAsync("rename_self", new Dictionary<string, object?> { ["room"] = "wrong", ["displayName"] = "Nobody" })).IsError);
-        Assert.True((await client.CallToolAsync("rename_self", new Dictionary<string, object?> { ["room"] = room, ["displayName"] = "Alice here" })).IsError);
+        Assert.True((await client.CallToolAsync("rename_self", new Dictionary<string, object?> { ["room"] = "wrong", ["displayName"] = "Nobody" }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        Assert.True((await client.CallToolAsync("rename_self", new Dictionary<string, object?> { ["room"] = room, ["displayName"] = "Alice here" }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         Assert.Equal("renamed", await Call("rename_self", new() { ["room"] = room, ["displayName"] = "Agent renamed" }));
         var same = await Attend(first.Code, "Agent one", key);
         var current = await Members(same);
@@ -115,7 +115,7 @@ public sealed class MeetingNicknameTests
         Assert.Equal(agentId, latest.GetProperty("participantId").GetGuid());
         Assert.Equal("Agent renamed", latest.GetProperty("displayName").GetString());
         Assert.Equal("left", await Call("leave", new() { ["room"] = same }));
-        Assert.True((await client.CallToolAsync("rename_self", new Dictionary<string, object?> { ["room"] = room, ["displayName"] = "Invalid" })).IsError);
+        Assert.True((await client.CallToolAsync("rename_self", new Dictionary<string, object?> { ["room"] = room, ["displayName"] = "Invalid" }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
 
         // An explicit new connection owns the second room. Expiry alone cannot restore the old holder.
         await using var replacementScope = site.Services.CreateAsyncScope();
@@ -123,7 +123,7 @@ public sealed class MeetingNicknameTests
         var replacementTransport = McpTransportSessionKey.FromDigest(Guid.NewGuid().ToByteArray());
         await sessions.JoinAsync(replacementTransport, second.Code, "Agent one", "takeover", "test", CancellationToken.None);
         clock.Advance(TimeSpan.FromMinutes(11));
-        var stale = await client.CallToolAsync("list_participants", new Dictionary<string, object?> { ["room"] = other });
+        var stale = await client.CallToolAsync("list_participants", new Dictionary<string, object?> { ["room"] = other }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(stale.IsError);
         Assert.Contains("connection_unavailable", Assert.Single(stale.Content.OfType<TextContentBlock>()).Text);
     }

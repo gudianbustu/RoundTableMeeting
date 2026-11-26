@@ -24,25 +24,25 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var login = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         login.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         login.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        var loginResponse = await isolatedClient.SendAsync(login);
-        var loginBody = await loginResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var loginResponse = await isolatedClient.SendAsync(login, TestContext.Current.CancellationToken);
+        var loginBody = await loginResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, loginResponse.StatusCode);
         Assert.Equal("alice", loginBody.GetProperty("username").GetString());
         Assert.Contains("no-store", loginResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
 
-        var meResponse = await isolatedClient.GetAsync("/api/auth/me");
-        var meBody = await meResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var meResponse = await isolatedClient.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
+        var meBody = await meResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, meResponse.StatusCode);
         Assert.Equal(loginBody.GetProperty("userId").GetString(), meBody.GetProperty("userId").GetString());
 
         using var logout = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
         logout.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
-        var logoutResponse = await isolatedClient.SendAsync(logout);
+        var logoutResponse = await isolatedClient.SendAsync(logout, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
         Assert.Contains("no-store", logoutResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
-        var afterLogout = await isolatedClient.GetAsync("/api/auth/me");
+        var afterLogout = await isolatedClient.GetAsync("/api/auth/me", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, afterLogout.StatusCode);
-        Assert.Equal("unauthenticated", (await afterLogout.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unauthenticated", (await afterLogout.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -55,8 +55,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         login.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         login.Content = JsonContent.Create(new { username = "bob", password = "test-password-bob" });
 
-        var response = await isolatedClient.SendAsync(login);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await isolatedClient.SendAsync(login, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("bob", body.GetProperty("username").GetString());
@@ -71,16 +71,16 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var invalid = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         invalid.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         invalid.Content = JsonContent.Create(new { username = "missing", password = "wrong" });
-        var invalidResponse = await isolatedClient.SendAsync(invalid);
+        var invalidResponse = await isolatedClient.SendAsync(invalid, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, invalidResponse.StatusCode);
-        Assert.Equal("invalid_credentials", (await invalidResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("invalid_credentials", (await invalidResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
 
         using var external = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         external.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
         external.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        var externalResponse = await isolatedClient.SendAsync(external);
+        var externalResponse = await isolatedClient.SendAsync(external, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, externalResponse.StatusCode);
-        Assert.Equal("origin_not_allowed", (await externalResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("origin_not_allowed", (await externalResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -109,17 +109,17 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     {
         using var isolatedFactory = new TestApplicationFactory();
         using var isolatedClient = isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
-        var defaultResponse = await isolatedClient.GetAsync("/__test/default-authorization");
+        var defaultResponse = await isolatedClient.GetAsync("/__test/default-authorization", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, defaultResponse.StatusCode);
-        Assert.Equal("unauthenticated", (await defaultResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unauthenticated", (await defaultResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
 
         using var login = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         login.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         login.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        Assert.Equal(HttpStatusCode.OK, (await isolatedClient.SendAsync(login)).StatusCode);
-        var forbiddenResponse = await isolatedClient.GetAsync("/__test/forbidden");
+        Assert.Equal(HttpStatusCode.OK, (await isolatedClient.SendAsync(login, TestContext.Current.CancellationToken)).StatusCode);
+        var forbiddenResponse = await isolatedClient.GetAsync("/__test/forbidden", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, forbiddenResponse.StatusCode);
-        var forbiddenBody = await forbiddenResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var forbiddenBody = await forbiddenResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("forbidden", forbiddenBody.GetProperty("code").GetString());
         Assert.Equal("You do not have permission to access this resource.", forbiddenBody.GetProperty("detail").GetString());
     }
@@ -130,16 +130,16 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var isolatedFactory = new TestApplicationFactory();
         using var isolatedClient = isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         using var missingOrigin = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login") { Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" }) };
-        var missingOriginResponse = await isolatedClient.SendAsync(missingOrigin);
+        var missingOriginResponse = await isolatedClient.SendAsync(missingOrigin, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, missingOriginResponse.StatusCode);
-        Assert.Equal("origin_not_allowed", (await missingOriginResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("origin_not_allowed", (await missingOriginResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
 
         using var unsupported = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         unsupported.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         unsupported.Content = new StringContent("username=alice&password=test-password-alice", System.Text.Encoding.UTF8, "application/x-www-form-urlencoded");
-        var unsupportedResponse = await isolatedClient.SendAsync(unsupported);
+        var unsupportedResponse = await isolatedClient.SendAsync(unsupported, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, unsupportedResponse.StatusCode);
-        Assert.Equal("unsupported_media_type", (await unsupportedResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unsupported_media_type", (await unsupportedResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -149,15 +149,15 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var isolatedClient = isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         using var logout = new HttpRequestMessage(HttpMethod.Post, "/api/auth/logout");
         logout.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
-        var logoutResponse = await isolatedClient.SendAsync(logout);
+        var logoutResponse = await isolatedClient.SendAsync(logout, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, logoutResponse.StatusCode);
 
         using var nullOrigin = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         nullOrigin.Headers.TryAddWithoutValidation("Origin", "null");
         nullOrigin.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        var nullResponse = await isolatedClient.SendAsync(nullOrigin);
+        var nullResponse = await isolatedClient.SendAsync(nullOrigin, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, nullResponse.StatusCode);
-        Assert.Equal("origin_not_allowed", (await nullResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("origin_not_allowed", (await nullResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -169,8 +169,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         request.Content = JsonContent.Create(new { username = "", password = "" });
 
-        var response = await isolatedClient.SendAsync(request);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await isolatedClient.SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("validation_failed", body.GetProperty("code").GetString());
         Assert.True(body.GetProperty("errors").TryGetProperty("username", out _));
@@ -186,10 +186,10 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/auth/me");
         request.Headers.TryAddWithoutValidation("Cookie", "RoundTableMeeting.Auth=invalid-cookie");
 
-        var response = await isolatedClient.SendAsync(request);
+        var response = await isolatedClient.SendAsync(request, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Null(response.Headers.Location);
-        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -198,9 +198,9 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var isolatedFactory = new TestApplicationFactory();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/unknown-with-origin");
         request.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
-        var response = await isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false }).SendAsync(request);
+        var response = await isolatedFactory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false }).SendAsync(request, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
-        Assert.Equal("route_not_found", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("route_not_found", (await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -211,8 +211,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/auth/login");
         request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         request.Content = JsonContent.Create(new { username = "alice", password = "test-password-alice" });
-        var response = await isolatedClient.SendAsync(request);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await isolatedClient.SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var cookieHeader = response.Headers.GetValues("Set-Cookie").Single(value => value.StartsWith("RoundTableMeeting.Auth=", StringComparison.Ordinal));
         var cookieValue = cookieHeader.Split(';', 2)[0];
         var claimValue = body.GetProperty("userId").GetString()!;
@@ -220,7 +220,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
 
         using var claimsRequest = new HttpRequestMessage(HttpMethod.Get, "/__test/auth-claims");
         claimsRequest.Headers.TryAddWithoutValidation("Cookie", cookieValue);
-        var claimsResponse = await isolatedClient.SendAsync(claimsRequest);
+        var claimsResponse = await isolatedClient.SendAsync(claimsRequest, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, claimsResponse.StatusCode);
 
         var logText = string.Join("\n", isolatedFactory.LogSink.Events.SelectMany(log => new[]
@@ -248,7 +248,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
             using (var firstFactory = new TestApplicationFactory(databasePath))
             using (var firstClient = firstFactory.CreateClient())
             {
-                Assert.Equal(HttpStatusCode.OK, (await firstClient.GetAsync("/api/system/status")).StatusCode);
+                Assert.Equal(HttpStatusCode.OK, (await firstClient.GetAsync("/api/system/status", TestContext.Current.CancellationToken)).StatusCode);
                 await WaitForSeedRowsAsync(databasePath);
             }
 
@@ -257,7 +257,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
             using (var secondFactory = new TestApplicationFactory(databasePath))
             using (var secondClient = secondFactory.CreateClient())
             {
-                Assert.Equal(HttpStatusCode.OK, (await secondClient.GetAsync("/api/system/status")).StatusCode);
+                Assert.Equal(HttpStatusCode.OK, (await secondClient.GetAsync("/api/system/status", TestContext.Current.CancellationToken)).StatusCode);
                 await WaitForSeedRowsAsync(databasePath);
             }
 
@@ -315,8 +315,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     [Fact]
     public async Task StatusEndpointReturnsRealAvailableContract()
     {
-        var response = await client.GetAsync("/api/system/status");
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await client.GetAsync("/api/system/status", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("available", body.GetProperty("status").GetString());
@@ -328,20 +328,20 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     [Fact]
     public async Task UnknownApiReturnsProblemDetails404()
     {
-        var response = await client.GetAsync("/api/not-found");
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await client.GetAsync("/api/not-found", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
         Assert.Equal("route_not_found", body.GetProperty("code").GetString());
-        Assert.DoesNotContain("<html", await response.Content.ReadAsStringAsync(), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<html", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task OpenApiDocumentIsGeneratedByAspNetCoreProvider()
     {
-        var response = await client.GetAsync("/openapi/v1.json");
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await client.GetAsync("/openapi/v1.json", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.StartsWith("3.0", body.GetProperty("openapi").GetString());
@@ -359,8 +359,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     [Fact]
     public async Task ScalarPointsToTheSameOpenApiDocument()
     {
-        var response = await client.GetAsync("/scalar/v1/");
-        var body = await response.Content.ReadAsStringAsync();
+        var response = await client.GetAsync("/scalar/v1/", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Contains("openapi", body, StringComparison.OrdinalIgnoreCase);
@@ -372,9 +372,9 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     {
         using var isolatedFactory = new TestApplicationFactory();
         using var isolatedClient = isolatedFactory.CreateClient();
-        var response = await isolatedClient.GetAsync("/__test/throw");
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-        var text = await response.Content.ReadAsStringAsync();
+        var response = await isolatedClient.GetAsync("/__test/throw", TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
+        var text = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("internal_error", body.GetProperty("code").GetString());
@@ -396,8 +396,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     [Fact]
     public async Task InvalidTestModelUsesFieldValidationProblemDetails()
     {
-        var response = await client.PostAsJsonAsync("/__test/validation", new { });
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await client.PostAsJsonAsync("/__test/validation", new { }, cancellationToken: TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal("validation_failed", body.GetProperty("code").GetString());
@@ -409,8 +409,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, "/__test/throw");
         request.Headers.TryAddWithoutValidation("traceparent", "00-0123456789abcdef0123456789abcdef-0123456789abcdef-01");
-        var response = await client.SendAsync(request);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
         Assert.Equal("0123456789abcdef0123456789abcdef", body.GetProperty("traceId").GetString());
@@ -423,8 +423,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var unavailableClient = unavailableFactory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Get, "/api/system/status");
         request.Headers.TryAddWithoutValidation("traceparent", "00-11111111111111111111111111111111-2222222222222222-01");
-        var response = await unavailableClient.SendAsync(request);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await unavailableClient.SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal("degraded", body.GetProperty("status").GetString());
@@ -450,7 +450,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var isolatedFactory = new TestApplicationFactory();
         using var isolatedClient = isolatedFactory.CreateClient();
 
-        var response = await isolatedClient.GetAsync("/__test/throw");
+        var response = await isolatedClient.GetAsync("/__test/throw", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
 
         var requestLog = Assert.Single(isolatedFactory.LogSink.Events, logEvent =>
@@ -475,7 +475,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var request = new HttpRequestMessage(HttpMethod.Get, "/system/status");
         request.Headers.Accept.ParseAdd("text/html");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         Assert.NotEqual("application/problem+json", response.Content.Headers.ContentType?.MediaType);
@@ -487,10 +487,10 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var request = new HttpRequestMessage(HttpMethod.Get, "/origin-safe-asset.txt");
         request.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
 
-        var response = await client.SendAsync(request);
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Equal("static asset is public", await response.Content.ReadAsStringAsync());
+        Assert.Equal("static asset is public", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -499,11 +499,11 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
 
-        var response = await client.GetAsync("/api/users");
+        var response = await client.GetAsync("/api/users", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
-        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unauthenticated", (await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -513,8 +513,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         await LoginAsync(client, "alice", "test-password-alice");
 
-        var list = await client.GetAsync("/api/users");
-        var users = await list.Content.ReadFromJsonAsync<JsonElement>();
+        var list = await client.GetAsync("/api/users", TestContext.Current.CancellationToken);
+        var users = await list.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, list.StatusCode);
         Assert.Contains("no-store", list.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(2, users.GetArrayLength());
@@ -523,11 +523,11 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var create = new HttpRequestMessage(HttpMethod.Post, "/api/users");
         create.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         create.Content = JsonContent.Create(new { username = "charlie", nickname = "Charlie" });
-        var created = await client.SendAsync(create);
+        var created = await client.SendAsync(create, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
         Assert.Contains("no-store", created.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
-        Assert.Equal("charlie", (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("username").GetString());
+        Assert.Equal("charlie", (await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("username").GetString());
     }
 
     [Fact]
@@ -540,8 +540,8 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var request = new HttpRequestMessage(HttpMethod.Post, "/api/users");
         request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         request.Content = JsonContent.Create(new { username = " ALICE ", nickname = "Other", initialPassword = "secret" });
-        var response = await client.SendAsync(request);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("username_conflict", body.GetProperty("code").GetString());
@@ -558,16 +558,16 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var origin = new HttpRequestMessage(HttpMethod.Post, "/api/users");
         origin.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
         origin.Content = JsonContent.Create(new { username = "charlie", nickname = "Charlie", initialPassword = "secret" });
-        var originResponse = await client.SendAsync(origin);
+        var originResponse = await client.SendAsync(origin, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, originResponse.StatusCode);
-        Assert.Equal("origin_not_allowed", (await originResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("origin_not_allowed", (await originResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
 
         using var media = new HttpRequestMessage(HttpMethod.Post, "/api/users");
         media.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         media.Content = new StringContent("{}", System.Text.Encoding.UTF8, "text/plain");
-        var mediaResponse = await client.SendAsync(media);
+        var mediaResponse = await client.SendAsync(media, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, mediaResponse.StatusCode);
-        Assert.Equal("unsupported_media_type", (await mediaResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("unsupported_media_type", (await mediaResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -576,22 +576,22 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         await LoginAsync(client, "alice", "test-password-alice");
-        var users = await (await client.GetAsync("/api/users")).Content.ReadFromJsonAsync<JsonElement>();
+        var users = await (await client.GetAsync("/api/users", TestContext.Current.CancellationToken)).Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var aliceId = users.EnumerateArray().Single(user => user.GetProperty("username").GetString() == "alice").GetProperty("userId").GetGuid();
 
         using var patch = new HttpRequestMessage(HttpMethod.Patch, $"/api/users/{aliceId}/nickname");
         patch.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         patch.Content = JsonContent.Create(new { nickname = " Alice Updated " });
-        var updated = await client.SendAsync(patch);
+        var updated = await client.SendAsync(patch, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, updated.StatusCode);
-        Assert.Equal("Alice Updated", (await updated.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("nickname").GetString());
+        Assert.Equal("Alice Updated", (await updated.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("nickname").GetString());
 
         using var missing = new HttpRequestMessage(HttpMethod.Patch, $"/api/users/{Guid.NewGuid()}/nickname");
         missing.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         missing.Content = JsonContent.Create(new { nickname = "Missing" });
-        var missingResponse = await client.SendAsync(missing);
+        var missingResponse = await client.SendAsync(missing, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
-        Assert.Equal("user_not_found", (await missingResponse.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("user_not_found", (await missingResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
     }
 
     [Fact]
@@ -600,16 +600,16 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var factory = new TestApplicationFactory();
         using var admin = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         await LoginAsync(admin, "alice", "test-password-alice");
-        var users = await (await admin.GetAsync("/api/users")).Content.ReadFromJsonAsync<JsonElement>();
+        var users = await (await admin.GetAsync("/api/users", TestContext.Current.CancellationToken)).Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var bobId = users.EnumerateArray().Single(user => user.GetProperty("username").GetString() == "bob").GetProperty("userId").GetGuid();
 
         using var reset = new HttpRequestMessage(HttpMethod.Post, $"/api/users/{bobId}/reset-password");
         reset.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
-        var resetResponse = await admin.SendAsync(reset);
+        var resetResponse = await admin.SendAsync(reset, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NoContent, resetResponse.StatusCode);
         Assert.Contains("no-store", resetResponse.Headers.CacheControl?.ToString(), StringComparison.OrdinalIgnoreCase);
         Assert.Equal("no-cache", resetResponse.Headers.Pragma.ToString());
-        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await admin.GetAsync("/api/auth/me", TestContext.Current.CancellationToken)).StatusCode);
 
         using var oldPasswordClient = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         Assert.Equal(HttpStatusCode.Unauthorized, await LoginStatusAsync(oldPasswordClient, "bob", "test-password-bob"));
@@ -623,13 +623,13 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false, HandleCookies = true });
         await LoginAsync(client, "alice", "test-password-alice");
-        var users = await (await client.GetAsync("/api/users")).Content.ReadFromJsonAsync<JsonElement>();
+        var users = await (await client.GetAsync("/api/users", TestContext.Current.CancellationToken)).Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var bobId = users.EnumerateArray().Single(user => user.GetProperty("username").GetString() == "bob").GetProperty("userId").GetGuid();
 
         using var reset = new HttpRequestMessage(HttpMethod.Post, $"/api/users/{bobId}/reset-password");
         reset.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         reset.Content = new StringContent("reset", System.Text.Encoding.UTF8, "text/plain");
-        var response = await client.SendAsync(reset);
+        var response = await client.SendAsync(reset, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
     }
@@ -639,7 +639,7 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
     {
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient();
-        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var document = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", cancellationToken: TestContext.Current.CancellationToken);
         var paths = document.GetProperty("paths");
 
         Assert.True(paths.GetProperty("/api/users").TryGetProperty("get", out _));
@@ -662,12 +662,12 @@ public sealed class HttpContractTests : IClassFixture<TestApplicationFactory>
         using var put = new HttpRequestMessage(HttpMethod.Put, "/api/users");
         put.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
         put.Content = JsonContent.Create(new { username = "x", nickname = "X", initialPassword = "secret" });
-        var putResponse = await client.SendAsync(put);
+        var putResponse = await client.SendAsync(put, TestContext.Current.CancellationToken);
         Assert.Contains(putResponse.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed });
 
         using var unknown = new HttpRequestMessage(HttpMethod.Get, "/api/users/not-a-route");
         unknown.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
-        var unknownResponse = await client.SendAsync(unknown);
+        var unknownResponse = await client.SendAsync(unknown, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.NotFound, unknownResponse.StatusCode);
     }
 

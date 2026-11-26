@@ -44,7 +44,7 @@ public sealed class ContainerCompatibilityTests : IClassFixture<TestApplicationF
         Assert.NotSame(unitOfWork, otherScope.ServiceProvider.GetRequiredService<IUnitOfWork>());
         Assert.NotSame(initializer, otherScope.ServiceProvider.GetRequiredService<IDatabaseInitializer>());
         Assert.NotSame(availabilityChecker, otherScope.ServiceProvider.GetRequiredService<IDatabaseAvailabilityChecker>());
-        Assert.True(await availabilityChecker.IsAvailableAsync());
+        Assert.True(await availabilityChecker.IsAvailableAsync(TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -65,10 +65,10 @@ public sealed class ContainerCompatibilityTests : IClassFixture<TestApplicationF
         using var client = factory.CreateClient();
         Assert.True(File.Exists(factory.DatabasePath));
 
-        var response = await client.GetAsync("/__test/application-part");
+        var response = await client.GetAsync("/__test/application-part", TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.Contains("loaded", await response.Content.ReadAsStringAsync(), StringComparison.Ordinal);
+        Assert.Contains("loaded", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
     }
 
 }

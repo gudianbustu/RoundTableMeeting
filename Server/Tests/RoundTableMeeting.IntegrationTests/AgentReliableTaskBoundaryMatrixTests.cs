@@ -62,10 +62,10 @@ public sealed partial class McpAgentContractTests
         await using (var scope = test.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var tasks = await db.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync();
+            var tasks = await db.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(new[] { AgentReplyTaskState.Delivered, AgentReplyTaskState.Queued, AgentReplyTaskState.Queued }, tasks.Select(t => t.State));
             Assert.Equal(1, tasks[0].AutomaticRetryCount);
-            Assert.Equal(nextAttempt, (await db.AgentTaskDeliveryAttempts.SingleAsync(a => a.ID == oldAttempt)).ReplacementAttemptId);
+            Assert.Equal(nextAttempt, (await db.AgentTaskDeliveryAttempts.SingleAsync(a => a.ID == oldAttempt, cancellationToken: TestContext.Current.CancellationToken)).ReplacementAttemptId);
         }
         var seen = new HashSet<Guid>();
         var current = replacement;
@@ -82,8 +82,8 @@ public sealed partial class McpAgentContractTests
         }
         await using var finalScope = test.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(6, await final.MeetingMessages.CountAsync());
-        Assert.All(await final.AgentReplyTasks.ToArrayAsync(), task => Assert.Equal(AgentReplyTaskState.Replied, task.State));
+        Assert.Equal(6, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.All(await final.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken), task => Assert.Equal(AgentReplyTaskState.Replied, task.State));
     }
 
     [Theory]
@@ -110,7 +110,7 @@ public sealed partial class McpAgentContractTests
         var failed = await test.Facts();
         var registration = Assert.Single(test.Services.GetRequiredService<IAgentConnectionRegistry>().ListRegistrations(test.MeetingId));
         await using (var scope = test.Services.CreateAsyncScope())
-            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(registration));
+            Assert.False(await scope.ServiceProvider.GetRequiredService<AgentCollaborationService>().ReconcileConnectionAsync(registration, cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(failed, await test.Facts());
         var status = (await test.Call("get_agent_status", new { connectionSessionId = test.Id })).GetProperty("queueHead");
         Assert.Equal("confirmation_timeout", status.GetProperty("failureCode").GetString());
@@ -137,7 +137,7 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(before, await test.Facts(includeConnection: false));
         await using var scope = test.Services.CreateAsyncScope();
         Assert.Equal(test.Clock.Now.AddSeconds(120),
-            (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync()).LeaseExpiresAtUtc);
+            (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LeaseExpiresAtUtc);
     }
 
     private sealed class SdkTaskBoundary : IAsyncDisposable

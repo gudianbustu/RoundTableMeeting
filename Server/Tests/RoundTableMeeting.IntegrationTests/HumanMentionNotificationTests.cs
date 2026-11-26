@@ -26,7 +26,7 @@ public sealed class HumanMentionNotificationTests
         const string origin = "http://localhost:5173";
         const string hubPath = "/hubs/mention-notifications";
         anonymous.DefaultRequestHeaders.Add("Origin", origin);
-        using var denied = await anonymous.PostAsync(hubPath + "/negotiate?negotiateVersion=1", null);
+        using var denied = await anonymous.PostAsync(hubPath + "/negotiate?negotiateVersion=1", null, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Unauthorized, denied.StatusCode);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         async Task<ClientWebSocket> Connect(HttpClient client, string username)
@@ -70,16 +70,16 @@ public sealed class HumanMentionNotificationTests
         using var first = await Connect(owner, "alice");
         using var second = await Connect(member, "bob");
         using var third = await Connect(observer, "carol");
-        using var created = await owner.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "通知验收" });
-        var data = await created.Content.ReadFromJsonAsync<JsonElement>();
+        using var created = await owner.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "通知验收" }, cancellationToken: TestContext.Current.CancellationToken);
+        var data = await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var meeting = data.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var code = data.GetProperty("invitation").GetProperty("meetingCode").GetString();
         var ownerName = data.GetProperty("meeting").GetProperty("currentParticipant").GetProperty("displayName").GetString();
-        using var joined = await member.PostAsJsonAsync("/api/meetings/join", new { meetingCode = code, displayName = "通知乙" });
+        using var joined = await member.PostAsJsonAsync("/api/meetings/join", new { meetingCode = code, displayName = "通知乙" }, cancellationToken: TestContext.Current.CancellationToken);
         joined.EnsureSuccessStatusCode();
-        var memberData = await joined.Content.ReadFromJsonAsync<JsonElement>();
+        var memberData = await joined.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var memberId = memberData.GetProperty("currentParticipant").GetProperty("participantId").GetGuid();
-        using var observerJoin = await observer.PostAsJsonAsync("/api/meetings/join", new { meetingCode = code, displayName = "旁观者" });
+        using var observerJoin = await observer.PostAsJsonAsync("/api/meetings/join", new { meetingCode = code, displayName = "旁观者" }, cancellationToken: TestContext.Current.CancellationToken);
         observerJoin.EnsureSuccessStatusCode();
         async Task<Guid> Send(HttpClient client, string content)
         {
@@ -92,7 +92,7 @@ public sealed class HumanMentionNotificationTests
         await Send(owner, "@" + ownerName);
         using var privatePost = await owner.PostAsJsonAsync($"/api/meetings/{meeting}/messages", new {
             clientSubmissionId = Guid.NewGuid(), content = "@旁观者 仅私聊", visibility = "private", recipientParticipantId = memberId
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         privatePost.EnsureSuccessStatusCode();
         var personal = await Send(owner, "@通知乙 @通知乙");
         Assert.Equal(personal, await Receive(second, meeting));

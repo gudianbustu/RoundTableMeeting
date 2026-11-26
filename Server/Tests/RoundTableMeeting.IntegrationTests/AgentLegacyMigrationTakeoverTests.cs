@@ -37,7 +37,7 @@ public sealed partial class McpAgentContractTests
         await using (var db = new RoundTableMeetingDbContext(new DbContextOptionsBuilder<RoundTableMeetingDbContext>()
             .UseSqlite($"Data Source={factory.DatabasePath};Foreign Keys=True;Pooling=False").Options))
         {
-            await db.Database.MigrateAsync("20260904073122_AddAgentCollaboration");
+            await db.Database.MigrateAsync("20260904073122_AddAgentCollaboration", cancellationToken: TestContext.Current.CancellationToken);
             var user = UserAccount.Create("old-owner", "Old owner");
             user.InitializePasswordHash("test-hash");
             meeting = Meeting.Create("Old schema takeover", null, user.ID, now);
@@ -46,9 +46,9 @@ public sealed partial class McpAgentContractTests
             var trigger = MeetingMessage.CreateParticipant(meeting.ID, 1, human.ID, MessageAuthorKind.Human,
                 human.DisplayName, "@Worker old task", Guid.NewGuid(), now);
             var mention = MessageMention.Create(meeting.ID, trigger.ID, agent.ID, "Worker", 0, 7);
-            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({user.ID}, {user.Username}, {user.NormalizedUsername}, {user.Nickname}, {user.PasswordHash})");
+            await db.Database.ExecuteSqlInterpolatedAsync($"INSERT INTO UserAccounts (ID, Username, NormalizedUsername, Nickname, PasswordHash) VALUES ({user.ID}, {user.Username}, {user.NormalizedUsername}, {user.Nickname}, {user.PasswordHash})", cancellationToken: TestContext.Current.CancellationToken);
             db.Add(meeting);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             await LegacyMeetingParticipantSeed.InsertAsync(db, human);
             await LegacyMeetingParticipantSeed.InsertAsync(db, agent);
             db.AddRange(trigger, mention);
@@ -59,18 +59,18 @@ public sealed partial class McpAgentContractTests
                 replyId = reply.ID;
                 db.Add(reply);
             }
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentConnectionSessions
                 (ID,MeetingId,ParticipantId,Transport,State,DeclaredContextCharacterLimit,InitialSnapshotSequence,
                  InitialContextState,InitialContextConfirmedAtUtc,McpTransportBinding,ConnectedAtUtc,LastActivityAtUtc,CreatedAtUtc)
                 VALUES ({connectionId},{meeting.ID},{agent.ID},'mcp-streamable-http','Connected',12000,0,
                  'Confirmed',{now},'old-migration-binding',{now},{now},{now})
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentContextCursors (ID,MeetingId,ParticipantId,DeliveredThroughSequence,AllocatedThroughSequence,UpdatedAtUtc)
                 VALUES ({Guid.NewGuid()},{meeting.ID},{agent.ID},1,1,{now})
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
             await db.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentReplyTasks (ID,MeetingId,AgentParticipantId,TriggerMessageId,TriggerSequence,TriggerMentionId,
                     SourceAuthorKind,SourceParticipantId,CandidateFromSequenceExclusive,CandidateToSequenceInclusive,
@@ -82,7 +82,7 @@ public sealed partial class McpAgentContractTests
                     {(state == "Failed" ? "context_invalid" : null)},
                     {(state == "Failed" ? now : (DateTimeOffset?)null)},
                     {(state == "Cancelled" ? now : (DateTimeOffset?)null)},{now})
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
             if (attemptId is not null)
                 await db.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO AgentTaskDeliveryAttempts (ID,TaskId,ConnectionSessionId,MeetingId,CandidateFirstSequence,
@@ -92,16 +92,16 @@ public sealed partial class McpAgentContractTests
                         {(attemptState == "Delivered" ? 1L : (long?)null)},
                         {(attemptState == "Delivered" ? 1L : (long?)null)},
                         {(attemptState == "Delivered" ? now : (DateTimeOffset?)null)})
-                    """);
+                    """, cancellationToken: TestContext.Current.CancellationToken);
         }
         using var http = CreateAnonymousClient(factory);
         await using var sdk = await CreateSdkAsync(http);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync()).State);
-            Assert.Equal("legacy_v1", (await db.AgentContextCursors.SingleAsync()).RequiredReliabilityMode);
-            Assert.Equal(attemptId, (await db.AgentReplyTasks.SingleAsync()).CurrentAttemptId);
+            Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+            Assert.Equal("legacy_v1", (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).RequiredReliabilityMode);
+            Assert.Equal(attemptId, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).CurrentAttemptId);
         }
         var joined = await ActivationCallAsync(sdk, "join_meeting", new
         {
@@ -133,7 +133,7 @@ public sealed partial class McpAgentContractTests
                 Assert.Equal("retry_pending", wait.GetProperty("errorCode").GetString());
                 var due = wait.GetProperty("data").GetProperty("nextRetryAt").GetDateTimeOffset();
                 var delay = due - DateTimeOffset.UtcNow;
-                if (delay > TimeSpan.Zero) await Task.Delay(delay);
+                if (delay > TimeSpan.Zero) await Task.Delay(delay, TestContext.Current.CancellationToken);
                 wait = await ActivationCallAsync(sdk, "wait_for_mention", new { connectionSessionId = id, waitTimeoutSeconds = 1 });
             }
             Assert.True(wait.GetProperty("succeeded").GetBoolean());
@@ -151,10 +151,10 @@ public sealed partial class McpAgentContractTests
         }
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var persisted = await final.AgentReplyTasks.SingleAsync();
+        var persisted = await final.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(state == "Cancelled" ? AgentReplyTaskState.Cancelled : AgentReplyTaskState.Replied, persisted.State);
-        Assert.Equal(state == "Cancelled" ? 1 : 2, await final.MeetingMessages.CountAsync());
+        Assert.Equal(state == "Cancelled" ? 1 : 2, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         if (replyId is not null) Assert.Equal(replyId, persisted.ReplyMessageId);
-        Assert.Equal(0, await final.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(0, await final.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

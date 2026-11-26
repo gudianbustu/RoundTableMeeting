@@ -29,17 +29,17 @@ public sealed class AvatarLibraryTests
         }));
         using var owner = factory.CreateClient();
         owner.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        (await owner.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" })).EnsureSuccessStatusCode();
-        var created = await owner.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "头像重入" });
+        (await owner.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+        var created = await owner.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "头像重入" }, cancellationToken: TestContext.Current.CancellationToken);
         created.EnsureSuccessStatusCode();
-        var creation = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var creation = await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var meetingPath = "/api/meetings/" + creation.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var key = Guid.NewGuid().ToString("N");
         if (useAvatarInvitation)
         {
-            var invitation = await owner.PostAsJsonAsync(meetingPath + "/agent-invitations", new { displayName = "Returning", avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/Claude.png" });
+            var invitation = await owner.PostAsJsonAsync(meetingPath + "/agent-invitations", new { displayName = "Returning", avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/Claude.png" }, cancellationToken: TestContext.Current.CancellationToken);
             invitation.EnsureSuccessStatusCode();
-            key = (await invitation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("invitationKey").GetString()!;
+            key = (await invitation.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("invitationKey").GetString()!;
         }
         var arguments = new Dictionary<string, object?> {
             ["meetingCode"] = creation.GetProperty("invitation").GetProperty("meetingCode").GetString(),
@@ -64,7 +64,7 @@ public sealed class AvatarLibraryTests
         {
             using var scope = factory.Services.CreateScope();
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(1, await db.Database.ExecuteSqlRawAsync("UPDATE AvatarInvitations SET BoundParticipantId = NULL"));
+            Assert.Equal(1, await db.Database.ExecuteSqlRawAsync("UPDATE AvatarInvitations SET BoundParticipantId = NULL", cancellationToken: TestContext.Current.CancellationToken));
         }
         clock.Advance(TimeSpan.FromMinutes(6));
         var recovered = await AttendOnNewTransport();
@@ -86,13 +86,13 @@ public sealed class AvatarLibraryTests
         using var member = factory.CreateClient();
         using var outsider = factory.CreateClient();
         const string library = "/api/avatars";
-        Assert.Equal(HttpStatusCode.Unauthorized, (await outsider.GetAsync(library)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await outsider.GetAsync(library, TestContext.Current.CancellationToken)).StatusCode);
         foreach (var (client, name) in new[] { (owner, "alice"), (member, "bob") })
         {
             client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-            (await client.PostAsJsonAsync("/api/auth/login", new { username = name, password = "test-password-" + name })).EnsureSuccessStatusCode();
+            (await client.PostAsJsonAsync("/api/auth/login", new { username = name, password = "test-password-" + name }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         }
-        var initial = await member.GetFromJsonAsync<JsonElement>(library);
+        var initial = await member.GetFromJsonAsync<JsonElement>(library, cancellationToken: TestContext.Current.CancellationToken);
         var seedRoot = Path.Combine(AppContext.BaseDirectory, "AvatarSeed");
         var expectedCount = Directory.EnumerateFiles(seedRoot, "*.png", SearchOption.AllDirectories).Count();
         Assert.True(expectedCount > 0);
@@ -109,79 +109,79 @@ public sealed class AvatarLibraryTests
             return body;
         }
         using var deniedUpload = Form();
-        Assert.Equal(HttpStatusCode.Forbidden, (await member.PostAsync(library, deniedUpload)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await member.PostAsync(library, deniedUpload, TestContext.Current.CancellationToken)).StatusCode);
         using var badUpload = Form(false);
-        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsync(library, badUpload)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsync(library, badUpload, TestContext.Current.CancellationToken)).StatusCode);
         using var catalogUpload = Form();
-        using var uploaded = await owner.PostAsync(library, catalogUpload);
+        using var uploaded = await owner.PostAsync(library, catalogUpload, TestContext.Current.CancellationToken);
         uploaded.EnsureSuccessStatusCode();
-        var entry = await uploaded.Content.ReadFromJsonAsync<JsonElement>();
+        var entry = await uploaded.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var photo = entry.GetProperty("imageUrl").GetString()!;
-        Assert.Equal("image/png", (await member.GetAsync(photo)).Content.Headers.ContentType?.MediaType);
+        Assert.Equal("image/png", (await member.GetAsync(photo, TestContext.Current.CancellationToken)).Content.Headers.ContentType?.MediaType);
         using var personal = Form();
-        using var mine = await member.PostAsync("/api/account/avatar", personal);
+        using var mine = await member.PostAsync("/api/account/avatar", personal, TestContext.Current.CancellationToken);
         mine.EnsureSuccessStatusCode();
-        var ownPhoto = (await mine.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("avatarUrl").GetString()!;
+        var ownPhoto = (await mine.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("avatarUrl").GetString()!;
         Assert.NotEqual(photo, ownPhoto);
-        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(ownPhoto)).StatusCode);
-        Assert.Equal(expectedCount + 1, (await member.GetFromJsonAsync<JsonElement>(library)).GetArrayLength());
-        var me = await member.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(ownPhoto, TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(expectedCount + 1, (await member.GetFromJsonAsync<JsonElement>(library, cancellationToken: TestContext.Current.CancellationToken)).GetArrayLength());
+        var me = await member.GetFromJsonAsync<JsonElement>("/api/auth/me", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(ownPhoto, me.GetProperty("avatarUrl").GetString());
 
-        using var created = await owner.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "头像验收" });
+        using var created = await owner.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "头像验收" }, cancellationToken: TestContext.Current.CancellationToken);
         created.EnsureSuccessStatusCode();
-        var creation = await created.Content.ReadFromJsonAsync<JsonElement>();
+        var creation = await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var meeting = creation.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var code = creation.GetProperty("invitation").GetProperty("meetingCode").GetString()!;
         var path = $"/api/meetings/{meeting}";
-        (await member.PostAsJsonAsync("/api/meetings/join", new { meetingCode = code, displayName = "Member" })).EnsureSuccessStatusCode();
-        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(ownPhoto)).StatusCode);
-        var roster = await owner.GetFromJsonAsync<JsonElement>(path);
+        (await member.PostAsJsonAsync("/api/meetings/join", new { meetingCode = code, displayName = "Member" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+        Assert.Equal(HttpStatusCode.OK, (await owner.GetAsync(ownPhoto, TestContext.Current.CancellationToken)).StatusCode);
+        var roster = await owner.GetFromJsonAsync<JsonElement>(path, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Contains(roster.GetProperty("participants").EnumerateArray(), p =>
             p.GetProperty("displayName").GetString() == "Member" && p.GetProperty("avatarUrl").GetString() == ownPhoto);
 
         var id = entry.GetProperty("id").GetString();
-        using var invitation = await owner.PostAsJsonAsync(path + "/agent-invitations", new { displayName = "AgentA", avatarId = id });
+        using var invitation = await owner.PostAsJsonAsync(path + "/agent-invitations", new { displayName = "AgentA", avatarId = id }, cancellationToken: TestContext.Current.CancellationToken);
         invitation.EnsureSuccessStatusCode();
-        var key = (await invitation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("invitationKey").GetString();
+        var key = (await invitation.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("invitationKey").GetString();
         await using var mcp = await McpClient.CreateAsync(new HttpClientTransport(new()
         {
             Endpoint = new Uri(owner.BaseAddress!, "/mcp"), TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string> { ["X-RoundTable-Mode"] = "rooms" }
-        }, factory.CreateClient()));
+        }, factory.CreateClient()), cancellationToken: TestContext.Current.CancellationToken);
         var attended = await mcp.CallToolAsync("attend", new Dictionary<string, object?> {
             ["meetingCode"] = code, ["displayName"] = "AgentA", ["invitationKey"] = key
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(true, attended.IsError);
         var room = JsonDocument.Parse(Assert.Single(attended.Content.OfType<TextContentBlock>()).Text).RootElement.GetProperty("room").GetString();
         var sent = await mcp.CallToolAsync("send_public_message", new Dictionary<string, object?> {
             ["room"] = room, ["clientSubmissionId"] = Guid.NewGuid(), ["content"] = "avatar history sample"
-        });
+        }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.NotEqual(true, sent.IsError);
-        var history = await member.GetFromJsonAsync<JsonElement>(path + "/messages");
+        var history = await member.GetFromJsonAsync<JsonElement>(path + "/messages", cancellationToken: TestContext.Current.CancellationToken);
         var message = Assert.Single(history.GetProperty("items").EnumerateArray(), x => x.GetProperty("content").GetString() == "avatar history sample");
         Assert.Equal(photo, message.GetProperty("author").GetProperty("avatarUrl").GetString());
         Assert.Equal(0, message.GetProperty("author").GetProperty("avatarColorSlot").GetInt32());
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id })).EnsureSuccessStatusCode();
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         async Task<int> ReadMemberColor() =>
             (await member.GetFromJsonAsync<JsonElement>(path)).GetProperty("participants").EnumerateArray()
                 .Single(p => p.GetProperty("displayName").GetString() == "Member").GetProperty("avatarColorSlot").GetInt32();
         Assert.Equal(1, await ReadMemberColor());
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png" })).EnsureSuccessStatusCode();
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         Assert.Equal(0, await ReadMemberColor());
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id })).EnsureSuccessStatusCode();
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         Assert.Equal(1, await ReadMemberColor());
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png" })).EnsureSuccessStatusCode();
-        Assert.Equal("/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png", (await member.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("avatarUrl").GetString());
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+        Assert.Equal("/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png", (await member.GetFromJsonAsync<JsonElement>("/api/auth/me", cancellationToken: TestContext.Current.CancellationToken)).GetProperty("avatarUrl").GetString());
         // Both participants use the migrated public upload before its group is renamed.
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id })).EnsureSuccessStatusCode();
-        (await owner.PostAsJsonAsync(library + "/groups", new { action = "renameGroup", group = "自定义", name = "公共收藏" })).EnsureSuccessStatusCode();
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync(library + "/groups", new { action = "renameGroup", group = "自定义", name = "公共收藏" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         Assert.Equal(1, await ReadMemberColor());
-        var renamed = await member.GetFromJsonAsync<JsonElement>(path + "/messages");
+        var renamed = await member.GetFromJsonAsync<JsonElement>(path + "/messages", cancellationToken: TestContext.Current.CancellationToken);
         var author = renamed.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("content").GetString() == "avatar history sample").GetProperty("author");
         var renamedPhoto = author.GetProperty("avatarUrl").GetString();
         Assert.Contains(Uri.EscapeDataString("公共收藏"), renamedPhoto);
         Assert.Equal(0, author.GetProperty("avatarColorSlot").GetInt32());
-        Assert.Equal(HttpStatusCode.OK, (await member.GetAsync(renamedPhoto)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await member.GetAsync(renamedPhoto, TestContext.Current.CancellationToken)).StatusCode);
     }
 }

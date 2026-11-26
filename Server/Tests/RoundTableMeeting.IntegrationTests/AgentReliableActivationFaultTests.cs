@@ -59,19 +59,19 @@ public sealed partial class McpAgentContractTests
             var failed = await ActivationCallAsync(first, "join_meeting", join);
             Assert.Equal("agent_operation_unavailable", failed.GetProperty("errorCode").GetString());
             await using var scope = factory.Services.CreateAsyncScope();
-            id = (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync()).ID;
+            id = (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ID;
         }
         Guid initialId;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var connection = await db.AgentConnectionSessions.SingleAsync();
+            var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentConnectionState.Disconnected, connection.State);
             Assert.Equal(id, connection.ID);
             Assert.Equal(resuming ? 2 : 1, connection.BindingVersion);
             Assert.Equal(1, connection.ConnectionGeneration);
-            initialId = (await db.AgentInitialContextDeliveries.SingleAsync()).ID;
-            Assert.Equal(id, (await db.AgentContextCursors.SingleAsync()).CurrentConnectionId);
+            initialId = (await db.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ID;
+            Assert.Equal(id, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).CurrentConnectionId);
         }
         if (resuming)
         {
@@ -94,9 +94,9 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(initialId, resumed.GetProperty("data").GetProperty("initialDeliveryId").GetGuid());
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(1, await final.AgentConnectionSessions.CountAsync());
-        Assert.Equal(1, await final.AgentInitialContextDeliveries.CountAsync());
-        Assert.Equal(resuming ? 3 : 2, await final.AgentRecoveryOperations.CountAsync());
+        Assert.Equal(1, await final.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await final.AgentInitialContextDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(resuming ? 3 : 2, await final.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     private static async Task<JsonElement> ActivationCallAsync(McpClient sdk, string name, object args)

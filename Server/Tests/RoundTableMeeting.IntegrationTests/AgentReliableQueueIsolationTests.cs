@@ -43,7 +43,7 @@ public sealed partial class McpAgentContractTests
         for (var i = 0; i < 100; i++)
         {
             test.Clock.Now = test.Clock.Now.AddMinutes(1);
-            await scanner.ReconcileAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            await scanner.ReconcileAsync(TestContext.Current.CancellationToken).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         }
         Assert.Equal(before, await ReadFacts());
         var nextTransport = RecoveryTransport(245);
@@ -54,8 +54,8 @@ public sealed partial class McpAgentContractTests
         Assert.NotEqual(test.Mention.DeliveryAttemptId, recovered.DeliveryAttemptId);
         await using var finalScope = test.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(1, (await final.AgentReplyTasks.SingleAsync()).AutomaticRetryCount);
-        Assert.Equal(2, await final.AgentTaskDeliveryAttempts.CountAsync());
+        Assert.Equal(1, (await final.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AutomaticRetryCount);
+        Assert.Equal(2, await final.AgentTaskDeliveryAttempts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -81,13 +81,13 @@ public sealed partial class McpAgentContractTests
         await EventuallyAsync(test.Factory, async db => await db.AgentReplyTasks.CountAsync() == 3);
         await using var scope = test.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var tasks = await db.AgentReplyTasks.ToArrayAsync();
+        var tasks = await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(AgentReplyTaskState.Replied, tasks.Single(t => t.ID == oldTaskId).State);
         Assert.Equal(AgentReplyTaskState.Failed, tasks.Single(t => t.ID == test.Mention.TaskId).State);
         Assert.Equal(AgentReplyTaskState.Queued, tasks.Single(t => t.ID != oldTaskId && t.ID != test.Mention.TaskId).State);
-        Assert.Equal(4, await db.MeetingMessages.CountAsync());
-        var legacyConnection = await db.AgentConnectionSessions.SingleAsync(c => c.ID == legacy.ConnectionId);
+        Assert.Equal(4, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        var legacyConnection = await db.AgentConnectionSessions.SingleAsync(c => c.ID == legacy.ConnectionId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("legacy_v1", legacyConnection.ReliabilityMode);
-        Assert.Equal(InitialContextState.Confirmed, (await db.AgentInitialContextDeliveries.SingleAsync(i => i.ConnectionSessionId == legacy.ConnectionId)).State);
+        Assert.Equal(InitialContextState.Confirmed, (await db.AgentInitialContextDeliveries.SingleAsync(i => i.ConnectionSessionId == legacy.ConnectionId, cancellationToken: TestContext.Current.CancellationToken)).State);
     }
 }

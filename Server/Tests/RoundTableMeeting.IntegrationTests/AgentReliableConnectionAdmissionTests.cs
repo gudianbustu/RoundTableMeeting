@@ -35,18 +35,18 @@ public sealed partial class McpAgentContractTests
         var second = ActivationCallAsync(contender, "join_meeting", new { meetingCode = secondMeeting.MeetingCode,
             displayName = "Worker", contextCharacterLimit = 6000, reliabilityMode = "explicit_ack_v1",
             joinMode = takeover ? "takeover" : "create", operationId = Guid.NewGuid(), recoveryKey = new string('A', 43) });
-        var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10));
+        var results = await Task.WhenAll(first, second).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         Assert.Single(results, r => r.GetProperty("succeeded").GetBoolean());
         Assert.Equal("connection_invalid", Assert.Single(results, r => !r.GetProperty("succeeded").GetBoolean()).GetProperty("errorCode").GetString());
         var firstWon = results[0].GetProperty("succeeded").GetBoolean();
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(takeover ? 2 : 1, await db.AgentConnectionSessions.CountAsync());
-        Assert.Equal(takeover ? 2 : 1, await db.AgentRecoveryOperations.CountAsync());
-        Assert.Equal(firstWon ? 1 : 0, await db.AgentConnectionSessions.CountAsync(c => c.MeetingId == firstMeeting.MeetingId));
+        Assert.Equal(takeover ? 2 : 1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(takeover ? 2 : 1, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(firstWon ? 1 : 0, await db.AgentConnectionSessions.CountAsync(c => c.MeetingId == firstMeeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
         if (takeover)
         {
-            var previous = await db.AgentConnectionSessions.SingleAsync(c => c.ID == oldId);
+            var previous = await db.AgentConnectionSessions.SingleAsync(c => c.ID == oldId, cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(firstWon ? AgentConnectionState.Connected : AgentConnectionState.Superseded, previous.State);
             var originalStatus = await ActivationCallAsync(old, "get_agent_status", new { connectionSessionId = oldId });
             Assert.Equal(firstWon, originalStatus.GetProperty("succeeded").GetBoolean());
@@ -82,10 +82,10 @@ public sealed partial class McpAgentContractTests
         AssertToolFailure(await ActivationCallAsync(downgrade, "join_meeting", legacy), "reliability_mode_required");
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var cursor = await db.AgentContextCursors.SingleAsync();
+        var cursor = await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal("explicit_ack_v1", cursor.RequiredReliabilityMode);
-        Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync(c => c.ID == cursor.CurrentConnectionId)).State);
-        Assert.Equal(upgradeLegacy ? 2 : 1, await db.AgentConnectionSessions.CountAsync());
-        Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync());
+        Assert.Equal(AgentConnectionState.Disconnected, (await db.AgentConnectionSessions.SingleAsync(c => c.ID == cursor.CurrentConnectionId, cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Equal(upgradeLegacy ? 2 : 1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

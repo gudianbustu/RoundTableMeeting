@@ -21,7 +21,7 @@ public sealed class AuthenticationServiceTests
         var repository = new FakeRepository { Account = account };
         var service = CreateService(repository, new FakeCurrentUserContext());
 
-        var result = await service.AuthenticateAsync(new LoginRequest { Username = " ALICE ", Password = "secret" });
+        var result = await service.AuthenticateAsync(new LoginRequest { Username = " ALICE ", Password = "secret" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(AuthenticateStatus.Success, result.Status);
         Assert.Equal(account.ID, result.User?.UserId);
@@ -34,8 +34,8 @@ public sealed class AuthenticationServiceTests
     {
         var account = UserAccount.Create("alice", "Alice");
         account.InitializePasswordHash(new PasswordHasher<UserAccount>().HashPassword(account, "secret"));
-        var wrong = await CreateService(new FakeRepository { Account = account }, new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = "alice", Password = "wrong" });
-        var missing = await CreateService(new FakeRepository(), new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = "missing", Password = "wrong" });
+        var wrong = await CreateService(new FakeRepository { Account = account }, new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = "alice", Password = "wrong" }, TestContext.Current.CancellationToken);
+        var missing = await CreateService(new FakeRepository(), new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = "missing", Password = "wrong" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(AuthenticateStatus.InvalidCredentials, wrong.Status);
         Assert.Equal(wrong.Status, missing.Status);
@@ -49,7 +49,7 @@ public sealed class AuthenticationServiceTests
         var hasher = new RecordingPasswordHasher();
         var service = new AuthenticationService(new FakeRepository(), new FakeCurrentUserContext(), new PasswordVerificationService(hasher));
 
-        var result = await service.AuthenticateAsync(new LoginRequest { Username = "missing", Password = "secret" });
+        var result = await service.AuthenticateAsync(new LoginRequest { Username = "missing", Password = "secret" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(AuthenticateStatus.InvalidCredentials, result.Status);
         Assert.Equal(1, hasher.VerifyCalls);
@@ -63,7 +63,7 @@ public sealed class AuthenticationServiceTests
         var hasher = new RecordingPasswordHasher { Result = Microsoft.AspNetCore.Identity.PasswordVerificationResult.SuccessRehashNeeded };
         var service = new AuthenticationService(new FakeRepository { Account = account }, new FakeCurrentUserContext(), new PasswordVerificationService(hasher));
 
-        var result = await service.AuthenticateAsync(new LoginRequest { Username = "alice", Password = "secret" });
+        var result = await service.AuthenticateAsync(new LoginRequest { Username = "alice", Password = "secret" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(AuthenticateStatus.Success, result.Status);
         Assert.Equal("old-hash", account.PasswordHash);
@@ -77,7 +77,7 @@ public sealed class AuthenticationServiceTests
         var hasher = new RecordingPasswordHasher { Result = Microsoft.AspNetCore.Identity.PasswordVerificationResult.Success };
         var service = new AuthenticationService(new FakeRepository { Account = account }, new FakeCurrentUserContext(), new PasswordVerificationService(hasher));
 
-        await service.AuthenticateAsync(new LoginRequest { Username = "alice", Password = " secret " });
+        await service.AuthenticateAsync(new LoginRequest { Username = "alice", Password = " secret " }, TestContext.Current.CancellationToken);
 
         Assert.Equal(" secret ", hasher.LastPassword);
     }
@@ -86,7 +86,7 @@ public sealed class AuthenticationServiceTests
     public async Task UsernameNormalizationFailureReturnsValidationFailed()
     {
         var tooLong = new string('a', 65);
-        var result = await CreateService(new FakeRepository(), new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = tooLong, Password = "secret" });
+        var result = await CreateService(new FakeRepository(), new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = tooLong, Password = "secret" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(AuthenticateStatus.ValidationFailed, result.Status);
         Assert.Contains("username", result.Errors?.Keys ?? []);
@@ -100,7 +100,7 @@ public sealed class AuthenticationServiceTests
         var hasher = new RecordingPasswordHasher { Result = Microsoft.AspNetCore.Identity.PasswordVerificationResult.Success };
         var service = new AuthenticationService(new FakeRepository { Account = account }, new FakeCurrentUserContext(), new PasswordVerificationService(hasher));
 
-        await service.AuthenticateAsync(new LoginRequest { Username = "alice", Password = " secret " });
+        await service.AuthenticateAsync(new LoginRequest { Username = "alice", Password = " secret " }, TestContext.Current.CancellationToken);
 
         Assert.Equal(" secret ", hasher.LastPassword);
     }
@@ -112,7 +112,7 @@ public sealed class AuthenticationServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "secret-a"), new SeedAccountInput("bob", "Bob", "secret-b")], initialAdminUsername: "alice");
+        await seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "secret-a"), new SeedAccountInput("bob", "Bob", "secret-b")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(2, unitOfWork.AddedEntities.Count);
         Assert.Equal(1, unitOfWork.CommitCount);
@@ -122,7 +122,7 @@ public sealed class AuthenticationServiceTests
     public async Task InvalidInputDoesNotQueryRepository()
     {
         var repository = new FakeRepository();
-        var result = await CreateService(repository, new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = " ", Password = "" });
+        var result = await CreateService(repository, new FakeCurrentUserContext()).AuthenticateAsync(new LoginRequest { Username = " ", Password = "" }, TestContext.Current.CancellationToken);
 
         Assert.Equal(AuthenticateStatus.ValidationFailed, result.Status);
         Assert.Equal(["password", "username"], result.Errors?.Keys.OrderBy(key => key));
@@ -132,7 +132,7 @@ public sealed class AuthenticationServiceTests
     [Fact]
     public async Task AnonymousCurrentUserIsUnauthenticated()
     {
-        var result = await CreateService(new FakeRepository(), new FakeCurrentUserContext()).GetCurrentUserAsync();
+        var result = await CreateService(new FakeRepository(), new FakeCurrentUserContext()).GetCurrentUserAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(CurrentUserStatus.Unauthenticated, result.Status);
         Assert.Null(result.User);
@@ -147,7 +147,7 @@ public sealed class AuthenticationServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-secret")], initialAdminUsername: "alice");
+        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-secret")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal("Original", existing.Nickname);
         Assert.Equal("original-hash", existing.PasswordHash);
@@ -160,7 +160,7 @@ public sealed class AuthenticationServiceTests
         var account = UserAccount.Create("alice", "Alice");
         account.InitializePasswordHash("hash");
         var context = new FakeCurrentUserContext { IsAuthenticated = true, UserId = account.ID };
-        var result = await CreateService(new FakeRepository { Account = account }, context).GetCurrentUserAsync();
+        var result = await CreateService(new FakeRepository { Account = account }, context).GetCurrentUserAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(CurrentUserStatus.Success, result.Status);
         Assert.Equal(account.ID, result.User?.UserId);
@@ -172,7 +172,7 @@ public sealed class AuthenticationServiceTests
     [Fact]
     public async Task MissingCurrentUserAccountReturnsUnauthenticated()
     {
-        var result = await CreateService(new FakeRepository(), new FakeCurrentUserContext { IsAuthenticated = true, UserId = Guid.NewGuid() }).GetCurrentUserAsync();
+        var result = await CreateService(new FakeRepository(), new FakeCurrentUserContext { IsAuthenticated = true, UserId = Guid.NewGuid() }).GetCurrentUserAsync(TestContext.Current.CancellationToken);
 
         Assert.Equal(CurrentUserStatus.Unauthenticated, result.Status);
         Assert.Null(result.User);
@@ -184,7 +184,7 @@ public sealed class AuthenticationServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var seeder = new AccountSeeder(new MultiAccountRepository(), unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "a"), new SeedAccountInput(" ALICE ", "Other", "b")], initialAdminUsername: "alice"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => seeder.SeedAsync([new SeedAccountInput("alice", "Alice", "a"), new SeedAccountInput(" ALICE ", "Other", "b")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken));
 
         Assert.Empty(unitOfWork.AddedEntities);
         Assert.Equal(0, unitOfWork.CommitCount);
@@ -199,7 +199,7 @@ public sealed class AuthenticationServiceTests
         var unitOfWork = new FakeUnitOfWork();
         var seeder = new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork));
 
-        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Bob", "new-b")], initialAdminUsername: "alice");
+        await seeder.SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Bob", "new-b")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Single(unitOfWork.AddedEntities);
         Assert.Equal(1, unitOfWork.CommitCount);
@@ -213,7 +213,7 @@ public sealed class AuthenticationServiceTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => new AccountSeeder(new MultiAccountRepository(), new FakeUnitOfWork(), new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(new FakeUnitOfWork())).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")], cancelled));
 
         var failedUnitOfWork = new FakeUnitOfWork { CommitException = new InvalidOperationException("commit failed") };
-        await Assert.ThrowsAsync<InvalidOperationException>(() => new AccountSeeder(new MultiAccountRepository(), failedUnitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(failedUnitOfWork)).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")], initialAdminUsername: "alice"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new AccountSeeder(new MultiAccountRepository(), failedUnitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(failedUnitOfWork)).SeedAsync([new SeedAccountInput("alice", "Alice", "secret")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken));
         Assert.Equal(1, failedUnitOfWork.CommitCount);
     }
 
@@ -227,7 +227,7 @@ public sealed class AuthenticationServiceTests
         var repository = new MultiAccountRepository(alice, bob);
         var unitOfWork = new FakeUnitOfWork();
 
-        await new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork)).SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Changed", "new-b")], initialAdminUsername: "alice");
+        await new AccountSeeder(repository, unitOfWork, new PasswordHasher<UserAccount>(), new TestAccountTransactionRunner(unitOfWork)).SeedAsync([new SeedAccountInput("alice", "Changed", "new-a"), new SeedAccountInput("bob", "Changed", "new-b")], initialAdminUsername: "alice", cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Empty(unitOfWork.AddedEntities);
         Assert.Equal(1, unitOfWork.CommitCount);

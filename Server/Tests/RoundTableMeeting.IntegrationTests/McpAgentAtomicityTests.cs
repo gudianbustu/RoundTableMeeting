@@ -60,14 +60,14 @@ public sealed partial class McpAgentContractTests
         var task = Data(await CallToolAsync(agent, joined.Session.TransportSessionId, 3, "wait_for_mention",
             new { connectionSessionId = joined.ConnectionId }, useSessionEventStream: true));
         await DeleteLifecycleMeetingAsync(browser, meeting.MeetingId, "Cleanup retry");
-        await fault.Attempted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        await fault.Attempted.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(MeetingLifecycleState.Deleting, (await db.Meetings.SingleAsync()).LifecycleState);
-            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync()).State);
-            Assert.Equal(1, await db.AgentTaskDeliveryAttempts.CountAsync());
-            Assert.Equal(1, await db.AgentConnectionSessions.CountAsync());
+            Assert.Equal(MeetingLifecycleState.Deleting, (await db.Meetings.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LifecycleState);
+            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+            Assert.Equal(1, await db.AgentTaskDeliveryAttempts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         AssertToolError(await ReplyLifecycleAsync(agent, joined, task, 4, "late reply"), "meeting_not_found");
         fault.Fail = false;
@@ -123,10 +123,10 @@ public sealed partial class McpAgentContractTests
             await using (var scope = factory.Services.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-                Assert.False(await db.AgentConnectionSessions.AnyAsync());
-                Assert.False(await db.AgentInitialContextDeliveries.AnyAsync());
-                Assert.False(await db.AgentContextCursors.AnyAsync());
-                Assert.False(await db.MeetingParticipants.AnyAsync(item => item.ParticipantType == ParticipantType.Agent));
+                Assert.False(await db.AgentConnectionSessions.AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
+                Assert.False(await db.AgentInitialContextDeliveries.AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
+                Assert.False(await db.AgentContextCursors.AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
+                Assert.False(await db.MeetingParticipants.AnyAsync(item => item.ParticipantType == ParticipantType.Agent, cancellationToken: TestContext.Current.CancellationToken));
             }
             fault.Stage = null;
             join = await CallToolAsync(agent, session.TransportSessionId, 3, "join_meeting",
@@ -149,19 +149,19 @@ public sealed partial class McpAgentContractTests
             await using (var scope = factory.Services.CreateAsyncScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-                var initial = await db.AgentInitialContextDeliveries.SingleAsync();
+                var initial = await db.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(InitialContextState.Confirmed, initial.State);
                 confirmedAt = initial.ConfirmedAtUtc;
                 Assert.NotNull(confirmedAt);
-                Assert.Equal(1, (await db.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
-                Assert.All(await db.AgentReplyTasks.ToArrayAsync(), item => Assert.Equal(AgentReplyTaskState.Queued, item.State));
-                Assert.False(await db.AgentTaskDeliveryAttempts.AnyAsync());
+                Assert.Equal(1, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
+                Assert.All(await db.AgentReplyTasks.ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken), item => Assert.Equal(AgentReplyTaskState.Queued, item.State));
+                Assert.False(await db.AgentTaskDeliveryAttempts.AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
             }
             var retry = Data(await CallToolAsync(agent, session.TransportSessionId, 4, "wait_for_mention", new { connectionSessionId = connectionId }));
             Assert.Equal(2, retry.GetProperty("triggerSequence").GetInt64());
             await using var readScope = factory.Services.CreateAsyncScope();
             var readDb = readScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(confirmedAt, (await readDb.AgentInitialContextDeliveries.SingleAsync()).ConfirmedAtUtc);
+            Assert.Equal(confirmedAt, (await readDb.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ConfirmedAtUtc);
             return;
         }
         AssertToolError(await CallToolAsync(agent, session.TransportSessionId, 4, "wait_for_mention",
@@ -172,9 +172,9 @@ public sealed partial class McpAgentContractTests
         await using var finalScope = factory.Services.CreateAsyncScope();
         var finalDb = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
         Assert.Equal(new[] { AgentReplyTaskState.Delivered, AgentReplyTaskState.Queued },
-            await finalDb.AgentReplyTasks.OrderBy(item => item.TriggerSequence).Select(item => item.State).ToArrayAsync());
-        Assert.Equal(AgentTaskDeliveryAttemptState.Prepared, (await finalDb.AgentTaskDeliveryAttempts.SingleAsync()).State);
-        Assert.Equal(0, (await finalDb.AgentContextCursors.SingleAsync()).DeliveredThroughSequence);
+            await finalDb.AgentReplyTasks.OrderBy(item => item.TriggerSequence).Select(item => item.State).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(AgentTaskDeliveryAttemptState.Prepared, (await finalDb.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Equal(0, (await finalDb.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).DeliveredThroughSequence);
     }
 
     private sealed class AppendFailureSwitch { public bool Fail { get; set; } = true; }
@@ -220,21 +220,21 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(1, await db.MeetingMessages.CountAsync(item => item.MeetingId == meeting.MeetingId));
-            Assert.Equal(1, await db.MessageMentions.CountAsync(item => item.MeetingId == meeting.MeetingId));
-            Assert.Equal(1, await db.MessageAppendedEvents.CountAsync(item => item.MeetingId == meeting.MeetingId));
-            Assert.Equal(2, await db.MessageEventDeliveries.CountAsync());
-            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync()).State);
+            Assert.Equal(1, await db.MeetingMessages.CountAsync(item => item.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.MessageMentions.CountAsync(item => item.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.MessageAppendedEvents.CountAsync(item => item.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(2, await db.MessageEventDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         }
         fault.Fail = false;
         var reply = Data(await ReplyLifecycleAsync(agent, joined, task, 5, "@Alice result"));
         Assert.Equal(2, reply.GetProperty("message").GetProperty("sequence").GetInt64());
         await using var finalScope = factory.Services.CreateAsyncScope();
         var finalDb = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(2, await finalDb.MeetingMessages.CountAsync());
-        Assert.Equal(2, await finalDb.MessageMentions.CountAsync());
-        Assert.Equal(2, await finalDb.MessageAppendedEvents.CountAsync());
-        Assert.Equal(4, await finalDb.MessageEventDeliveries.CountAsync());
-        Assert.Equal(AgentReplyTaskState.Replied, (await finalDb.AgentReplyTasks.SingleAsync()).State);
+        Assert.Equal(2, await finalDb.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await finalDb.MessageMentions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await finalDb.MessageAppendedEvents.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(4, await finalDb.MessageEventDeliveries.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(AgentReplyTaskState.Replied, (await finalDb.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
     }
 }

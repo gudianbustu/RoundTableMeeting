@@ -40,11 +40,11 @@ public sealed partial class McpAgentContractTests
         Guid? committedChildId;
         await using (var cut = host.Database())
         {
-            Assert.Equal(afterCommit ? 2 : 1, await cut.AgentReplyTasks.CountAsync());
-            Assert.Equal(afterCommit ? 2 : 1, (await cut.AgentContextCursors.SingleAsync()).AllocatedThroughSequence);
-            committedChildId = await cut.AgentReplyTasks.Where(task => task.ParentTaskId == rootId).Select(task => (Guid?)task.ID).SingleOrDefaultAsync();
-            var eventId = (await cut.MessageAppendedEvents.SingleAsync(item => item.MessageId == replyId)).ID;
-            var delivery = await cut.MessageEventDeliveries.SingleAsync(item => item.EventId == eventId && item.ConsumerName == "agent-mention-task-v1");
+            Assert.Equal(afterCommit ? 2 : 1, await cut.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(afterCommit ? 2 : 1, (await cut.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AllocatedThroughSequence);
+            committedChildId = await cut.AgentReplyTasks.Where(task => task.ParentTaskId == rootId).Select(task => (Guid?)task.ID).SingleOrDefaultAsync(cancellationToken: TestContext.Current.CancellationToken);
+            var eventId = (await cut.MessageAppendedEvents.SingleAsync(item => item.MessageId == replyId, cancellationToken: TestContext.Current.CancellationToken)).ID;
+            var delivery = await cut.MessageEventDeliveries.SingleAsync(item => item.EventId == eventId && item.ConsumerName == "agent-mention-task-v1", cancellationToken: TestContext.Current.CancellationToken);
             deliveryId = delivery.ID;
             Assert.Equal(MessageEventDeliveryState.Leased, delivery.State);
             Assert.Null(delivery.CompletedAtUtc);
@@ -61,14 +61,14 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(replyId, child.GetProperty("triggerMessageId").GetGuid());
         await using var final = host.Database();
         var deadline = DateTimeOffset.UtcNow.AddSeconds(15);
-        while (!await final.MessageEventDeliveries.AnyAsync(item => item.ID == deliveryId && item.State == MessageEventDeliveryState.Completed))
+        while (!await final.MessageEventDeliveries.AnyAsync(item => item.ID == deliveryId && item.State == MessageEventDeliveryState.Completed, cancellationToken: TestContext.Current.CancellationToken))
         {
             Assert.True(DateTimeOffset.UtcNow < deadline, "Recovered event was not completed.");
-            await Task.Delay(50);
+            await Task.Delay(50, TestContext.Current.CancellationToken);
         }
-        Assert.Equal(2, await final.AgentReplyTasks.CountAsync());
-        Assert.Equal(2, await final.MeetingMessages.CountAsync());
-        Assert.Equal(2, (await final.AgentContextCursors.SingleAsync()).AllocatedThroughSequence);
-        Assert.Equal(0, await final.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(2, await final.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(2, (await final.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AllocatedThroughSequence);
+        Assert.Equal(0, await final.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

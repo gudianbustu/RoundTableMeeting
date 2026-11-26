@@ -88,7 +88,7 @@ public sealed partial class McpAgentContractTests
         await Observe(true, "awaiting_context_confirmation");
         Assert.Equal(second.TaskId, activity.ActiveTaskId);
         await using var scope = test.Services.CreateAsyncScope();
-        var cursor = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentContextCursors.SingleAsync();
+        var cursor = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(activity.Revision, cursor.ActivityRevision);
         Assert.Equal(activity.ChangedAt, cursor.ActivityChangedAtUtc);
     }

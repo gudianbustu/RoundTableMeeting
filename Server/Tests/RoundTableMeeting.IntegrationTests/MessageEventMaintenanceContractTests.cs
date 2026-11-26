@@ -22,14 +22,14 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            eventId = await db.MessageAppendedEvents.Where(x => x.MeetingId == meeting.MeetingId).Select(x => x.ID).SingleAsync();
+            eventId = await db.MessageAppendedEvents.Where(x => x.MeetingId == meeting.MeetingId).Select(x => x.ID).SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             var now = DateTimeOffset.UtcNow;
             var delivery = MessageEventDelivery.Create(eventId, "isolated-maintenance-consumer", now);
             var lease = Guid.NewGuid();
             delivery.Lease(lease, now.AddMinutes(1));
             Assert.True(delivery.Fail(lease, now, true));
             db.Add(delivery);
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             deliveryId = delivery.ID;
         }
         Assert.False(await MessageEventMaintenance.TryRunAsync([], factory.Services));
@@ -41,10 +41,10 @@ public sealed partial class McpAgentContractTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => MessageEventMaintenance.TryRunAsync([command], factory.Services));
         await using var check = factory.Services.CreateAsyncScope();
         var database = check.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var saved = await database.MessageEventDeliveries.SingleAsync(x => x.ID == deliveryId);
+        var saved = await database.MessageEventDeliveries.SingleAsync(x => x.ID == deliveryId, cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(eventId, saved.EventId);
         Assert.Equal(MessageEventDeliveryState.Pending, saved.State);
         Assert.Equal(1, saved.AttemptCount);
-        Assert.Equal(1, await database.MeetingMessages.CountAsync(x => x.MeetingId == meeting.MeetingId));
+        Assert.Equal(1, await database.MeetingMessages.CountAsync(x => x.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
     }
 }

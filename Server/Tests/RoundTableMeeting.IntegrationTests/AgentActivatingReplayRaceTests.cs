@@ -69,12 +69,12 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var pending = await db.AgentConnectionSessions.SingleAsync(c => c.State == AgentConnectionState.Activating);
+            var pending = await db.AgentConnectionSessions.SingleAsync(c => c.State == AgentConnectionState.Activating, cancellationToken: TestContext.Current.CancellationToken);
             if (resuming) Assert.Equal(id, pending.ID);
             id = pending.ID;
             Assert.Equal(AgentConnectionState.Activating, pending.State);
             Assert.Equal(resuming ? 2 : 1, pending.BindingVersion);
-            Assert.Equal("explicit_ack_v1", (await db.AgentContextCursors.SingleAsync()).RequiredReliabilityMode);
+            Assert.Equal("explicit_ack_v1", (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).RequiredReliabilityMode);
         }
         var round = coordinator.Arm();
         var takeover = new { meetingCode = meeting.MeetingCode, displayName = "Worker", contextCharacterLimit = 6000,
@@ -85,13 +85,13 @@ public sealed partial class McpAgentContractTests
         Task<System.Text.Json.JsonElement>? secondCall = null;
         try
         {
-            await round.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await round.Held.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             secondCall = takeoverFirst ? Replay() : Takeover();
-            await round.Contended.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await round.Contended.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(secondCall.IsCompleted);
         }
         finally { round.Release.TrySetResult(); }
-        var outcomes = await Task.WhenAll(firstCall, secondCall!).WaitAsync(TimeSpan.FromSeconds(10));
+        var outcomes = await Task.WhenAll(firstCall, secondCall!).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         var replay = outcomes[takeoverFirst ? 1 : 0];
         var taken = outcomes[takeoverFirst ? 0 : 1];
         Assert.True(taken.GetProperty("succeeded").GetBoolean(), taken.GetProperty("errorCode").GetString());
@@ -109,13 +109,13 @@ public sealed partial class McpAgentContractTests
         Assert.True((await ActivationCallAsync(taker, "renew_agent_lease", new { connectionSessionId = nextId })).GetProperty("succeeded").GetBoolean());
         await using var finalScope = factory.Services.CreateAsyncScope();
         var final = finalScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var cursor = await final.AgentContextCursors.SingleAsync();
+        var cursor = await final.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(nextId, cursor.CurrentConnectionId);
         Assert.Equal(mode == "takeover" ? 3 : 2, cursor.ConnectionGeneration);
-        Assert.Equal(1, await final.AgentConnectionSessions.CountAsync(c => c.State == AgentConnectionState.Connected));
-        Assert.Equal(AgentConnectionState.Superseded, (await final.AgentConnectionSessions.SingleAsync(c => c.ID == id)).State);
-        Assert.Equal(mode == "create" ? 2 : 3, await final.AgentRecoveryOperations.CountAsync());
-        Assert.Equal(1, await final.MeetingParticipants.CountAsync(p => p.ParticipantType == ParticipantType.Agent));
+        Assert.Equal(1, await final.AgentConnectionSessions.CountAsync(c => c.State == AgentConnectionState.Connected, cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(AgentConnectionState.Superseded, (await final.AgentConnectionSessions.SingleAsync(c => c.ID == id, cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Equal(mode == "create" ? 2 : 3, await final.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await final.MeetingParticipants.CountAsync(p => p.ParticipantType == ParticipantType.Agent, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -156,8 +156,8 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var cursor = await db.AgentContextCursors.SingleAsync();
-            var connection = await db.AgentConnectionSessions.SingleAsync(c => c.ID == cursor.CurrentConnectionId);
+            var cursor = await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
+            var connection = await db.AgentConnectionSessions.SingleAsync(c => c.ID == cursor.CurrentConnectionId, cancellationToken: TestContext.Current.CancellationToken);
             pending = new(connection.MeetingId, connection.ParticipantId, connection.ID, connection.McpTransportBinding)
             { ConnectionGeneration = connection.ConnectionGeneration, BindingVersion = connection.BindingVersion,
                 ReliabilityMode = connection.ReliabilityMode };
@@ -166,7 +166,7 @@ public sealed partial class McpAgentContractTests
         // Its stale in-memory registration must not permanently prevent new resumes.
         await using (var scope = factory.Services.CreateAsyncScope())
             await scope.ServiceProvider.GetRequiredService<RoundTableMeeting.Application.AgentCollaboration.AgentCollaborationService>()
-                .ReconcileConnectionAsync(pending);
+                .ReconcileConnectionAsync(pending, cancellationToken: TestContext.Current.CancellationToken);
         var resumed = await ActivationCallAsync(recovery, "resume_agent", new { connectionSessionId = pending.ConnectionSessionId,
             recoveryKey = key, operationId = Guid.NewGuid() });
         Assert.True(resumed.GetProperty("succeeded").GetBoolean(), resumed.GetProperty("errorCode").GetString());

@@ -30,11 +30,11 @@ public sealed class AccountSettingsContractTests
         await Login(admin, "alice"); await Login(member, "bob");
         var created = await Send(member, HttpMethod.Post, "/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Private", description = "Only member" });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        var id = (await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("meeting").GetProperty("meetingId").GetGuid();
-        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/meetings/{id}")).StatusCode);
+        var id = (await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("meeting").GetProperty("meetingId").GetGuid();
+        Assert.Equal(HttpStatusCode.NotFound, (await admin.GetAsync($"/api/meetings/{id}", TestContext.Current.CancellationToken)).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(admin, HttpMethod.Post, $"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "denied" })).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound, (await Send(admin, HttpMethod.Post, $"/api/meetings/{id}/deletion", new { confirmationName = "Private" })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await member.GetAsync($"/api/meetings/{id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await member.GetAsync($"/api/meetings/{id}", TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Theory]
@@ -63,7 +63,7 @@ public sealed class AccountSettingsContractTests
         {
             var response = await Send(client, method, path, body);
             Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
-            Assert.Equal("forbidden", (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+            Assert.Equal("forbidden", (await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
             Assert.True(response.Headers.CacheControl?.NoStore);
         }
     }
@@ -78,15 +78,15 @@ public sealed class AccountSettingsContractTests
         Assert.Equal(HttpStatusCode.BadRequest, (await Send(alice, HttpMethod.Patch, $"/api/users/{aid}/admin", new { isAdmin = "false" })).StatusCode);
         var last = await Send(alice, HttpMethod.Patch, $"/api/users/{aid}/admin", new { isAdmin = false });
         Assert.Equal(HttpStatusCode.Conflict, last.StatusCode);
-        Assert.Equal("last_admin_required", (await last.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.Equal("last_admin_required", (await last.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("code").GetString());
         Assert.Equal(HttpStatusCode.OK, (await Send(alice, HttpMethod.Patch, $"/api/users/{bid}/admin", new { isAdmin = true })).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync("/api/users")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync("/api/users", TestContext.Current.CancellationToken)).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(bob, HttpMethod.Patch, $"/api/users/{aid}/admin", new { isAdmin = false })).StatusCode);
-        Assert.Equal(HttpStatusCode.Forbidden, (await alice.GetAsync("/api/users")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await alice.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await alice.GetAsync("/api/users", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await alice.GetAsync("/api/auth/me", TestContext.Current.CancellationToken)).StatusCode);
         var created = await Send(bob, HttpMethod.Post, "/api/users", new { username = "new", nickname = "New", initialPassword = "secret", isAdmin = true });
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
-        Assert.False((await created.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("isAdmin").GetBoolean());
+        Assert.False((await created.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("isAdmin").GetBoolean());
     }
 
     [Fact]
@@ -96,18 +96,18 @@ public sealed class AccountSettingsContractTests
         var a = await Login(alice, "alice"); var b = await Login(bob, "bob"); await Login(otherBob, "bob");
         var changed = await Send(bob, HttpMethod.Patch, "/api/account/nickname", new { nickname = " Bob new ", userId = a.GetProperty("userId").GetString(), isAdmin = true });
         Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
-        var user = await changed.Content.ReadFromJsonAsync<JsonElement>();
+        var user = await changed.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(b.GetProperty("userId").GetString(), user.GetProperty("userId").GetString());
         Assert.False(user.GetProperty("isAdmin").GetBoolean());
         Assert.Equal("Bob new", user.GetProperty("nickname").GetString());
         var wrong = await Send(bob, HttpMethod.Post, "/api/account/change-password", new { currentPassword = "wrong", newPassword = "new" });
         Assert.Equal(HttpStatusCode.BadRequest, wrong.StatusCode);
-        Assert.True((await wrong.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("errors").TryGetProperty("currentPassword", out _));
+        Assert.True((await wrong.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken)).GetProperty("errors").TryGetProperty("currentPassword", out _));
         var success = await Send(bob, HttpMethod.Post, "/api/account/change-password", new { currentPassword = "test-password-bob", newPassword = " 新密码 " });
         Assert.Equal(HttpStatusCode.NoContent, success.StatusCode);
         Assert.False(success.Headers.Contains("Set-Cookie"));
-        Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync("/api/auth/me")).StatusCode);
-        Assert.Equal(HttpStatusCode.OK, (await otherBob.GetAsync("/api/auth/me")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await bob.GetAsync("/api/auth/me", TestContext.Current.CancellationToken)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await otherBob.GetAsync("/api/auth/me", TestContext.Current.CancellationToken)).StatusCode);
         using var fresh = Client(factory);
         Assert.Equal(HttpStatusCode.Unauthorized, (await Send(fresh, HttpMethod.Post, "/api/auth/login", new { username = "bob", password = "test-password-bob" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await Send(fresh, HttpMethod.Post, "/api/auth/login", new { username = "bob", password = " 新密码 " })).StatusCode);
@@ -124,18 +124,18 @@ public sealed class AccountSettingsContractTests
         Assert.Equal(HttpStatusCode.Unauthorized, (await Send(client, new HttpMethod(method), path, new { nickname = "N", currentPassword = "x", newPassword = "y" })).StatusCode);
         await Login(client, "bob");
         using var missingOrigin = new HttpRequestMessage(new HttpMethod(method), path) { Content = JsonContent.Create(new { }) };
-        var denied = await client.SendAsync(missingOrigin);
+        var denied = await client.SendAsync(missingOrigin, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode); Assert.True(denied.Headers.CacheControl?.NoStore);
         using var media = new HttpRequestMessage(new HttpMethod(method), path) { Content = new StringContent("bad") };
         media.Headers.Add("Origin", "http://localhost:5173");
-        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await client.SendAsync(media)).StatusCode);
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, (await client.SendAsync(media, TestContext.Current.CancellationToken)).StatusCode);
     }
 
     [Fact]
     public async Task OpenApiIncludesRequiredBooleanAndAllNewOperations()
     {
         using var factory = new TestApplicationFactory(); using var client = Client(factory);
-        var doc = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json");
+        var doc = await client.GetFromJsonAsync<JsonElement>("/openapi/v1.json", cancellationToken: TestContext.Current.CancellationToken);
         var paths = doc.GetProperty("paths");
         Assert.True(paths.GetProperty("/api/users").GetProperty("get").GetProperty("responses").TryGetProperty("403", out _));
         Assert.True(paths.GetProperty("/api/users/{userId}/admin").GetProperty("patch").GetProperty("responses").TryGetProperty("409", out _));

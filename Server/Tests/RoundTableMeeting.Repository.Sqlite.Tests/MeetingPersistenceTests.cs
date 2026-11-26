@@ -18,11 +18,11 @@ public sealed class MeetingPersistenceTests
             var user = UserAccount.Create("meeting-owner", "Owner"); user.InitializePasswordHash("hash");
             var meeting = Meeting.Create("One", null, user.ID, DateTimeOffset.UtcNow);
             context.Add(user); context.Add(meeting); context.Add(MeetingParticipant.CreateHuman(meeting.ID, user.ID, "Owner", DateTimeOffset.UtcNow));
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
             var duplicate = Meeting.Create("Two", null, user.ID, DateTimeOffset.UtcNow);
             context.Entry(duplicate).Property(nameof(Meeting.MeetingCode)).CurrentValue = meeting.MeetingCode;
             context.Add(duplicate);
-            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
         }
         finally { await context.DisposeAsync(); SqliteConnection.ClearAllPools(); Directory.Delete(root, true); }
     }
@@ -36,9 +36,9 @@ public sealed class MeetingPersistenceTests
             var unitOfWork = new UnitOfWorkImpl(context);
             var runner = new MeetingTransactionRunner(context, unitOfWork);
             var user = UserAccount.Create("runner-owner", "Owner"); user.InitializePasswordHash("hash");
-            await runner.RunAsync(token => { unitOfWork.RegisterAdd(user); return Task.FromResult(true); });
-            Assert.Equal(1, await context.UserAccounts.CountAsync());
-            await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(_ => runner.RunAsync(__ => Task.FromResult(true))));
+            await runner.RunAsync(token => { unitOfWork.RegisterAdd(user); return Task.FromResult(true); }, TestContext.Current.CancellationToken);
+            Assert.Equal(1, await context.UserAccounts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => runner.RunAsync(_ => runner.RunAsync(__ => Task.FromResult(true)), TestContext.Current.CancellationToken));
         }
         finally { await context.DisposeAsync(); SqliteConnection.ClearAllPools(); Directory.Delete(root, true); }
     }

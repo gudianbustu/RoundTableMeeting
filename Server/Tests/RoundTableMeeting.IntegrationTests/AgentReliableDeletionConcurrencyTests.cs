@@ -21,7 +21,7 @@ public sealed partial class McpAgentContractTests
         var deletion = DeleteLifecycleMeetingAsync(browser, test.MeetingId, "Reliable ordered races");
         try
         {
-            await gate.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await gate.Held.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(deletion.IsCompleted);
             var blockedCalls = new Func<Task<AgentOperationResult>>[]
             {
@@ -37,24 +37,24 @@ public sealed partial class McpAgentContractTests
                 () => test.Run(s => s.ReportFailureReliableAsync(test.Failure, test.Transport)),
                 () => test.Run(s => s.RetryReliableAsync(new(test.ConnectionId, test.Mention.TaskId, Guid.NewGuid()), test.Transport)),
             };
-            var denied = await Task.WhenAll(blockedCalls.Select(call => call())).WaitAsync(TimeSpan.FromSeconds(10));
+            var denied = await Task.WhenAll(blockedCalls.Select(call => call())).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             Assert.All(denied, result => Assert.Equal("meeting_not_found", result.ErrorCode));
             var scan = await test.Run(async s => AgentOperationResult.Success(await s.ReconcileConnectionAsync(registration), "Scan complete."));
             Assert.False(Assert.IsType<bool>(scan.Data));
             await PostHumanMessageAsync(browser, other.MeetingId, "Other meeting remains writable");
             var otherAgent = Assert.IsType<AgentJoinResultDto>((await JoinReliableForTestAsync(test.Services,
                 ReliableJoinRequest(other.MeetingCode, "IndependentWorker", "create"), RecoveryTransport(224))
-                .WaitAsync(TimeSpan.FromSeconds(10))).Data);
+                .WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken)).Data);
             Assert.True((await test.Run(s => s.RenewReliableAsync(new(otherAgent.Connection.ConnectionSessionId), RecoveryTransport(224)))).Succeeded);
             await using var scope = test.Services.CreateAsyncScope();
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(c => c.MeetingId == test.MeetingId));
-            Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync(o => o.MeetingId == test.MeetingId));
-            Assert.Equal(1, await db.MeetingMessages.CountAsync(m => m.MeetingId == test.MeetingId));
-            Assert.Equal(1, await db.MeetingMessages.CountAsync(m => m.MeetingId == other.MeetingId));
+            Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(c => c.MeetingId == test.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync(o => o.MeetingId == test.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.MeetingMessages.CountAsync(m => m.MeetingId == test.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.MeetingMessages.CountAsync(m => m.MeetingId == other.MeetingId, cancellationToken: TestContext.Current.CancellationToken));
         }
         finally { gate.Release.TrySetResult(); }
-        await deletion.WaitAsync(TimeSpan.FromSeconds(10));
+        await deletion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         await AssertAgentMeetingGoneAsync(test.Factory, test.MeetingId);
         Assert.Equal("meeting_not_found", (await JoinReliableForTestAsync(test.Services,
             ReliableJoinRequest(test.MeetingCode, "Worker", "takeover"), RecoveryTransport(225))).ErrorCode);

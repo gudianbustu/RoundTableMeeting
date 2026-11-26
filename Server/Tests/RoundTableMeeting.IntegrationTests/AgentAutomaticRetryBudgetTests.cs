@@ -40,12 +40,12 @@ public sealed partial class McpAgentContractTests
                 await using (var scope = test.Services.CreateAsyncScope())
                 {
                     var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-                    var tasks = await db.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync();
+                    var tasks = await db.AgentReplyTasks.OrderBy(t => t.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
                     Assert.Equal(AgentReplyTaskState.Failed, tasks[0].State);
                     Assert.Equal(automatic, tasks[0].AutomaticRetryCount);
                     Assert.Equal(cycle, tasks[0].RetryCycle);
                     Assert.Equal(AgentReplyTaskState.Queued, tasks[1].State);
-                    Assert.Equal(cycle * (quota + 1) + automatic + 1, await db.AgentTaskDeliveryAttempts.CountAsync());
+                    Assert.Equal(cycle * (quota + 1) + automatic + 1, await db.AgentTaskDeliveryAttempts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
                 }
                 if (automatic == quota) break;
                 Assert.Equal(test.Clock.Now.AddSeconds(1), decision.NextRetryAt);
@@ -57,7 +57,7 @@ public sealed partial class McpAgentContractTests
                 Assert.NotEqual(previous.DeliveryAttemptId, current.DeliveryAttemptId);
                 await using (var scope = test.Services.CreateAsyncScope())
                 {
-                    var old = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentTaskDeliveryAttempts.SingleAsync(a => a.ID == previous.DeliveryAttemptId);
+                    var old = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentTaskDeliveryAttempts.SingleAsync(a => a.ID == previous.DeliveryAttemptId, cancellationToken: TestContext.Current.CancellationToken);
                     Assert.Equal(AgentTaskDeliveryAttemptState.Abandoned, old.State);
                     Assert.Equal(current.DeliveryAttemptId, old.ReplacementAttemptId);
                 }
@@ -67,7 +67,7 @@ public sealed partial class McpAgentContractTests
             if (cycle == 1) break;
             AgentReplyTask before;
             await using (var scope = test.Services.CreateAsyncScope())
-                before = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(t => t.ID == current.TaskId);
+                before = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(t => t.ID == current.TaskId, cancellationToken: TestContext.Current.CancellationToken);
             transport = RecoveryTransport(251);
             Assert.True((await test.Run(s => s.ResumeReliableAsync(new(connectionId, test.RecoveryKey, Guid.NewGuid()), transport))).Succeeded);
             Assert.Equal("retry_exhausted", (await test.Run(s => s.WaitReliableAsync(new(connectionId), transport))).ErrorCode);
@@ -79,7 +79,7 @@ public sealed partial class McpAgentContractTests
             Assert.Equal("retry_exhausted", (await test.Run(s => s.WaitReliableAsync(new(connectionId), transport))).ErrorCode);
             await using (var scope = test.Services.CreateAsyncScope())
             {
-                var after = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(t => t.ID == current.TaskId);
+                var after = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(t => t.ID == current.TaskId, cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(before.FailedAtUtc, after.FailedAtUtc);
                 Assert.Equal(before.FailureCode, after.FailureCode);
                 Assert.Equal(before.RetryCycle, after.RetryCycle);
@@ -93,7 +93,7 @@ public sealed partial class McpAgentContractTests
             current = Assert.IsType<AgentMentionResultDto>((await test.Run(s => s.WaitReliableAsync(new(connectionId), transport))).Data);
             Assert.Equal(firstKey, current.ReplyIdempotencyKey);
             await using (var scope = test.Services.CreateAsyncScope())
-                Assert.Equal(0, (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(t => t.ID == current.TaskId)).AutomaticRetryCount);
+                Assert.Equal(0, (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(t => t.ID == current.TaskId, cancellationToken: TestContext.Current.CancellationToken)).AutomaticRetryCount);
             Assert.True((await test.Run(s => s.ConfirmReliableAsync(new(connectionId, "task", TaskId: current.TaskId,
                 DeliveryAttemptId: current.DeliveryAttemptId), transport))).Succeeded);
         }

@@ -48,8 +48,8 @@ public sealed partial class McpAgentContractTests
         Assert.Equal("reply_idempotency_mismatch", (await ReliableForTestAsync(factory.Services, s => s.ReplyReliableAsync(replyRequest with { Content = "different" }, nextTransport))).ErrorCode);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(2, await db.MeetingMessages.CountAsync());
-        Assert.Equal(AgentReplyTaskState.Replied, (await db.AgentReplyTasks.SingleAsync()).State);
+        Assert.Equal(2, await db.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(AgentReplyTaskState.Replied, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
     }
 
     [Fact]
@@ -71,10 +71,10 @@ public sealed partial class McpAgentContractTests
         {
             await using var allocationScope = factory.Services.CreateAsyncScope();
             var allocationDb = allocationScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var allocated = await allocationDb.AgentReplyTasks.CountAsync(task => task.MeetingId == meeting.MeetingId);
+            var allocated = await allocationDb.AgentReplyTasks.CountAsync(task => task.MeetingId == meeting.MeetingId, cancellationToken: TestContext.Current.CancellationToken);
             if (allocated == 2) break;
             Assert.True(DateTimeOffset.UtcNow < allocationDeadline, $"Expected two allocated tasks, found {allocated}.");
-            await Task.Delay(25);
+            await Task.Delay(25, TestContext.Current.CancellationToken);
         }
         var first = Assert.IsType<AgentMentionResultDto>((await ReliableForTestAsync(factory.Services, s => s.WaitReliableAsync(new(id), transport))).Data);
         await ReliableForTestAsync(factory.Services, s => s.ConfirmReliableAsync(new(id, "task", TaskId: first.TaskId, DeliveryAttemptId: first.DeliveryAttemptId), transport));
@@ -97,11 +97,11 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(1, receipt.CurrentRetryCycle);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var tasks = await db.AgentReplyTasks.OrderBy(task => task.TriggerSequence).ToArrayAsync();
+        var tasks = await db.AgentReplyTasks.OrderBy(task => task.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, tasks[0].AutomaticRetryCount);
         Assert.Equal(AgentReplyTaskState.Delivered, tasks[0].State);
         Assert.Equal(AgentReplyTaskState.Queued, tasks[1].State);
-        Assert.Equal(AgentTaskDeliveryAttemptState.Abandoned, (await db.AgentTaskDeliveryAttempts.SingleAsync(item => item.ID == first.DeliveryAttemptId)).State);
+        Assert.Equal(AgentTaskDeliveryAttemptState.Abandoned, (await db.AgentTaskDeliveryAttempts.SingleAsync(item => item.ID == first.DeliveryAttemptId, cancellationToken: TestContext.Current.CancellationToken)).State);
     }
 
     [Fact]
@@ -129,6 +129,6 @@ public sealed partial class McpAgentContractTests
         var replacement = Assert.IsType<AgentMentionResultDto>((await ReliableForTestAsync(factory.Services, s => s.WaitReliableAsync(new(id), transport))).Data);
         Assert.NotEqual(mention.DeliveryAttemptId, replacement.DeliveryAttemptId);
         await using var scope = factory.Services.CreateAsyncScope();
-        Assert.Equal(1, (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync()).AutomaticRetryCount);
+        Assert.Equal(1, (await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AutomaticRetryCount);
     }
 }

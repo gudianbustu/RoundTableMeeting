@@ -24,8 +24,8 @@ public sealed class OriginProtectionTests
     {
         using var factory = new TestApplicationFactory();
         using var request = CreateRequest(new HttpMethod(method), "/__test/origin/json", AllowedOrigin, new StringContent("{\"name\":\"accepted\"}", Encoding.UTF8, "application/json"));
-        using var response = await factory.CreateClient().SendAsync(request);
-        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.Equal(method, body.GetProperty("method").GetString());
@@ -36,7 +36,7 @@ public sealed class OriginProtectionTests
     {
         using var factory = new TestApplicationFactory();
         using var request = CreateRequest(HttpMethod.Delete, "/__test/origin/no-json", AllowedOrigin);
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -51,7 +51,7 @@ public sealed class OriginProtectionTests
     {
         using var factory = new TestApplicationFactory();
         using var request = CreateRequest(HttpMethod.Post, "/__test/origin/json", origin, new StringContent("{\"name\":\"blocked\"}", Encoding.UTF8, "application/json"));
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertProblemAsync(response, HttpStatusCode.Forbidden, "origin_not_allowed", "The browser origin is not allowed.");
     }
@@ -66,7 +66,7 @@ public sealed class OriginProtectionTests
         using var factory = new TestApplicationFactory();
         HttpContent? content = contentType is null ? null : new StringContent("ignored", Encoding.UTF8, contentType);
         using var request = CreateRequest(HttpMethod.Post, "/__test/origin/json", origin, content);
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertProblemAsync(response, HttpStatusCode.Forbidden, "origin_not_allowed", "The browser origin is not allowed.");
     }
@@ -77,7 +77,7 @@ public sealed class OriginProtectionTests
         using var factory = new TestApplicationFactory();
         using var request = CreateRequest(HttpMethod.Post, "/__test/origin/json", null, new StringContent("{\"name\":\"blocked\"}", Encoding.UTF8, "application/json"));
         request.Headers.TryAddWithoutValidation("Origin", [AllowedOrigin, "https://evil.example"]);
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertProblemAsync(response, HttpStatusCode.Forbidden, "origin_not_allowed", "The browser origin is not allowed.");
     }
@@ -96,7 +96,7 @@ public sealed class OriginProtectionTests
         content.Headers.Remove("Content-Type");
         if (contentType is not null) content.Headers.TryAddWithoutValidation("Content-Type", contentType);
         using var request = CreateRequest(HttpMethod.Post, "/__test/origin/json", AllowedOrigin, content);
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(expected, response.StatusCode);
         if (expected == HttpStatusCode.UnsupportedMediaType)
@@ -112,7 +112,7 @@ public sealed class OriginProtectionTests
     {
         using var factory = new TestApplicationFactory();
         using var request = CreateRequest(HttpMethod.Post, "/__test/origin/json", AllowedOrigin, new StringContent(body, Encoding.UTF8, "application/json"));
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         await AssertProblemAsync(response, HttpStatusCode.BadRequest, "validation_failed", "One or more validation errors occurred.");
     }
@@ -128,7 +128,7 @@ public sealed class OriginProtectionTests
         HttpContent? content = null;
         if (contentType is not null) content = new StringContent("ignored", Encoding.UTF8, contentType);
         using var request = CreateRequest(new HttpMethod(method), "/__test/origin/no-json", AllowedOrigin, content);
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
@@ -140,7 +140,7 @@ public sealed class OriginProtectionTests
     {
         using var factory = new TestApplicationFactory();
         using var request = new HttpRequestMessage(new HttpMethod(method), "/__test/origin/json");
-        using var response = await factory.CreateClient().SendAsync(request);
+        using var response = await factory.CreateClient().SendAsync(request, TestContext.Current.CancellationToken);
 
         Assert.Contains(response.StatusCode, new[] { HttpStatusCode.NotFound, HttpStatusCode.MethodNotAllowed });
     }
@@ -217,12 +217,12 @@ public sealed class OriginProtectionTests
         using var client = factory.CreateClient();
         using var unmarked = new HttpRequestMessage(HttpMethod.Post, "/__test/origin/unmarked");
         unmarked.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
-        using var unmarkedResponse = await client.SendAsync(unmarked);
+        using var unmarkedResponse = await client.SendAsync(unmarked, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, unmarkedResponse.StatusCode);
 
         using var unknown = new HttpRequestMessage(HttpMethod.Post, "/api/unknown-origin");
         unknown.Headers.TryAddWithoutValidation("Origin", "https://evil.example");
-        using var unknownResponse = await client.SendAsync(unknown);
+        using var unknownResponse = await client.SendAsync(unknown, TestContext.Current.CancellationToken);
         await AssertProblemAsync(unknownResponse, HttpStatusCode.NotFound, "route_not_found", "The requested API route was not found.");
     }
 
@@ -232,11 +232,11 @@ public sealed class OriginProtectionTests
         using var factory = new TestApplicationFactory();
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
         using var missingOrigin = new HttpRequestMessage(HttpMethod.Post, "/__test/origin/authorized");
-        using var forbidden = await client.SendAsync(missingOrigin);
+        using var forbidden = await client.SendAsync(missingOrigin, TestContext.Current.CancellationToken);
         await AssertProblemAsync(forbidden, HttpStatusCode.Forbidden, "origin_not_allowed", "The browser origin is not allowed.");
 
         using var allowedOrigin = CreateRequest(HttpMethod.Post, "/__test/origin/authorized", AllowedOrigin);
-        using var unauthorized = await client.SendAsync(allowedOrigin);
+        using var unauthorized = await client.SendAsync(allowedOrigin, TestContext.Current.CancellationToken);
         await AssertProblemAsync(unauthorized, HttpStatusCode.Unauthorized, "unauthenticated", "Authentication is required.");
 
         Assert.Contains(factory.LogSink.Events, logEvent =>

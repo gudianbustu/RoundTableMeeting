@@ -13,7 +13,7 @@ public sealed class AgentInfrastructureLogPrivacyTests
     {
         var logger = new PrivateExceptionLogger<AgentConnectionCompensator>();
         var service = new AgentConnectionCompensator(new PrivateFaultScopes(), logger);
-        Assert.False(await service.DisconnectAsync(new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "safe-test-binding"), DateTimeOffset.UtcNow));
+        Assert.False(await service.DisconnectAsync(new(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), "safe-test-binding"), DateTimeOffset.UtcNow, TestContext.Current.CancellationToken));
         Assert.Single(logger.Messages);
         Assert.Contains("InvalidOperationException", logger.Messages[0]);
         Assert.DoesNotContain(Secret, logger.Messages[0]);
@@ -25,7 +25,7 @@ public sealed class AgentInfrastructureLogPrivacyTests
     {
         var logger = new PrivateExceptionLogger<AgentActivityNotifier>();
         var service = new AgentActivityNotifier(null!, new PrivateFaultScopes(), new PrivateFaultGate(), logger);
-        await service.NotifyAsync(new AgentActivityDto(Guid.NewGuid(), Guid.NewGuid(), "waiting", null, null, DateTimeOffset.UtcNow));
+        await service.NotifyAsync(new AgentActivityDto(Guid.NewGuid(), Guid.NewGuid(), "waiting", null, null, DateTimeOffset.UtcNow), cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(logger.Messages);
         Assert.Contains("InvalidOperationException", logger.Messages[0]);
         Assert.DoesNotContain(Secret, logger.Messages[0]);

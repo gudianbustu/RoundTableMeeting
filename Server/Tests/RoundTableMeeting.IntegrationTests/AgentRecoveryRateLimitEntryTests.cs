@@ -43,12 +43,12 @@ public sealed partial class McpAgentContractTests
         await using (var scope = test.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var connection = await db.AgentConnectionSessions.SingleAsync();
+            var connection = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(1, connection.BindingVersion);
             Assert.Equal(AgentConnectionState.Connected, connection.State);
-            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync()).State);
-            Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync());
-            Assert.Equal(1, await db.AgentTaskDeliveryAttempts.CountAsync());
+            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+            Assert.Equal(1, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(1, await db.AgentTaskDeliveryAttempts.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         // A rejected admission reserves no transport and creates no receipt. Once the
         // actual server window expires, the same transport can make a fresh resume.
@@ -80,9 +80,9 @@ public sealed partial class McpAgentContractTests
         await using (var scope = test.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            Assert.Equal(test.ConnectionId, (await db.AgentContextCursors.SingleAsync()).CurrentConnectionId);
-            Assert.Equal(1, await db.AgentConnectionSessions.CountAsync());
-            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync()).State);
+            Assert.Equal(test.ConnectionId, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).CurrentConnectionId);
+            Assert.Equal(1, await db.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Equal(AgentReplyTaskState.Processing, (await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         }
         test.Clock.Now = test.Clock.Now.AddSeconds(300);
         var taken = await ActivationCallAsync(second, "join_meeting", new { meetingCode = test.MeetingCode,

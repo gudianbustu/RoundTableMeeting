@@ -44,35 +44,35 @@ public sealed partial class McpAgentContractTests
         var joined = SdkPayload(await oldSdk.CallToolAsync("join_meeting", new Dictionary<string, object?>
         {
             ["meetingCode"] = meeting.MeetingCode, ["displayName"] = "SdkWorker", ["contextCharacterLimit"] = 12000
-        }));
+        }, cancellationToken: TestContext.Current.CancellationToken));
         var connectionId = joined.GetProperty("data").GetProperty("connection").GetProperty("connectionSessionId").GetGuid();
         var args = new Dictionary<string, object?> { ["connectionSessionId"] = connectionId };
         await probe.InitializeAsync(meeting.MeetingId);
-        var wait = oldSdk.CallToolAsync("wait_for_mention", args).AsTask();
-        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var wait = oldSdk.CallToolAsync("wait_for_mention", args, cancellationToken: TestContext.Current.CancellationToken).AsTask();
+        await signals.Entered.Task.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         probe.Now = probe.Now.AddSeconds(30);
-        var renewed = SdkPayload(await oldSdk.CallToolAsync("probe_renew", args).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        var renewed = SdkPayload(await oldSdk.CallToolAsync("probe_renew", args, cancellationToken: TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.True(renewed.GetProperty("succeeded").GetBoolean());
         Assert.Equal(probe.Now.AddSeconds(120), renewed.GetProperty("data").GetProperty("leaseExpiresAt").GetDateTimeOffset());
         Assert.Equal(probe.Now.AddSeconds(120).UtcTicks, await probe.ReadLeaseAsync());
         Assert.False(wait.IsCompleted);
 
-        var resumed = SdkPayload(await newSdk.CallToolAsync("probe_resume", args).AsTask().WaitAsync(TimeSpan.FromSeconds(5)));
+        var resumed = SdkPayload(await newSdk.CallToolAsync("probe_resume", args, cancellationToken: TestContext.Current.CancellationToken).AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
         Assert.True(resumed.GetProperty("succeeded").GetBoolean());
         Assert.Equal(connectionId, resumed.GetProperty("data").GetProperty("connectionSessionId").GetGuid());
         Assert.Equal(2, resumed.GetProperty("data").GetProperty("bindingVersion").GetInt64());
-        AssertToolFailure(SdkPayload(await wait.WaitAsync(TimeSpan.FromSeconds(5))), "connection_invalid");
-        await oldSdk.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        AssertToolFailure(SdkPayload(await wait.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)), "connection_invalid");
+        await oldSdk.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         await EventuallyAsync(factory, _ => Task.FromResult(!factory.Services.GetRequiredService<IAgentConnectionRegistry>()
             .ContainsTransport(probe.FirstTransport!.Value)));
 
-        var status = SdkPayload(await newSdk.CallToolAsync("get_agent_status", args));
+        var status = SdkPayload(await newSdk.CallToolAsync("get_agent_status", args, cancellationToken: TestContext.Current.CancellationToken));
         Assert.True(status.GetProperty("succeeded").GetBoolean());
         Assert.Equal("connected", status.GetProperty("data").GetProperty("connection").GetProperty("state").GetString());
         probe.Now = probe.Now.AddSeconds(30);
-        Assert.True(SdkPayload(await newSdk.CallToolAsync("probe_renew", args)).GetProperty("succeeded").GetBoolean());
+        Assert.True(SdkPayload(await newSdk.CallToolAsync("probe_renew", args, cancellationToken: TestContext.Current.CancellationToken)).GetProperty("succeeded").GetBoolean());
         Assert.Equal(probe.Now.AddSeconds(120).UtcTicks, await probe.ReadLeaseAsync());
-        await newSdk.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5));
+        await newSdk.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
         await EventuallyAsync(factory, async db => await db.AgentConnectionSessions.AnyAsync(item =>
             item.ID == connectionId && item.State == AgentConnectionState.Disconnected));
     }

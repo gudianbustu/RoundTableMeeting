@@ -22,10 +22,10 @@ public sealed class SimpleMeetingTests
         }));
         using var human = factory.CreateClient();
         human.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" });
+        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken);
         login.EnsureSuccessStatusCode();
-        using var create = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Remote MCP" });
-        var meeting = await create.Content.ReadFromJsonAsync<JsonElement>();
+        using var create = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Remote MCP" }, cancellationToken: TestContext.Current.CancellationToken);
+        var meeting = await create.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var id = meeting.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var code = meeting.GetProperty("invitation").GetProperty("meetingCode").GetString()!;
         var invitationKey = Guid.NewGuid().ToString("N");
@@ -45,20 +45,20 @@ public sealed class SimpleMeetingTests
 
         await using var first = await Host();
         Assert.Equal(new[] { "attachment_transfer", "attend", "history", "leave", "next", "reply", "send_private_message", "send_public_message", "skip" },
-            (await first.ListToolsAsync()).Select(t => t.Name).Order().ToArray());
+            (await first.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken)).Select(t => t.Name).Order().ToArray());
         Assert.Equal("joined", await Call(first, "attend"));
         await using var other = await Host(Guid.NewGuid().ToString("N"));
-        Assert.True((await other.CallToolAsync("attend")).IsError);
-        Assert.True((await other.CallToolAsync("next")).IsError);
-        var workspace = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}");
+        Assert.True((await other.CallToolAsync("attend", cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        Assert.True((await other.CallToolAsync("next", cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        var workspace = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}", cancellationToken: TestContext.Current.CancellationToken);
         var agent = workspace.GetProperty("participants").EnumerateArray().Single(p => p.GetProperty("displayName").GetString() == "访客");
         var participantId = agent.GetProperty("participantId").GetGuid();
         // The SDK answers the server's first liveness ping while a next call is pending.
         var waiting = Call(first, "next");
-        await Task.Delay(TimeSpan.FromSeconds(27));
+        await Task.Delay(TimeSpan.FromSeconds(27), TestContext.Current.CancellationToken);
         Assert.False(waiting.IsCompleted);
         using var post = await human.PostAsJsonAsync($"/api/meetings/{id}/messages", new { clientSubmissionId = Guid.NewGuid(),
-            content = "收到请回", visibility = "private", recipientParticipantId = participantId });
+            content = "收到请回", visibility = "private", recipientParticipantId = participantId }, cancellationToken: TestContext.Current.CancellationToken);
         post.EnsureSuccessStatusCode();
         var delivery = JsonDocument.Parse(await waiting).RootElement;
         Assert.True(delivery.GetProperty("fromMeetingCreator").GetBoolean());
@@ -71,8 +71,8 @@ public sealed class SimpleMeetingTests
         Assert.Equal("handled", await Call(restored, "reply", reply));
         Assert.Equal("left", await Call(restored, "leave"));
         Assert.Equal("left", await Call(restored, "leave"));
-        Assert.True((await first.CallToolAsync("next")).IsError);
-        var history = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/messages");
+        Assert.True((await first.CallToolAsync("next", cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        var history = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{id}/messages", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(history.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "收到");
     }
     [Fact]
@@ -81,7 +81,7 @@ public sealed class SimpleMeetingTests
         using var factory = new TestApplicationFactory();
         using var human = factory.CreateClient();
         human.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" });
+        using var login = await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken);
         login.EnsureSuccessStatusCode();
         Task<McpClient> Host() => McpClient.CreateAsync(new HttpClientTransport(new()
         {
@@ -118,11 +118,11 @@ public sealed class SimpleMeetingTests
         }
         var a = await Join("会议 A");
         var b = await Join("会议 B");
-        using var switched = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "free" });
+        using var switched = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "free" }, cancellationToken: TestContext.Current.CancellationToken);
         switched.EnsureSuccessStatusCode();
         foreach (var room in new[] { b.Id, a.Id })
         {
-            using var posted = await human.PostAsJsonAsync($"/api/meetings/{room}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "自由发言", visibility = "public" });
+            using var posted = await human.PostAsJsonAsync($"/api/meetings/{room}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "自由发言", visibility = "public" }, cancellationToken: TestContext.Current.CancellationToken);
             posted.EnsureSuccessStatusCode();
         }
         var optional = JsonDocument.Parse(await Call(host, "next", new() { ["rooms"] = new[] { b.Room, a.Room } })).RootElement;
@@ -136,7 +136,7 @@ public sealed class SimpleMeetingTests
             var admitted = JsonDocument.Parse(await Call(host, "attend", new() { ["meetingCode"] = a.Code, ["displayName"] = name, ["invitationKey"] = Guid.NewGuid().ToString("N") })).RootElement;
             contributors.Add(admitted.GetProperty("room").GetString()!);
         }
-        using var topic = await human.PostAsJsonAsync($"/api/meetings/{a.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "新话题" });
+        using var topic = await human.PostAsJsonAsync($"/api/meetings/{a.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "新话题" }, cancellationToken: TestContext.Current.CancellationToken);
         topic.EnsureSuccessStatusCode();
         async Task<JsonElement> Next(string room) => JsonDocument.Parse(await Call(host, "next", new() { ["rooms"] = new[] { room } })).RootElement;
         var archive = JsonDocument.Parse(await Call(host, "history", new() { ["room"] = contributors[0], ["limit"] = 10 })).RootElement;
@@ -157,23 +157,23 @@ public sealed class SimpleMeetingTests
         Assert.Equal("第二位", last.GetProperty("author").GetProperty("displayName").GetString());
         Assert.Equal(batch.GetRawText(), (await Next(a.Room)).GetRawText());
         var invalid = await host.CallToolAsync("reply", new Dictionary<string, object?> {
-            ["room"] = a.Room, ["messageId"] = last.GetProperty("messageId").GetGuid(), ["content"] = "跨话题", ["replyToMessageId"] = discussion.GetProperty("messageId").GetGuid() });
+            ["room"] = a.Room, ["messageId"] = last.GetProperty("messageId").GetGuid(), ["content"] = "跨话题", ["replyToMessageId"] = discussion.GetProperty("messageId").GetGuid() }, cancellationToken: TestContext.Current.CancellationToken);
         Assert.True(invalid.IsError);
         var decision = new Dictionary<string, object?> { ["room"] = a.Room, ["messageId"] = last.GetProperty("messageId").GetGuid(), ["content"] = "合并回复", ["replyToMessageId"] = context.GetProperty("messageId").GetGuid() };
         Assert.Equal("handled", await Call(host, "reply", decision));
         Assert.Equal("handled", await Call(host, "reply", decision));
-        var combinedHistory = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{a.Id}/messages");
+        var combinedHistory = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{a.Id}/messages", cancellationToken: TestContext.Current.CancellationToken);
         var combined = Assert.Single(combinedHistory.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "合并回复");
         Assert.Equal(context.GetProperty("messageId").GetGuid(), combined.GetProperty("replyToMessageId").GetGuid());
         var held = (await Next(contributors[0])).GetProperty("message").GetProperty("messageId").GetGuid();
-        using var interrupted = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "directed" });
+        using var interrupted = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "directed" }, cancellationToken: TestContext.Current.CancellationToken);
         interrupted.EnsureSuccessStatusCode();
-        using var reopened = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "free" });
+        using var reopened = await human.PutAsJsonAsync($"/api/meetings/{a.Id}/discussion-mode", new { mode = "free" }, cancellationToken: TestContext.Current.CancellationToken);
         reopened.EnsureSuccessStatusCode();
         var stale = new Dictionary<string, object?> { ["room"] = contributors[0], ["messageId"] = held, ["content"] = "过期回复" };
         Assert.Equal("discussion_ended", await Call(host, "reply", stale));
         Assert.Equal("discussion_ended", await Call(host, "reply", stale));
-        using var fresh = await human.PostAsJsonAsync($"/api/meetings/{a.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "重开后的议题" });
+        using var fresh = await human.PostAsJsonAsync($"/api/meetings/{a.Id}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "重开后的议题" }, cancellationToken: TestContext.Current.CancellationToken);
         fresh.EnsureSuccessStatusCode();
         foreach (var room in contributors.Append(a.Room))
         {
@@ -181,17 +181,17 @@ public sealed class SimpleMeetingTests
             Assert.Equal("重开后的议题", next.GetProperty("content").GetString());
             await Call(host, "skip", new() { ["room"] = room, ["messageId"] = next.GetProperty("messageId").GetGuid() });
         }
-        var checkedHistory = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{a.Id}/messages");
+        var checkedHistory = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{a.Id}/messages", cancellationToken: TestContext.Current.CancellationToken);
         Assert.DoesNotContain(checkedHistory.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "过期回复");
         var waiting = Call(host, "next", new() { ["rooms"] = new[] { a.Room, b.Room } });
         await Send(b.Id, b.Member, "乙");
         var received = JsonDocument.Parse(await waiting).RootElement;
         Assert.Equal(b.Room, received.GetProperty("room").GetString());
         var msg = received.GetProperty("message").GetProperty("messageId").GetGuid();
-        Assert.True((await host.CallToolAsync("reply", new Dictionary<string,object?> { ["room"] = a.Room, ["messageId"] = msg, ["content"] = "串会" })).IsError);
+        Assert.True((await host.CallToolAsync("reply", new Dictionary<string,object?> { ["room"] = a.Room, ["messageId"] = msg, ["content"] = "串会" }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         Assert.Equal("handled", await Call(host, "reply", new() { ["room"] = b.Room, ["messageId"] = msg, ["content"] = "乙回复" }));
         Assert.Equal("left", await Call(host, "leave", new() { ["room"] = b.Room }));
-        var history = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{b.Id}/messages");
+        var history = await human.GetFromJsonAsync<JsonElement>($"/api/meetings/{b.Id}/messages", cancellationToken: TestContext.Current.CancellationToken);
         Assert.Single(history.GetProperty("items").EnumerateArray(), m => m.GetProperty("content").GetString() == "乙回复");
         await Send(a.Id, a.Member, "甲");
         await using var resumed = await Host();

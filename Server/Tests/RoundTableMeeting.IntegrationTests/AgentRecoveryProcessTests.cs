@@ -60,7 +60,7 @@ public sealed partial class McpAgentContractTests
         if (permanent)
         {
             var blocked = SdkPayload(await newSdk.CallToolAsync("wait_for_mention", new Dictionary<string, object?>
-                { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 1 }));
+                { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 1 }, cancellationToken: TestContext.Current.CancellationToken));
             Assert.False(blocked.GetProperty("succeeded").GetBoolean());
             Assert.Equal("retry_exhausted", blocked.GetProperty("errorCode").GetString());
             Assert.Equal(decision, await ReadDecision());
@@ -113,8 +113,8 @@ public sealed partial class McpAgentContractTests
         // Verify the durable cut before killing the real process; no graceful DELETE runs.
         await using (var before = host.Database())
         {
-            Assert.Equal(AgentConnectionState.Connected, (await before.AgentConnectionSessions.SingleAsync()).State);
-            if (cut != "initial") Assert.Equal(cut, (await before.AgentReplyTasks.SingleAsync()).State.ToString().ToLowerInvariant());
+            Assert.Equal(AgentConnectionState.Connected, (await before.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+            if (cut != "initial") Assert.Equal(cut, (await before.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State.ToString().ToLowerInvariant());
         }
         await host.CrashAsync();
         await host.StartAsync();
@@ -125,29 +125,29 @@ public sealed partial class McpAgentContractTests
             staleRequest.Headers.TryAddWithoutValidation("Accept", "application/json, text/event-stream");
             staleRequest.Content = System.Net.Http.Json.JsonContent.Create(new { jsonrpc = "2.0", id = 1001,
                 method = "tools/call", @params = new { name = "get_agent_status", arguments = new { connectionSessionId = id } } });
-            using var staleResponse = await oldHttp.SendAsync(staleRequest);
+            using var staleResponse = await oldHttp.SendAsync(staleRequest, TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.NotFound, staleResponse.StatusCode);
         }
         await using (var after = host.Database())
         {
-            var connection = await after.AgentConnectionSessions.SingleAsync();
+            var connection = await after.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(id, connection.ID);
             Assert.Equal(AgentConnectionState.Disconnected, connection.State);
             Assert.Equal("server_restart", connection.DisconnectReason);
-            var initial = await after.AgentInitialContextDeliveries.SingleAsync();
+            var initial = await after.AgentInitialContextDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(initialId, initial.ID);
             if (cut is "delivered" or "processing")
             {
-                var task = await after.AgentReplyTasks.SingleAsync();
+                var task = await after.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
                 Assert.Equal(taskId, task.ID);
                 Assert.Equal(AgentReplyTaskState.Failed, task.State);
                 Assert.Equal("server_restart", task.FailureCode);
                 Assert.Equal(0, task.AutomaticRetryCount);
                 Assert.False(task.RetryExhausted);
                 Assert.Equal(attemptId, task.CurrentAttemptId);
-                Assert.NotNull((await after.AgentTaskDeliveryAttempts.SingleAsync()).InvalidatedAtUtc);
+                Assert.NotNull((await after.AgentTaskDeliveryAttempts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).InvalidatedAtUtc);
             }
-            if (cut == "replied") Assert.Equal(AgentReplyTaskState.Replied, (await after.AgentReplyTasks.SingleAsync()).State);
+            if (cut == "replied") Assert.Equal(AgentReplyTaskState.Replied, (await after.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         }
         using var newHttp = host.Client();
         await using var newSdk = await CreateSdkAsync(newHttp);
@@ -175,10 +175,10 @@ public sealed partial class McpAgentContractTests
             do
             {
                 var response = SdkPayload(await newSdk.CallToolAsync("wait_for_mention", new Dictionary<string, object?>
-                    { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 5 }));
+                    { ["connectionSessionId"] = id, ["waitTimeoutSeconds"] = 5 }, cancellationToken: TestContext.Current.CancellationToken));
                 if (response.GetProperty("succeeded").GetBoolean()) { next = response.GetProperty("data"); break; }
                 Assert.Equal("retry_pending", response.GetProperty("errorCode").GetString());
-                await Task.Delay(50);
+                await Task.Delay(50, TestContext.Current.CancellationToken);
             } while (DateTimeOffset.UtcNow < deadline);
             Assert.Equal("mention", next.GetProperty("kind").GetString());
             Assert.Equal(taskId, next.GetProperty("taskId").GetGuid());
@@ -187,16 +187,16 @@ public sealed partial class McpAgentContractTests
             Assert.NotEqual(attemptId, nextAttempt);
             var stale = SdkPayload(await newSdk.CallToolAsync("reply_to_mention", new Dictionary<string, object?>
                 { ["connectionSessionId"] = id, ["taskId"] = taskId, ["deliveryAttemptId"] = attemptId,
-                    ["replyIdempotencyKey"] = replyKey, ["content"] = "Process recovery reply" }));
+                    ["replyIdempotencyKey"] = replyKey, ["content"] = "Process recovery reply" }, cancellationToken: TestContext.Current.CancellationToken));
             Assert.False(stale.GetProperty("succeeded").GetBoolean());
             await ProcessCallAsync(newSdk, "confirm_context", new { connectionSessionId = id, kind = "task", taskId, deliveryAttemptId = nextAttempt });
             await ProcessCallAsync(newSdk, "reply_to_mention", new { connectionSessionId = id, taskId, deliveryAttemptId = nextAttempt,
                 replyIdempotencyKey = replyKey, content = "Process recovery reply" });
         }
         await using var final = host.Database();
-        Assert.Equal(cut == "initial" ? 1 : 3, await final.MeetingMessages.CountAsync());
-        Assert.Equal(1, await final.AgentConnectionSessions.CountAsync());
-        Assert.Equal(1, (await final.AgentContextCursors.SingleAsync()).ConnectionGeneration);
+        Assert.Equal(cut == "initial" ? 1 : 3, await final.MeetingMessages.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, await final.AgentConnectionSessions.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(1, (await final.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ConnectionGeneration);
     }
 
     private static async Task<JsonElement> ProcessCallAsync(McpClient sdk, string name, object args)

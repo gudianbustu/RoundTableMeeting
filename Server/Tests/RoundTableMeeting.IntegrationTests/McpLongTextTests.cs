@@ -27,10 +27,10 @@ public sealed class McpLongTextTests
         site.UseKestrel(0);
         using var human = site.CreateClient();
         human.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
-        (await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" })).EnsureSuccessStatusCode();
-        var response = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Long text" });
+        (await human.PostAsJsonAsync("/api/auth/login", new { username = "alice", password = "test-password-alice" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+        var response = await human.PostAsJsonAsync("/api/meetings", new { creationRequestId = Guid.NewGuid(), name = "Long text" }, cancellationToken: TestContext.Current.CancellationToken);
         response.EnsureSuccessStatusCode();
-        var meeting = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var meeting = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
         var code = meeting.GetProperty("invitation").GetProperty("meetingCode").GetString();
         using var originHost = new TestApplicationFactory();
         using var origin = originHost.WithWebHostBuilder(b => b.ConfigureAppConfiguration((_, config) =>
@@ -40,7 +40,7 @@ public sealed class McpLongTextTests
         {
             Endpoint = new Uri(http.BaseAddress!, "mcp"), TransportMode = HttpTransportMode.StreamableHttp,
             AdditionalHeaders = new Dictionary<string, string> { ["X-RoundTable-Mode"] = "rooms" }
-        }, http));
+        }, http), cancellationToken: TestContext.Current.CancellationToken);
         async Task<string> Call(string tool, Dictionary<string, object?> args)
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(18));
@@ -87,13 +87,13 @@ public sealed class McpLongTextTests
         Assert.Equal(full, await Read(b, publicId));
         foreach (var (offset, limit) in new[] { (1, 4), (999, 4), (0, 3), (0, 65537) })
             Assert.True((await mcp.CallToolAsync("read_message_text", new Dictionary<string, object?> {
-                ["room"] = b, ["messageId"] = publicId, ["offsetBytes"] = offset, ["limitBytes"] = limit })).IsError);
+                ["room"] = b, ["messageId"] = publicId, ["offsetBytes"] = offset, ["limitBytes"] = limit }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         var publicItem = Assert.Single(await History(b), m => m.GetProperty("messageId").GetGuid() == publicId);
         Assert.NotEqual(full, publicItem.GetProperty("content").GetString());
         Assert.Equal(publicItem.GetProperty("originalTextAttachmentId").GetGuid(),
             Assert.Single(publicItem.GetProperty("attachments").EnumerateArray()).GetProperty("attachmentId").GetGuid());
         post["content"] = full + "changed";
-        Assert.True((await mcp.CallToolAsync("send_public_message", post)).IsError);
+        Assert.True((await mcp.CallToolAsync("send_public_message", post, cancellationToken: TestContext.Current.CancellationToken)).IsError);
 
         var draft = Guid.NewGuid();
         var submit = new Dictionary<string, object?> { ["room"] = a, ["draftId"] = draft, ["destination"] = "private", ["recipientDisplayName"] = "Reader" };
@@ -101,12 +101,12 @@ public sealed class McpLongTextTests
             ["totalBytes"] = Encoding.UTF8.GetByteCount(full), ["content"] = full[prefix.Length..] };
         await Call("stage_text_part", part);
         var differentManifest = new Dictionary<string, object?>(part) { ["partCount"] = 3 };
-        Assert.True((await mcp.CallToolAsync("stage_text_part", differentManifest)).IsError);
-        Assert.True((await mcp.CallToolAsync("submit_staged_text", submit)).IsError);
+        Assert.True((await mcp.CallToolAsync("stage_text_part", differentManifest, cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        Assert.True((await mcp.CallToolAsync("submit_staged_text", submit, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         Assert.DoesNotContain(await History(b), m => m.GetProperty("visibility").GetString() == "private");
         await Call("stage_text_part", part);
         part["content"] = "different part";
-        Assert.True((await mcp.CallToolAsync("stage_text_part", part)).IsError);
+        Assert.True((await mcp.CallToolAsync("stage_text_part", part, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         part["content"] = prefix;
         part["index"] = 0;
         await Call("stage_text_part", part);
@@ -115,14 +115,14 @@ public sealed class McpLongTextTests
         await using (var scope = site.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            await db.Set<MeetingAttachment>().Where(f => f.State == "staged").ExecuteDeleteAsync();
+            await db.Set<MeetingAttachment>().Where(f => f.State == "staged").ExecuteDeleteAsync(cancellationToken: TestContext.Current.CancellationToken);
         }
         Assert.Equal(published, Guid.Parse((await Call("submit_staged_text", submit)).Trim('"')));
         var wrongDestination = new Dictionary<string, object?>(submit) { ["recipientDisplayName"] = "Other" };
-        Assert.True((await mcp.CallToolAsync("submit_staged_text", wrongDestination)).IsError);
+        Assert.True((await mcp.CallToolAsync("submit_staged_text", wrongDestination, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         Assert.Equal(full, await Read(b, published));
         Assert.Single(await History(b), m => m.GetProperty("messageId").GetGuid() == published);
-        Assert.True((await mcp.CallToolAsync("read_message_text", new Dictionary<string, object?> { ["room"] = outsider, ["messageId"] = published })).IsError);
+        Assert.True((await mcp.CallToolAsync("read_message_text", new Dictionary<string, object?> { ["room"] = outsider, ["messageId"] = published }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         var inbox = JsonDocument.Parse(await Call("next", new() { ["rooms"] = new[] { b } })).RootElement.GetProperty("message");
         Assert.Equal(published, inbox.GetProperty("messageId").GetGuid());
         var answer = new Dictionary<string, object?> { ["room"] = b, ["messageId"] = published, ["content"] = full + "reply" };
@@ -149,7 +149,7 @@ public sealed class McpLongTextTests
         foreach (var usedDraft in new[] { draft, publicDraft })
         {
             var reused = new Dictionary<string, object?>(stagedReply) { ["draftId"] = usedDraft };
-            Assert.True((await mcp.CallToolAsync("submit_staged_text", reused)).IsError);
+            Assert.True((await mcp.CallToolAsync("submit_staged_text", reused, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         }
         var countBeforeReply = (await History(a)).Length;
         var replyReceipt = Guid.Parse((await Call("submit_staged_text", stagedReply)).Trim('"'));
@@ -158,10 +158,10 @@ public sealed class McpLongTextTests
         {
             var moved = new Dictionary<string, object?> { ["room"] = a, ["draftId"] = replyDraft, ["destination"] = destination };
             if (destination == "private") moved["recipientDisplayName"] = "Reader";
-            Assert.True((await mcp.CallToolAsync("submit_staged_text", moved)).IsError);
+            Assert.True((await mcp.CallToolAsync("submit_staged_text", moved, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         }
         var otherDelivery = new Dictionary<string, object?>(stagedReply) { ["messageId"] = published, ["replyToMessageId"] = firstReplyId };
-        Assert.True((await mcp.CallToolAsync("submit_staged_text", otherDelivery)).IsError);
+        Assert.True((await mcp.CallToolAsync("submit_staged_text", otherDelivery, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         Assert.Equal(countBeforeReply + 1, (await History(a)).Length);
         var secondReply = Assert.Single(await History(b), m => m.GetProperty("replyToMessageId").ValueKind != JsonValueKind.Null
             && m.GetProperty("replyToMessageId").GetGuid() == firstReplyId);
@@ -203,19 +203,19 @@ public sealed class McpLongTextTests
         Assert.Equal(stableReceipt, await Call("send_private_message", stableAddress));
         stableAddress.Remove("recipientParticipantId");
         stableAddress["recipientDisplayName"] = "Reader renamed";
-        Assert.True((await mcp.CallToolAsync("send_private_message", stableAddress)).IsError);
+        Assert.True((await mcp.CallToolAsync("send_private_message", stableAddress, cancellationToken: TestContext.Current.CancellationToken)).IsError);
 
         var recoveryRoom = await Attend("Recovery");
         var meetingId = meeting.GetProperty("meeting").GetProperty("meetingId").GetGuid();
         var modeUrl = $"/api/meetings/{meetingId}/discussion-mode";
-        (await human.PutAsJsonAsync(modeUrl, new { mode = "free" })).EnsureSuccessStatusCode();
-        (await human.PostAsJsonAsync($"/api/meetings/{meetingId}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "Recovery topic" })).EnsureSuccessStatusCode();
+        (await human.PutAsJsonAsync(modeUrl, new { mode = "free" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
+        (await human.PostAsJsonAsync($"/api/meetings/{meetingId}/messages", new { clientSubmissionId = Guid.NewGuid(), content = "Recovery topic" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         var nextArgs = new Dictionary<string, object?> { ["rooms"] = new[] { recoveryRoom } };
         var turn = JsonDocument.Parse(await Call("next", nextArgs)).RootElement.GetProperty("message");
         Assert.True(turn.GetProperty("optionalAgentResponse").GetBoolean());
         var checkpointKey = System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes($"{code}/RECOVERY"));
         var checkpoint = Path.Combine(Path.GetDirectoryName(source.DatabasePath)!, "mcp-inbox", Convert.ToHexString(checkpointKey) + ".json");
-        var pendingState = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(checkpoint))!;
+        var pendingState = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(checkpoint, TestContext.Current.CancellationToken))!;
         var recoveryDraft = Guid.NewGuid();
         await Call("stage_text_part", new() { ["room"] = recoveryRoom, ["draftId"] = recoveryDraft,
             ["partCount"] = 1, ["index"] = 0, ["totalBytes"] = 2, ["content"] = "ok" });
@@ -223,24 +223,24 @@ public sealed class McpLongTextTests
             ["destination"] = "reply", ["messageId"] = turn.GetProperty("messageId").GetGuid() };
         var savedReply = await Call("submit_staged_text", recoveryReply);
         // Restore the durable state at the crash boundary: database append committed, cursor acknowledgement not yet saved.
-        var handledState = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(checkpoint))!;
+        var handledState = System.Text.Json.Nodes.JsonNode.Parse(await File.ReadAllTextAsync(checkpoint, TestContext.Current.CancellationToken))!;
         pendingState["Decision"] = handledState["LastDecision"]!.GetValue<string>();
-        await File.WriteAllTextAsync(checkpoint, pendingState.ToJsonString());
-        (await human.PutAsJsonAsync(modeUrl, new { mode = "directed" })).EnsureSuccessStatusCode();
+        await File.WriteAllTextAsync(checkpoint, pendingState.ToJsonString(), TestContext.Current.CancellationToken);
+        (await human.PutAsJsonAsync(modeUrl, new { mode = "directed" }, cancellationToken: TestContext.Current.CancellationToken)).EnsureSuccessStatusCode();
         var wake = await Call("send_private_message", new() { ["room"] = a, ["clientSubmissionId"] = Guid.NewGuid(),
             ["recipientDisplayName"] = "Recovery", ["content"] = "Wake after interruption" });
         var nextPending = await Call("next", nextArgs);
         Assert.Equal(JsonDocument.Parse(wake).RootElement.GetGuid(), JsonDocument.Parse(nextPending).RootElement.GetProperty("message").GetProperty("messageId").GetGuid());
         Assert.Equal(savedReply, await Call("submit_staged_text", recoveryReply));
         Assert.Equal("discussion_ended", await Call("submit_staged_text", new(recoveryReply) { ["draftId"] = Guid.NewGuid() }));
-        Assert.True((await mcp.CallToolAsync("submit_staged_text", new Dictionary<string, object?>(recoveryReply) { ["attachmentIds"] = new[] { Guid.NewGuid() } })).IsError);
+        Assert.True((await mcp.CallToolAsync("submit_staged_text", new Dictionary<string, object?>(recoveryReply) { ["attachmentIds"] = new[] { Guid.NewGuid() } }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
         Assert.Equal(nextPending, await Call("next", nextArgs));
 
         await using var replacementScope = site.Services.CreateAsyncScope();
         var sessions = replacementScope.ServiceProvider.GetRequiredService<CurrentMcpSessionService>();
         await sessions.JoinAsync(McpTransportSessionKey.FromDigest(Guid.NewGuid().ToByteArray()), code!, "Writer", "takeover", "test", CancellationToken.None);
-        Assert.True((await mcp.CallToolAsync("stage_text_part", part)).IsError);
-        Assert.True((await mcp.CallToolAsync("submit_staged_text", submit)).IsError);
-        Assert.True((await mcp.CallToolAsync("read_message_text", new Dictionary<string, object?> { ["room"] = a, ["messageId"] = publicId })).IsError);
+        Assert.True((await mcp.CallToolAsync("stage_text_part", part, cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        Assert.True((await mcp.CallToolAsync("submit_staged_text", submit, cancellationToken: TestContext.Current.CancellationToken)).IsError);
+        Assert.True((await mcp.CallToolAsync("read_message_text", new Dictionary<string, object?> { ["room"] = a, ["messageId"] = publicId }, cancellationToken: TestContext.Current.CancellationToken)).IsError);
     }
 }

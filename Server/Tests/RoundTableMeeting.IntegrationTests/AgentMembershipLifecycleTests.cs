@@ -27,9 +27,9 @@ public sealed partial class McpAgentContractTests
         var leaveOperation = Guid.NewGuid();
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var result = await scope.ServiceProvider.GetRequiredService<IMeetingMembershipService>().LeaveAsync(meeting.MeetingId, takeover.Agent.ParticipantId, leaveOperation);
+            var result = await scope.ServiceProvider.GetRequiredService<IMeetingMembershipService>().LeaveAsync(meeting.MeetingId, takeover.Agent.ParticipantId, leaveOperation, TestContext.Current.CancellationToken);
             Assert.Equal(MeetingOperationStatus.Success, result.Status);
-            Assert.Equal("active", (await scope.ServiceProvider.GetRequiredService<IMeetingLifecycleService>().GetStatusAsync(new(meeting.MeetingId, first.LifecycleProof!)))!.Status);
+            Assert.Equal("active", (await scope.ServiceProvider.GetRequiredService<IMeetingLifecycleService>().GetStatusAsync(new(meeting.MeetingId, first.LifecycleProof!), TestContext.Current.CancellationToken))!.Status);
         }
         Assert.Empty(factory.Services.GetRequiredService<IAgentConnectionRegistry>().ListRegistrations(meeting.MeetingId));
         var thirdTransport = McpTransportSessionKey.FromDigest(Enumerable.Repeat((byte)133, 32).ToArray());
@@ -45,13 +45,13 @@ public sealed partial class McpAgentContractTests
         Assert.Equal(first.Agent.ParticipantId, rejoined.Agent.ParticipantId);
         Assert.True(rejoined.Connection.ConnectionGeneration > takeover.Connection.ConnectionGeneration);
         await using var final = factory.Services.CreateAsyncScope();
-        await final.ServiceProvider.GetRequiredService<IMeetingMembershipService>().LeaveAsync(meeting.MeetingId, rejoined.Agent.ParticipantId, leaveOperation);
+        await final.ServiceProvider.GetRequiredService<IMeetingMembershipService>().LeaveAsync(meeting.MeetingId, rejoined.Agent.ParticipantId, leaveOperation, TestContext.Current.CancellationToken);
         var db = final.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(MeetingMembershipState.Joined, (await db.MeetingParticipants.SingleAsync(p => p.ID == first.Agent.ParticipantId)).MembershipState);
+        Assert.Equal(MeetingMembershipState.Joined, (await db.MeetingParticipants.SingleAsync(p => p.ID == first.Agent.ParticipantId, cancellationToken: TestContext.Current.CancellationToken)).MembershipState);
         Assert.True(factory.Services.GetRequiredService<IAgentConnectionRegistry>().ContainsTransport(thirdTransport));
         await DeleteLifecycleMeetingAsync(browser, meeting.MeetingId, "Agent membership");
         await AssertAgentMeetingGoneAsync(factory, meeting.MeetingId);
         Assert.Equal("deleted", (await final.ServiceProvider.GetRequiredService<IMeetingLifecycleService>()
-            .GetStatusAsync(new(meeting.MeetingId, first.LifecycleProof!)))!.Status);
+            .GetStatusAsync(new(meeting.MeetingId, first.LifecycleProof!), TestContext.Current.CancellationToken))!.Status);
     }
 }

@@ -26,7 +26,7 @@ public sealed partial class AgentMentionTaskConsumerTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var parents = await db.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId).OrderBy(task => task.TriggerSequence).ToArrayAsync();
+            var parents = await db.AgentReplyTasks.Where(task => task.MeetingId == seed.MeetingId).OrderBy(task => task.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(new[] { first.MessageId, second.MessageId }, parents.Select(task => task.ChainId));
             Assert.Equal(new long[] { 0, 1 }, parents.Select(task => task.CandidateFromSequenceExclusive));
             Assert.All(parents, task => Assert.Null(task.ParentTaskId));
@@ -38,20 +38,20 @@ public sealed partial class AgentMentionTaskConsumerTests
                 parent.MarkReplied(i == 0 ? firstReply.MessageId : secondReply.MessageId, parent.CreatedAtUtc);
                 db.Update(parent);
             }
-            await db.SaveChangesAsync();
+            await db.SaveChangesAsync(TestContext.Current.CancellationToken);
         }
         await ConsumeAsync(factory, secondReply.Envelope);
         await ConsumeAsync(factory, firstReply.Envelope);
         await ConsumeAsync(factory, first.Envelope);
         await using var check = factory.Services.CreateAsyncScope();
         var final = check.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var children = await final.AgentReplyTasks.Where(task => task.AgentParticipantId == seed.FirstAgentId).OrderBy(task => task.TriggerSequence).ToArrayAsync();
+        var children = await final.AgentReplyTasks.Where(task => task.AgentParticipantId == seed.FirstAgentId).OrderBy(task => task.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(new[] { firstReply.MessageId, secondReply.MessageId }, children.Select(task => task.TriggerMessageId));
         Assert.Equal(new[] { first.MessageId, second.MessageId }, children.Select(task => task.ChainId));
         Assert.Equal(parentIds.Select(id => (Guid?)id), children.Select(task => task.ParentTaskId));
         Assert.Equal(new long[] { 0, 3 }, children.Select(task => task.CandidateFromSequenceExclusive));
-        Assert.Equal(4, await final.AgentReplyTasks.CountAsync());
-        Assert.Equal(4, await final.AgentReplyTasks.Select(task => task.ReplyIdempotencyKey).Distinct().CountAsync());
+        Assert.Equal(4, await final.AgentReplyTasks.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
+        Assert.Equal(4, await final.AgentReplyTasks.Select(task => task.ReplyIdempotencyKey).Distinct().CountAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Fact]
@@ -71,20 +71,20 @@ public sealed partial class AgentMentionTaskConsumerTests
             await ConsumeAsync(factory, message.Envelope);
             await AssertCursorAsync(factory, seed.MeetingId, seed.FirstAgentId, 0);
             await using var empty = factory.Services.CreateAsyncScope();
-            Assert.False(await empty.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.AnyAsync());
+            Assert.False(await empty.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentReplyTasks.AnyAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         var trigger = await AddMessageAsync(factory, seed, 5, MessageAuthorKind.Human, "@Analyst next",
             new MentionInput(seed.FirstAgentId, "Analyst", 0, 8));
         await ConsumeAsync(factory, trigger.Envelope);
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        var task = await db.AgentReplyTasks.SingleAsync();
+        var task = await db.AgentReplyTasks.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(0, task.CandidateFromSequenceExclusive);
         Assert.Equal(5, task.CandidateToSequenceInclusive);
         Assert.Equal(trigger.MessageId, task.ChainId);
-        Assert.True(await db.MessageMentions.AnyAsync(item => item.MessageId == humanTarget.MessageId && item.TargetParticipantId == seed.HumanId));
+        Assert.True(await db.MessageMentions.AnyAsync(item => item.MessageId == humanTarget.MessageId && item.TargetParticipantId == seed.HumanId, cancellationToken: TestContext.Current.CancellationToken));
         var history = await db.MeetingMessages.Where(item => item.MeetingId == seed.MeetingId
-            && item.Sequence > task.CandidateFromSequenceExclusive && item.Sequence <= task.CandidateToSequenceInclusive).OrderBy(item => item.Sequence).ToArrayAsync();
+            && item.Sequence > task.CandidateFromSequenceExclusive && item.Sequence <= task.CandidateToSequenceInclusive).OrderBy(item => item.Sequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(new[] { system.MessageId, humanTarget.MessageId, ordinaryAgent.MessageId, ordinaryHuman.MessageId, trigger.MessageId }, history.Select(item => item.ID));
     }
 

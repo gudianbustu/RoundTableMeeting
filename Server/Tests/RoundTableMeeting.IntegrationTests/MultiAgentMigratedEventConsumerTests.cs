@@ -45,13 +45,13 @@ public sealed class MultiAgentMigratedEventConsumerTests
         await using (var old = new RoundTableMeetingDbContext(new DbContextOptionsBuilder<RoundTableMeetingDbContext>()
             .UseSqlite($"Data Source={original.DatabasePath};Foreign Keys=True;Pooling=False").Options))
         {
-            await old.Database.MigrateAsync("20260911063339_AddUserAccountAdmin");
+            await old.Database.MigrateAsync("20260911063339_AddUserAccountAdmin", cancellationToken: TestContext.Current.CancellationToken);
             old.Add(user);
-            await old.SaveChangesAsync();
+            await old.SaveChangesAsync(TestContext.Current.CancellationToken);
             await old.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO Meetings (ID, Name, Description, CreatorUserId, MeetingCode, LifecycleState, CreatedAtUtc)
                 VALUES ({meeting.ID}, {meeting.Name}, {meeting.Description}, {user.ID}, {meeting.MeetingCode}, 'Active', {now})
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
             foreach (var participant in new[] { human, alpha, beta }) await LegacyMeetingParticipantSeed.InsertAsync(old, participant);
             foreach (var message in new[] { root, pending, reply }) await LegacyMessageSeed.InsertAsync(old, message);
             foreach (var mention in new[] { rootMention, MessageMention.Create(meeting.ID, pending.ID, beta.ID, "Beta", 0, 5),
@@ -60,17 +60,17 @@ public sealed class MultiAgentMigratedEventConsumerTests
                 await old.Database.ExecuteSqlInterpolatedAsync($"""
                     INSERT INTO MessageMentions (ID, MeetingId, MessageId, TargetParticipantId, TargetDisplayName, StartOffset, Length)
                     VALUES ({mention.ID}, {mention.MeetingId}, {mention.MessageId}, {mention.TargetParticipantId}, {mention.TargetDisplayName}, {mention.StartOffset}, {mention.Length})
-                    """);
+                    """, cancellationToken: TestContext.Current.CancellationToken);
             }
             old.AddRange(oldEvent, delivery, AgentContextCursor.Create(meeting.ID, beta.ID, 0, now));
-            await old.SaveChangesAsync();
+            await old.SaveChangesAsync(TestContext.Current.CancellationToken);
             await old.Database.ExecuteSqlInterpolatedAsync($"""
                 INSERT INTO AgentReplyTasks (ID, MeetingId, AgentParticipantId, TriggerMessageId, TriggerSequence, TriggerMentionId,
                  SourceAuthorKind, SourceParticipantId, CandidateFromSequenceExclusive, CandidateToSequenceInclusive, ReplyIdempotencyKey,
                  State, CreatedAtUtc, AutomaticRetryCount, RetryCycle, RetryExhausted, ReplyMessageId, RepliedAtUtc)
                 VALUES ({Guid.NewGuid()}, {meeting.ID}, {alpha.ID}, {root.ID}, 1, {rootMention.ID}, 'Human', {human.ID}, 0, 1,
                  {Guid.NewGuid()}, 'Replied', {now}, 0, 0, 0, {reply.ID}, {now})
-                """);
+                """, cancellationToken: TestContext.Current.CancellationToken);
         }
         using var factory = original.WithWebHostBuilder(builder => builder.ConfigureTestServices(services =>
         {
@@ -83,25 +83,25 @@ public sealed class MultiAgentMigratedEventConsumerTests
         using var client = factory.CreateClient();
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-        Assert.Equal(3, (await db.AgentCollaborationBoundaries.SingleAsync()).AgentTriggerStartSequence);
-        Assert.Equal(state, (await db.MessageEventDeliveries.SingleAsync()).State);
+        Assert.Equal(3, (await db.AgentCollaborationBoundaries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AgentTriggerStartSequence);
+        Assert.Equal(state, (await db.MessageEventDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
         var consumer = scope.ServiceProvider.GetRequiredService<AgentMentionTaskConsumer>();
         var oldEnvelope = new MessageAppendedEnvelope(oldEvent.ID, reply.ID, meeting.ID, 3, now);
-        await consumer.ConsumeAsync(oldEnvelope);
-        Assert.Equal(0, (await db.AgentContextCursors.SingleAsync()).AllocatedThroughSequence);
+        await consumer.ConsumeAsync(oldEnvelope, TestContext.Current.CancellationToken);
+        Assert.Equal(0, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AllocatedThroughSequence);
         var later = MeetingMessage.CreateParticipant(meeting.ID, 4, human.ID, MessageAuthorKind.Human, "Owner", "@Beta later", Guid.NewGuid(), now.AddSeconds(2));
         db.AddRange(later, MessageMention.Create(meeting.ID, later.ID, beta.ID, "Beta", 0, 5));
-        await db.SaveChangesAsync();
-        await consumer.ConsumeAsync(new(Guid.NewGuid(), later.ID, meeting.ID, 4, later.CreatedAtUtc));
-        await consumer.ConsumeAsync(oldEnvelope);
-        await consumer.ConsumeAsync(new(Guid.NewGuid(), pending.ID, meeting.ID, 2, pending.CreatedAtUtc));
-        var tasks = await db.AgentReplyTasks.Where(task => task.AgentParticipantId == beta.ID).OrderBy(task => task.TriggerSequence).ToArrayAsync();
+        await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+        await consumer.ConsumeAsync(new(Guid.NewGuid(), later.ID, meeting.ID, 4, later.CreatedAtUtc), TestContext.Current.CancellationToken);
+        await consumer.ConsumeAsync(oldEnvelope, TestContext.Current.CancellationToken);
+        await consumer.ConsumeAsync(new(Guid.NewGuid(), pending.ID, meeting.ID, 2, pending.CreatedAtUtc), TestContext.Current.CancellationToken);
+        var tasks = await db.AgentReplyTasks.Where(task => task.AgentParticipantId == beta.ID).OrderBy(task => task.TriggerSequence).ToArrayAsync(cancellationToken: TestContext.Current.CancellationToken);
         Assert.Equal(new long[] { 2, 4 }, tasks.Select(task => task.TriggerSequence));
         Assert.Equal(new long[] { 0, 2 }, tasks.Select(task => task.CandidateFromSequenceExclusive));
         Assert.Equal(new[] { pending.ID, later.ID }, tasks.Select(task => task.ChainId));
         Assert.All(tasks, task => Assert.Null(task.ParentTaskId));
-        Assert.Equal(4, (await db.AgentContextCursors.SingleAsync()).AllocatedThroughSequence);
-        Assert.Equal(state, (await db.MessageEventDeliveries.SingleAsync()).State);
-        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+        Assert.Equal(4, (await db.AgentContextCursors.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).AllocatedThroughSequence);
+        Assert.Equal(state, (await db.MessageEventDeliveries.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).State);
+        Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
     }
 }

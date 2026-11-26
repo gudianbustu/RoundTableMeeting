@@ -17,13 +17,13 @@ public sealed class MeetingMembershipMigrationTests
         {
             await using var db = new RoundTableMeetingDbContext(new DbContextOptionsBuilder<RoundTableMeetingDbContext>()
                 .UseSqlite($"Data Source={path};Foreign Keys=True;Pooling=False").Options);
-            await db.Database.MigrateAsync();
+            await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var proof = MeetingLifecycleProof.Create(Guid.NewGuid(), new string('A', 64));
-            db.Add(proof); await db.SaveChangesAsync();
-            var error = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync(Previous));
+            db.Add(proof); await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            var error = await Assert.ThrowsAsync<SqliteException>(() => db.Database.MigrateAsync(Previous, cancellationToken: TestContext.Current.CancellationToken));
             Assert.Contains("CK_PreserveLifecycleFacts", error.Message);
-            Assert.True(await db.Set<MeetingLifecycleProof>().AnyAsync(p => p.ID == proof.ID));
-            Assert.Contains("20261015131414_AddMeetingMembershipLifecycle", await db.Database.GetAppliedMigrationsAsync());
+            Assert.True(await db.Set<MeetingLifecycleProof>().AnyAsync(p => p.ID == proof.ID, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.Contains("20261015131414_AddMeetingMembershipLifecycle", await db.Database.GetAppliedMigrationsAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         finally { File.Delete(path); }
     }
@@ -38,31 +38,31 @@ public sealed class MeetingMembershipMigrationTests
         {
             await using var db = new RoundTableMeetingDbContext(new DbContextOptionsBuilder<RoundTableMeetingDbContext>()
                 .UseSqlite($"Data Source={path};Foreign Keys=True;Pooling=False").Options);
-            await db.Database.MigrateAsync(Previous);
+            await db.Database.MigrateAsync(Previous, cancellationToken: TestContext.Current.CancellationToken);
             var now = DateTimeOffset.UtcNow;
             var user = UserAccount.Create("migration", "Migration"); user.InitializePasswordHash("test-hash");
             var meeting = Meeting.Create("Keep current intent", "Existing background", user.ID, now);
             if (deleting) meeting.BeginDeleting();
-            db.AddRange(user, meeting, AgentCollaborationBoundary.Create(meeting.ID)); await db.SaveChangesAsync();
+            db.AddRange(user, meeting, AgentCollaborationBoundary.Create(meeting.ID)); await db.SaveChangesAsync(TestContext.Current.CancellationToken);
             var participant = MeetingParticipant.CreateHuman(meeting.ID, user.ID, "Migration", now);
             await LegacyMeetingParticipantSeed.InsertAsync(db, participant);
             var message = MeetingMessage.CreateParticipant(meeting.ID, 1, participant.ID, MessageAuthorKind.Human, participant.DisplayName, "Exact old history", Guid.NewGuid(), now);
             var receipt = MeetingCreationReceipt.Create(user.ID, Guid.NewGuid(), Guid.NewGuid(), now);
             receipt.MarkDeleted(now);
             await LegacyMessageSeed.InsertAsync(db, message);
-            db.Add(receipt); await db.SaveChangesAsync();
-            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MeetingCreationReceipts SET ExpiresAtUtc = {now.AddDays(-1)} WHERE ID = {receipt.ID}");
+            db.Add(receipt); await db.SaveChangesAsync(TestContext.Current.CancellationToken);
+            await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE MeetingCreationReceipts SET ExpiresAtUtc = {now.AddDays(-1)} WHERE ID = {receipt.ID}", cancellationToken: TestContext.Current.CancellationToken);
             db.ChangeTracker.Clear();
-            await db.Database.MigrateAsync();
-            var migrated = await db.MeetingParticipants.SingleAsync();
+            await db.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
+            var migrated = await db.MeetingParticipants.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(MeetingMembershipState.Joined, migrated.MembershipState);
             Assert.Equal(1, migrated.MembershipRevision);
             Assert.Null(migrated.LeftThroughSequence);
             Assert.Equal(participant.ID, migrated.ID);
-            Assert.Equal(deleting ? MeetingLifecycleState.Deleting : MeetingLifecycleState.Active, (await db.Meetings.SingleAsync()).LifecycleState);
-            Assert.Equal("Exact old history", (await db.MeetingMessages.SingleAsync()).Content);
-            Assert.Null((await db.MeetingCreationReceipts.SingleAsync()).ExpiresAtUtc);
-            Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync());
+            Assert.Equal(deleting ? MeetingLifecycleState.Deleting : MeetingLifecycleState.Active, (await db.Meetings.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).LifecycleState);
+            Assert.Equal("Exact old history", (await db.MeetingMessages.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).Content);
+            Assert.Null((await db.MeetingCreationReceipts.SingleAsync(cancellationToken: TestContext.Current.CancellationToken)).ExpiresAtUtc);
+            Assert.Equal(0, await db.Database.SqlQueryRaw<long>("SELECT count(*) AS Value FROM pragma_foreign_key_check").SingleAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         finally { File.Delete(path); }
     }

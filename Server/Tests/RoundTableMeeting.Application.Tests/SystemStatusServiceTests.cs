@@ -10,7 +10,7 @@ public sealed class SystemStatusServiceTests
     public async Task AvailableDatabaseProducesAvailableStatus()
     {
         var service = new SystemStatusService(new FakeChecker(true), new FakeEnvironment("Testing"));
-        var result = await service.GetStatusAsync();
+        var result = await service.GetStatusAsync(TestContext.Current.CancellationToken);
         Assert.Equal("available", result.Status);
         Assert.Equal("available", result.Database.Status);
         Assert.Equal("Testing", result.Environment);
@@ -20,7 +20,7 @@ public sealed class SystemStatusServiceTests
     public async Task UnavailableDatabaseProducesDegradedStatus()
     {
         var service = new SystemStatusService(new FakeChecker(false), new FakeEnvironment("Testing"));
-        var result = await service.GetStatusAsync();
+        var result = await service.GetStatusAsync(TestContext.Current.CancellationToken);
         Assert.Equal("degraded", result.Status);
         Assert.Equal("unavailable", result.Database.Status);
     }

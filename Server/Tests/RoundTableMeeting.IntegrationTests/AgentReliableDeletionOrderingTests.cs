@@ -33,22 +33,22 @@ public sealed partial class McpAgentContractTests
         Task? deletion = null;
         try
         {
-            await round.Held.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await round.Held.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             deletion = DeleteLifecycleMeetingAsync(browser, test.MeetingId, "Reliable ordered races");
-            await gate.Closing.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await gate.Closing.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             Assert.False(deletion.IsCompleted);
             Assert.False(admitted.IsCompleted);
-            Assert.Null(await gate.AcquireSharedAsync(test.MeetingId));
+            Assert.Null(await gate.AcquireSharedAsync(test.MeetingId, TestContext.Current.CancellationToken));
             await PostHumanMessageAsync(browser, other.MeetingId, "Human is not blocked by the pending deletion");
             Assert.True((await JoinReliableForTestAsync(test.Services,
                 ReliableJoinRequest(other.MeetingCode, "IndependentWorker", "create"), RecoveryTransport(253))
-                .WaitAsync(TimeSpan.FromSeconds(5))).Succeeded);
+                .WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken)).Succeeded);
         }
         finally { round.Release.TrySetResult(); }
-        var result = await admitted.WaitAsync(TimeSpan.FromSeconds(10));
+        var result = await admitted.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         if (operation == "join") Assert.Equal("agent_connection_already_active", result.ErrorCode);
         else Assert.True(result.Succeeded, result.ErrorCode);
-        await deletion!.WaitAsync(TimeSpan.FromSeconds(10));
+        await deletion!.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
         await AssertAgentMeetingGoneAsync(test.Factory, test.MeetingId);
         Assert.Empty(test.Services.GetRequiredService<IAgentConnectionRegistry>().ListRegistrations(test.MeetingId));
     }

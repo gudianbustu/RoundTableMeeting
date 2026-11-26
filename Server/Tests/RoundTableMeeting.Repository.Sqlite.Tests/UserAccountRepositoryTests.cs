@@ -18,15 +18,15 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var account = UserAccount.Create(" Alice ", "Alice");
             account.InitializePasswordHash("hash");
             context.UserAccounts.Add(account);
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
             var repository = new UserAccountRepository(context);
-            var byName = await repository.FindByNormalizedUsernameAsync("ALICE");
-            var byId = await repository.FindByIdAsync(account.ID);
+            var byName = await repository.FindByNormalizedUsernameAsync("ALICE", TestContext.Current.CancellationToken);
+            var byId = await repository.FindByIdAsync(account.ID, TestContext.Current.CancellationToken);
 
             Assert.Equal(account.ID, byName?.ID);
             Assert.Equal(account.ID, byId?.ID);
@@ -49,14 +49,14 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var first = UserAccount.Create("alice", "Alice");
             first.InitializePasswordHash("hash");
             var second = UserAccount.Create("ALICE", "Other");
             second.InitializePasswordHash("hash");
             context.UserAccounts.AddRange(first, second);
 
-            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -74,14 +74,14 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var first = UserAccount.Create("café", "Cafe");
             first.InitializePasswordHash("hash");
             var second = UserAccount.Create("café", "Other");
             second.InitializePasswordHash("hash");
             context.UserAccounts.AddRange(first, second);
 
-            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -99,22 +99,22 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             await using var connection = new SqliteConnection("Data Source=" + path);
-            await connection.OpenAsync();
+            await connection.OpenAsync(TestContext.Current.CancellationToken);
             await using var command = connection.CreateCommand();
             command.CommandText = "PRAGMA table_info(UserAccounts);";
             var columns = new List<string>();
-            await using (var reader = await command.ExecuteReaderAsync())
+            await using (var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken))
             {
-                while (await reader.ReadAsync()) columns.Add(reader.GetString(1));
+                while (await reader.ReadAsync(TestContext.Current.CancellationToken)) columns.Add(reader.GetString(1));
             }
             Assert.Equal(["ID", "Username", "NormalizedUsername", "Nickname", "PasswordHash", "IsAdmin"], columns);
             command.CommandText = "PRAGMA index_list(UserAccounts);";
             var indexText = new List<string>();
-            await using (var reader = await command.ExecuteReaderAsync())
+            await using (var reader = await command.ExecuteReaderAsync(TestContext.Current.CancellationToken))
             {
-                while (await reader.ReadAsync()) indexText.Add(reader.GetString(1));
+                while (await reader.ReadAsync(TestContext.Current.CancellationToken)) indexText.Add(reader.GetString(1));
             }
             Assert.Contains("IX_UserAccounts_NormalizedUsername", indexText);
         }
@@ -134,10 +134,10 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             context.UserAccounts.Add(new UserAccount());
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync());
+            await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync(TestContext.Current.CancellationToken));
         }
         finally
         {
@@ -155,7 +155,7 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var property = context.Model.FindEntityType(typeof(UserAccount))!.FindProperty(nameof(UserAccount.Nickname))!;
 
             Assert.Equal(64, property.GetMaxLength());
@@ -176,14 +176,14 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var repository = new UserAccountRepository(context);
             var unitOfWork = new UnitOfWorkImpl(context);
             var account = UserAccount.Create("scoped", "Scoped");
             account.InitializePasswordHash("hash");
             unitOfWork.RegisterAdd(account);
-            Assert.Equal(1, await unitOfWork.CommitAsync());
-            Assert.Equal(account.ID, (await repository.FindByNormalizedUsernameAsync("SCOPED"))?.ID);
+            Assert.Equal(1, await unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
+            Assert.Equal(account.ID, (await repository.FindByNormalizedUsernameAsync("SCOPED", TestContext.Current.CancellationToken))?.ID);
         }
         finally
         {
@@ -201,16 +201,16 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             foreach (var username in new[] { "charlie", "alice", "bob" })
             {
                 var account = UserAccount.Create(username, username);
                 account.InitializePasswordHash("hash");
                 context.UserAccounts.Add(account);
             }
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
 
-            var result = await new UserAccountRepository(context).ListAllAsync();
+            var result = await new UserAccountRepository(context).ListAllAsync(TestContext.Current.CancellationToken);
 
             Assert.Equal(["alice", "bob", "charlie"], result.Select(account => account.Username));
             Assert.All(result, account => Assert.Equal(EntityState.Detached, context.Entry(account).State));
@@ -231,17 +231,17 @@ public sealed class UserAccountRepositoryTests
         {
             Directory.CreateDirectory(root);
             await using var context = CreateContext(path);
-            await context.Database.MigrateAsync();
+            await context.Database.MigrateAsync(cancellationToken: TestContext.Current.CancellationToken);
             var first = UserAccount.Create("alice", "Alice");
             first.InitializePasswordHash("hash");
             context.UserAccounts.Add(first);
-            await context.SaveChangesAsync();
+            await context.SaveChangesAsync(TestContext.Current.CancellationToken);
             var duplicate = UserAccount.Create("ALICE", "Other");
             duplicate.InitializePasswordHash("hash");
             var unitOfWork = new UnitOfWorkImpl(context);
             unitOfWork.RegisterAdd(duplicate);
 
-            await Assert.ThrowsAsync<RoundTableMeeting.Domain.Exceptions.UsernameConflictException>(() => unitOfWork.CommitAsync());
+            await Assert.ThrowsAsync<RoundTableMeeting.Domain.Exceptions.UsernameConflictException>(() => unitOfWork.CommitAsync(TestContext.Current.CancellationToken));
         }
         finally
         {

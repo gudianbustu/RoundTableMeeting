@@ -61,7 +61,7 @@ public sealed partial class McpAgentContractTests
         AgentConnectionRegistration pending;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
-            var c = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync();
+            var c = await scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>().AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(AgentConnectionState.Activating, c.State);
             pending = new(c.MeetingId, c.ParticipantId, c.ID, c.McpTransportBinding)
             { ConnectionGeneration = c.ConnectionGeneration, BindingVersion = c.BindingVersion, ReliabilityMode = c.ReliabilityMode };
@@ -75,8 +75,8 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var service = scope.ServiceProvider.GetRequiredService<AgentCollaborationService>();
-            Assert.True(await service.ReconcileConnectionAsync(pending));
-            Assert.False(await service.ReconcileConnectionAsync(pending));
+            Assert.True(await service.ReconcileConnectionAsync(pending, cancellationToken: TestContext.Current.CancellationToken));
+            Assert.False(await service.ReconcileConnectionAsync(pending, cancellationToken: TestContext.Current.CancellationToken));
         }
         var receipt = await ActivationCallAsync(failing, tool, operation);
         if (resumeReceipt) Assert.Equal("operation_superseded", receipt.GetProperty("errorCode").GetString());
@@ -88,11 +88,11 @@ public sealed partial class McpAgentContractTests
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-            var c = await db.AgentConnectionSessions.SingleAsync();
+            var c = await db.AgentConnectionSessions.SingleAsync(cancellationToken: TestContext.Current.CancellationToken);
             Assert.Equal(pending.ConnectionSessionId, c.ID);
             Assert.Equal(pending.BindingVersion + 1, c.BindingVersion);
             Assert.Equal(AgentConnectionState.Connected, c.State);
-            Assert.Equal(resumeReceipt ? 3 : 2, await db.AgentRecoveryOperations.CountAsync());
+            Assert.Equal(resumeReceipt ? 3 : 2, await db.AgentRecoveryOperations.CountAsync(cancellationToken: TestContext.Current.CancellationToken));
         }
         await PostHumanMessageAsync(browser, meeting.MeetingId, "@Worker pending recovery question");
         await cli.WaitEvent("replied");

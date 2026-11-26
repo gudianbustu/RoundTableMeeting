@@ -95,7 +95,7 @@ public sealed partial class McpAgentContractTests
 			id = 2,
 			method = "tools/list",
 			@params = new { }
-		});
+		}, TestContext.Current.CancellationToken);
 		McpBody toolsBody = await ReadMcpBodyAsync(toolsResponse);
 		JsonElement[] tools = toolsBody.Json.GetProperty("result").GetProperty("tools").EnumerateArray()
 			.ToArray();
@@ -171,14 +171,14 @@ public sealed partial class McpAgentContractTests
 			id = 2,
 			method = "tools/list",
 			@params = new { }
-		});
+		}, TestContext.Current.CancellationToken);
 		using HttpResponseMessage secondTools = await SendRpcAsync(client, second.TransportSessionId, new
 		{
 			jsonrpc = "2.0",
 			id = 3,
 			method = "tools/list",
 			@params = new { }
-		});
+		}, TestContext.Current.CancellationToken);
 		Assert.Equal(HttpStatusCode.OK, firstTools.StatusCode);
 		Assert.Equal(HttpStatusCode.OK, secondTools.StatusCode);
 		Assert.Equal(ExpectedToolNames.Length, (await ReadMcpBodyAsync(firstTools)).Json.GetProperty("result").GetProperty("tools").GetArrayLength());
@@ -189,7 +189,7 @@ public sealed partial class McpAgentContractTests
 			id = 4,
 			method = "tools/list",
 			@params = new { }
-		});
+		}, TestContext.Current.CancellationToken);
 		HttpStatusCode statusCode = invalidSession.StatusCode;
 		bool condition = ((statusCode == HttpStatusCode.BadRequest || statusCode == HttpStatusCode.NotFound) ? true : false);
 		Assert.True(condition, $"session_isolation: unexpected invalid-session status {(int)invalidSession.StatusCode}.");
@@ -231,12 +231,12 @@ public sealed partial class McpAgentContractTests
 		Assert.DoesNotContain(session.TransportSessionId, join.Raw, StringComparison.Ordinal);
 		await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
 		RoundTableMeetingDbContext db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-		Assert.Equal(1, await db.MeetingParticipants.CountAsync((MeetingParticipant item) => item.MeetingId == meeting.MeetingId && (int)item.ParticipantType == 1));
-		Assert.Equal(1, await db.AgentConnectionSessions.CountAsync((AgentConnectionSession item) => item.MeetingId == meeting.MeetingId && item.ID == connectionSessionId && (int)item.State == 0));
-		AgentContextCursor cursor = await db.AgentContextCursors.SingleAsync((AgentContextCursor item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == ((JsonElement)data).GetProperty("agent").GetProperty("participantId").GetGuid());
+		Assert.Equal(1, await db.MeetingParticipants.CountAsync((MeetingParticipant item) => item.MeetingId == meeting.MeetingId && (int)item.ParticipantType == 1, cancellationToken: TestContext.Current.CancellationToken));
+		Assert.Equal(1, await db.AgentConnectionSessions.CountAsync((AgentConnectionSession item) => item.MeetingId == meeting.MeetingId && item.ID == connectionSessionId && (int)item.State == 0, cancellationToken: TestContext.Current.CancellationToken));
+		AgentContextCursor cursor = await db.AgentContextCursors.SingleAsync((AgentContextCursor item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == ((JsonElement)data).GetProperty("agent").GetProperty("participantId").GetGuid(), cancellationToken: TestContext.Current.CancellationToken);
 		Assert.Equal(0L, cursor.DeliveredThroughSequence);
 		Assert.Equal(1L, cursor.AllocatedThroughSequence);
-		Assert.NotEqual("", (await db.AgentConnectionSessions.SingleAsync((AgentConnectionSession item) => item.ID == connectionSessionId)).McpTransportBinding);
+		Assert.NotEqual("", (await db.AgentConnectionSessions.SingleAsync((AgentConnectionSession item) => item.ID == connectionSessionId, cancellationToken: TestContext.Current.CancellationToken)).McpTransportBinding);
 	}
 
 	[Fact]
@@ -265,8 +265,8 @@ public sealed partial class McpAgentContractTests
 			})
 		};
 		request.Headers.TryAddWithoutValidation("Origin", "http://localhost:5173");
-		using HttpResponseMessage response = await browser.SendAsync(request);
-		JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>();
+		using HttpResponseMessage response = await browser.SendAsync(request, TestContext.Current.CancellationToken);
+		JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 		Assert.Equal(HttpStatusCode.Created, response.StatusCode);
 		Guid messageId = body.GetProperty("message").GetProperty("messageId").GetGuid();
 		for (int attempt = 0; attempt < 100; attempt++)
@@ -276,8 +276,8 @@ public sealed partial class McpAgentContractTests
 			MessageEventDeliveryState? deliveryState = await (from delivery in db.MessageEventDeliveries.AsNoTracking()
 				join appendedEvent in db.MessageAppendedEvents.AsNoTracking() on delivery.EventId equals appendedEvent.ID
 				where appendedEvent.MessageId == messageId && delivery.ConsumerName == "agent-mention-task-v1"
-				select (MessageEventDeliveryState?)delivery.State).SingleOrDefaultAsync();
-			AgentReplyTask? task = await db.AgentReplyTasks.AsNoTracking().SingleOrDefaultAsync((AgentReplyTask item) => item.MeetingId == meeting.MeetingId && item.AgentParticipantId == agentParticipantId && item.TriggerMessageId == messageId);
+				select (MessageEventDeliveryState?)delivery.State).SingleOrDefaultAsync(cancellationToken: TestContext.Current.CancellationToken);
+			AgentReplyTask? task = await db.AgentReplyTasks.AsNoTracking().SingleOrDefaultAsync((AgentReplyTask item) => item.MeetingId == meeting.MeetingId && item.AgentParticipantId == agentParticipantId && item.TriggerMessageId == messageId, cancellationToken: TestContext.Current.CancellationToken);
 			if (deliveryState == MessageEventDeliveryState.Completed && task != null)
 			{
 				Assert.Equal(AgentReplyTaskState.Queued, task.State);
@@ -285,7 +285,7 @@ public sealed partial class McpAgentContractTests
 				return;
 			}
 			Assert.NotEqual(MessageEventDeliveryState.Suspended, deliveryState);
-			await Task.Delay(100);
+			await Task.Delay(100, TestContext.Current.CancellationToken);
 		}
 		Assert.Fail("The durable Agent mention delivery did not commit its task before completion.");
 	}
@@ -314,7 +314,7 @@ public sealed partial class McpAgentContractTests
 		{
 			connectionSessionId
 		}, useSessionEventStream: true);
-		await Task.Delay(250);
+		await Task.Delay(250, TestContext.Current.CancellationToken);
 
 		(Guid TriggerMessageId, Guid TriggerMentionId, Guid SourceParticipantId, Guid MentionedAgentParticipantId) humanMessage = await PostHumanMentionAsync(
 			factory,
@@ -378,9 +378,9 @@ public sealed partial class McpAgentContractTests
 		Assert.Equal(JsonValueKind.Null, statusData.GetProperty("queueHead").ValueKind);
 
 		await WaitForPersistedAgentReplyAsync(factory, meeting.MeetingId, humanMessage.TriggerMessageId, replyMessageId, humanMessage.MentionedAgentParticipantId);
-		using HttpResponseMessage historyResponse = await browser.GetAsync($"/api/meetings/{meeting.MeetingId}/messages?afterSequence=0&limit=20");
+		using HttpResponseMessage historyResponse = await browser.GetAsync($"/api/meetings/{meeting.MeetingId}/messages?afterSequence=0&limit=20", TestContext.Current.CancellationToken);
 		Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
-		JsonElement history = await historyResponse.Content.ReadFromJsonAsync<JsonElement>();
+		JsonElement history = await historyResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 		JsonElement[] items = history.GetProperty("items").EnumerateArray().ToArray();
 		JsonElement visibleReply = Assert.Single(items, item => item.GetProperty("messageId").GetGuid() == replyMessageId);
 		Assert.Equal("agent", visibleReply.GetProperty("author").GetProperty("kind").GetString());
@@ -421,10 +421,10 @@ public sealed partial class McpAgentContractTests
 		await using (AsyncServiceScope scope = factory.Services.CreateAsyncScope())
 		{
 			RoundTableMeetingDbContext db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-			await db.AgentConnectionSessions.Where((AgentConnectionSession item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == reviewerId).ExecuteUpdateAsync(delegate(UpdateSettersBuilder<AgentConnectionSession> setters)
+			await db.AgentConnectionSessions.Where((AgentConnectionSession item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == reviewerId).ExecuteUpdateAsync(delegate (UpdateSettersBuilder<AgentConnectionSession> setters)
 			{
 				setters.SetProperty((AgentConnectionSession item) => item.State, AgentConnectionState.Disconnected).SetProperty((AgentConnectionSession item) => item.DisconnectedAtUtc, DateTimeOffset.UtcNow).SetProperty((AgentConnectionSession item) => item.LastActivityAtUtc, DateTimeOffset.UtcNow);
-			});
+			}, cancellationToken: TestContext.Current.CancellationToken);
 		}
 		using HttpClient recoveryAgent = CreateAnonymousClient(factory);
 		AssertToolFailure((await CallToolAsync(recoveryAgent, (await InitializeAsync(recoveryAgent)).TransportSessionId, 5, "join_meeting", new
@@ -435,8 +435,8 @@ public sealed partial class McpAgentContractTests
 		})).Payload, "agent_recovery_not_supported");
 		await using AsyncServiceScope verifyScope = factory.Services.CreateAsyncScope();
 		RoundTableMeetingDbContext verifyDb = verifyScope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-		Assert.Equal(1, await verifyDb.MeetingParticipants.CountAsync((MeetingParticipant item) => item.MeetingId == meeting.MeetingId && (int)item.ParticipantType == 1 && item.DisplayName == "Reviewer"));
-		Assert.Equal(1, await verifyDb.AgentContextCursors.CountAsync((AgentContextCursor item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == reviewerId));
+		Assert.Equal(1, await verifyDb.MeetingParticipants.CountAsync((MeetingParticipant item) => item.MeetingId == meeting.MeetingId && (int)item.ParticipantType == 1 && item.DisplayName == "Reviewer", cancellationToken: TestContext.Current.CancellationToken));
+		Assert.Equal(1, await verifyDb.AgentContextCursors.CountAsync((AgentContextCursor item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == reviewerId, cancellationToken: TestContext.Current.CancellationToken));
 	}
 
 	[Fact]
@@ -491,12 +491,12 @@ public sealed partial class McpAgentContractTests
 			id = 3,
 			method = "tools/call",
 			@params = new { name = "wait_for_mention", arguments = new { connectionSessionId } }
-		});
-		await Task.Delay(250);
+		}, TestContext.Current.CancellationToken);
+		await Task.Delay(250, TestContext.Current.CancellationToken);
 		using HttpClient cancellationClient = CreateAnonymousClient(factory);
 		using HttpResponseMessage cancellation = await SendCancelledAsync(cancellationClient, session.TransportSessionId, 3);
 		Assert.True((int)cancellation.StatusCode is >= 200 and < 300, $"MCP cancellation returned HTTP {(int)cancellation.StatusCode}.");
-		using HttpResponseMessage accepted = await waitRequest.WaitAsync(TimeSpan.FromSeconds(5));
+		using HttpResponseMessage accepted = await waitRequest.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
 		Assert.True(accepted.StatusCode is HttpStatusCode.OK or HttpStatusCode.Accepted,
 			$"MCP wait request returned unexpected HTTP {(int)accepted.StatusCode}.");
 
@@ -534,17 +534,17 @@ public sealed partial class McpAgentContractTests
 		{
 			await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
 			RoundTableMeetingDbContext db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-			AgentConnectionSession? connection = await db.AgentConnectionSessions.AsNoTracking().SingleOrDefaultAsync(item => item.ID == connectionSessionId);
+			AgentConnectionSession? connection = await db.AgentConnectionSessions.AsNoTracking().SingleOrDefaultAsync(item => item.ID == connectionSessionId, cancellationToken: TestContext.Current.CancellationToken);
 			if (connection?.State == AgentConnectionState.Disconnected)
 			{
-				Assert.Equal(1, await db.MeetingParticipants.CountAsync(item => item.MeetingId == meeting.MeetingId && item.ID == agentParticipantId));
-				using HttpResponseMessage historyResponse = await browser.GetAsync($"/api/meetings/{meeting.MeetingId}/messages?afterSequence=0&limit=20");
+				Assert.Equal(1, await db.MeetingParticipants.CountAsync(item => item.MeetingId == meeting.MeetingId && item.ID == agentParticipantId, cancellationToken: TestContext.Current.CancellationToken));
+				using HttpResponseMessage historyResponse = await browser.GetAsync($"/api/meetings/{meeting.MeetingId}/messages?afterSequence=0&limit=20", TestContext.Current.CancellationToken);
 				Assert.Equal(HttpStatusCode.OK, historyResponse.StatusCode);
-				JsonElement history = await historyResponse.Content.ReadFromJsonAsync<JsonElement>();
+				JsonElement history = await historyResponse.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: TestContext.Current.CancellationToken);
 				Assert.Contains(history.GetProperty("items").EnumerateArray(), item => item.GetProperty("content").GetString() == "message retained after close");
 				return;
 			}
-		await Task.Delay(250);
+		await Task.Delay(250, TestContext.Current.CancellationToken);
 		}
 		Assert.Fail("MCP DELETE did not transition the Agent connection to disconnected.");
 	}
@@ -585,10 +585,10 @@ public sealed partial class McpAgentContractTests
 		Assert.DoesNotContain(baseFactory.DatabasePath, join.Raw, StringComparison.OrdinalIgnoreCase);
 		await using AsyncServiceScope scope = factory.Services.CreateAsyncScope();
 		RoundTableMeetingDbContext db = scope.ServiceProvider.GetRequiredService<RoundTableMeetingDbContext>();
-		MeetingParticipant agentParticipant = await db.MeetingParticipants.SingleAsync((MeetingParticipant item) => item.MeetingId == meeting.MeetingId && item.DisplayName == "Compensation Agent");
+		MeetingParticipant agentParticipant = await db.MeetingParticipants.SingleAsync((MeetingParticipant item) => item.MeetingId == meeting.MeetingId && item.DisplayName == "Compensation Agent", cancellationToken: TestContext.Current.CancellationToken);
 		Assert.Equal(ParticipantType.Agent, agentParticipant.ParticipantType);
-		Assert.NotNull(await db.AgentContextCursors.SingleOrDefaultAsync((AgentContextCursor item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == agentParticipant.ID));
-		AgentConnectionSession connection = await db.AgentConnectionSessions.SingleAsync((AgentConnectionSession item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == agentParticipant.ID);
+		Assert.NotNull(await db.AgentContextCursors.SingleOrDefaultAsync((AgentContextCursor item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == agentParticipant.ID, cancellationToken: TestContext.Current.CancellationToken));
+		AgentConnectionSession connection = await db.AgentConnectionSessions.SingleAsync((AgentConnectionSession item) => item.MeetingId == meeting.MeetingId && item.ParticipantId == agentParticipant.ID, cancellationToken: TestContext.Current.CancellationToken);
 		Assert.Equal(AgentConnectionState.Disconnected, connection.State);
 		Assert.NotEqual(session.TransportSessionId, connection.McpTransportBinding);
 	}
@@ -600,8 +600,8 @@ public sealed partial class McpAgentContractTests
 		using HttpClient client = CreateAnonymousClient(factory);
 		using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Get, "/mcp/not-a-route");
 		request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/html"));
-		using HttpResponseMessage response = await client.SendAsync(request);
-		string body = await response.Content.ReadAsStringAsync();
+		using HttpResponseMessage response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+		string body = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
 		Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
 		Assert.NotEqual<string>("text/html", response.Content.Headers.ContentType?.MediaType);
 		Assert.DoesNotContain("<!doctype html", body, StringComparison.OrdinalIgnoreCase);
