@@ -25,7 +25,7 @@
   color: var(--rt-text);
   font-weight: 650;
 }
-.message-agent .chat-author-avatar {
+.message-agent .chat-author-avatar:not(:has(.rt-meeting-avatar, .rt-avatar-image)) {
   border-radius: 11px;
   background: var(--rt-primary);
   color: var(--rt-surface);
@@ -49,7 +49,7 @@
 }
 .message-own[data-message-id] { flex-direction: row-reverse; }
 .message-own .chat-message-column .message-meta { justify-content: flex-end; }
-.message-own .chat-message-column > * { margin-inline-start: auto; }
+.message-item.message-own .chat-message-column > * { margin-inline-start: auto; }
 .message-own .chat-message-column .message-attachments { align-items: flex-end; }
 .message-own .chat-image-group { justify-content: flex-end; }
 .chat-message-column .message-attachments { margin-top: 6px; }

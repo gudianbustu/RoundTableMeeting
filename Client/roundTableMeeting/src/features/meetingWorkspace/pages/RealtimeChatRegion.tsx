@@ -110,6 +110,7 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
     ? message.visibility === 'private' && (message.author.participantId === peerId || message.recipient?.participantId === peerId)
     : (message.visibility ?? 'public') === 'public'), [meetingId, peerId])
   const scope = useCallback(() => ({ meetingId, generation: generation.current }), [meetingId])
+
   const reportUnavailable = useCallback((expected: number) => {
     if (expected !== generation.current) return
     generation.current += 1; controller.current?.abort(); void connection.current?.stop(); connection.current = undefined
