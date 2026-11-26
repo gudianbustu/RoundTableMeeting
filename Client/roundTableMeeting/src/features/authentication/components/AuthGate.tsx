@@ -16,5 +16,6 @@ export function AuthGate() {
   if (state.status === 'checking') return <LoadingState />
   if (state.status === 'authenticated') return <Outlet />
   if (state.status === 'error') return <ErrorState title="服务暂时不可访问" description="请检查服务端是否已启动，然后重试。" traceId={state.error.traceId} onRetry={() => void retry()} />
+  if (location.pathname === '/' && !location.hash && !location.search) return <Navigate to="/welcome" replace />
   return <Navigate to="/login" replace state={{ returnTo: safeReturnTo(location) }} />
 }

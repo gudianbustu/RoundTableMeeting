@@ -4,8 +4,6 @@ import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
 import { CloseOutlined, MenuOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { FirstMeetingHome } from '../components/FirstMeetingHome'
-import { MeetingDirectory } from '../components/MeetingDirectory'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
 import { useEffect, useRef, useState } from 'react'
@@ -110,7 +108,7 @@ export function MeetingWorkspacePage() {
   const listError = workspace.listError && <Alert type="error" showIcon title={workspace.listError.message}
     action={<Button size="small" loading={workspace.loading} onClick={workspace.refresh}>重试加载会议列表</Button>} />
   const navigation = (
-    <MeetingNavigation unreadCounts={unreadCounts} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} meetings={workspace.lists.active} historyMeetings={workspace.lists.history} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />
+    <MeetingNavigation unreadCounts={unreadCounts} details={workspace.details} detailLoading={workspace.detailLoading} operationLoading={workspace.operationLoading} onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onHide={id => { setNavigationOpen(false); setHideId(id) }} onLeave={() => { setNavigationOpen(false); setLeaveOpen(true) }} onDelete={() => { setNavigationOpen(false); setDeleteOpen(true) }} meetings={workspace.lists.active} historyMeetings={workspace.lists.history} selectedId={workspace.selectedId} loading={workspace.loading} onSelect={id => { setNavigationOpen(false); workspace.select(id) }} onCreate={() => { setNavigationOpen(false); setCreateOpen(true) }} onJoin={() => { setNavigationOpen(false); setJoinOpen(true) }} />
   )
   const members = workspace.details?.participants.filter(person => person.membershipState !== 'left') ?? []
   const onlineMembers = members.filter(person => presence[person.participantId] === 'online')
@@ -131,17 +129,14 @@ export function MeetingWorkspacePage() {
       {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
     </div>
   </div>
-  return <section className={workspace.selectedId ? "meeting-workspace" : "meeting-home"}>
-    {!workspace.selectedId ? <>
-      {listError}
-      {workspace.error && <Alert closable onClose={workspace.clearError} type="error" title={workspace.error.message} />}
-      {!workspace.listReady ? <Typography.Text>正在加载会议列表…</Typography.Text> :
-        workspace.lists.active.length || workspace.lists.history.length ? <MeetingDirectory active={workspace.lists.active} history={workspace.lists.history}
-          view={workspace.view} onView={workspace.setView} onSelect={workspace.select} onHide={setHideId} busy={workspace.operationLoading}
-          onRejoin={id => void workspace.updateHistory(id, 'rejoin')} onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} /> :
-        <FirstMeetingHome onCreate={() => setCreateOpen(true)} onJoin={() => setJoinOpen(true)} />}
-    </> : <>
+  return <section className={workspace.selectedId ? 'meeting-workspace' : 'meeting-workspace workspace-home'}>
     {navigation}
+    {!workspace.selectedId ? <>
+      {(listError || workspace.error) && <div className="workspace-home-errors">{listError}
+        {workspace.error && <Alert closable onClose={workspace.clearError} type="error" title={workspace.error.message} />}
+      </div>}
+      <div className="workspace-home-prompt">选择一个会议，开始讨论</div>
+    </> : <>
     {navigationTrigger && createPortal(<Button type="text" icon={<MenuOutlined />} aria-label="打开会议导航"
       onClick={() => setNavigationOpen(true)} />, navigationTrigger)}
     <Drawer title="会议导航" placement="left" open={navigationOpen} onClose={() => setNavigationOpen(false)} size={280}>

@@ -36,6 +36,14 @@ export function MeetingNavigation({ unreadCounts = {}, meetings, historyMeetings
     {!historyMeetings && <Flex align="center" justify="space-between" wrap gap="small" className="meeting-navigation-heading"><Typography.Title level={4} style={{ margin: 0 }}>我的会议</Typography.Title><Flex gap="small"><Button aria-label="创建会议" title="创建会议" icon={<PlusOutlined />} onClick={onCreate} /><Button aria-label="加入会议" title="加入会议" icon={<LoginOutlined />} onClick={onJoin} /></Flex></Flex>}
     {!historyMeetings && <Segmented block value={view} options={[{ label: '当前会议', value: 'active' }, { label: '历史会议', value: 'history' }]} onChange={value => { setInfoId(undefined); setMenuId(undefined); onViewChange?.(value as 'active' | 'history') }} />}
     <div className="meeting-navigation-scroll">{renderList(meetings, !historyMeetings && view === 'history')}</div>
+    {historyMeetings && <div className="meeting-navigation-add">
+      <Dropdown trigger={['click']} placement="topRight" menu={{ items: [
+        { key: 'join', label: '加入会议', icon: <LoginOutlined />, onClick: onJoin },
+        { key: 'create', label: '创建会议', icon: <PlusOutlined />, onClick: onCreate },
+      ] }}>
+        <Button shape="circle" type="primary" aria-label="加入或创建会议" icon={<PlusOutlined />} />
+      </Dropdown>
+    </div>}
     {historyMeetings && <div className="meeting-navigation-history">
       <button type="button" className="meeting-history-toggle" aria-expanded={historyExpanded} onClick={() => setHistoryExpanded(open => !open)}>
         <RightOutlined rotate={historyExpanded ? 90 : 0} aria-hidden="true" />历史会议

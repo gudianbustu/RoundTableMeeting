@@ -4,6 +4,7 @@ import './FirstMeetingHome.css'
 
 type FirstMeetingHomeProps = {
   children?: ReactNode
+  welcome?: boolean
   onlyHistory?: boolean
   onCreate: () => void
   onJoin: () => void
@@ -15,17 +16,17 @@ const features = [
   { icon: 'private', title: '一对一私聊', description: '在会议内单独联系一位参与者。' },
 ]
 
-export function FirstMeetingHome({ onCreate, onJoin, children, onlyHistory = false }: FirstMeetingHomeProps) {
+export function FirstMeetingHome({ onCreate, onJoin, children, onlyHistory = false, welcome = false }: FirstMeetingHomeProps) {
   const HeroTitle = children ? 'h1' : 'h2'
   return <div className="first-home">
-    {!children && <div className="first-home-intro"><h1>我的会议</h1></div>}
+    {!children && <div className="first-home-intro"><h1>{welcome ? '圆桌会议' : '我的会议'}</h1></div>}
     <section className="first-home-hero">
       <div>
         <HeroTitle>{onlyHistory ? '当前没有参加的会议' : '开始一场圆桌讨论'}</HeroTitle>
         <p>{onlyHistory ? '你仍可回看已退出的会议，或重新加入。' : '邀请同事与 Agent 一起讨论，也可以用会议码加入。'}</p>
         <div className="first-home-buttons">
-          <button type="button" onClick={onCreate}>创建会议</button>
-          <button type="button" onClick={onJoin}>加入会议</button>
+          <button type="button" onClick={onCreate}>{welcome ? '登录' : '创建会议'}</button>
+          <button type="button" onClick={onJoin}>{welcome ? '注册' : '加入会议'}</button>
         </div>
       </div>
       <BrandOrbit className="first-home-orbit" />

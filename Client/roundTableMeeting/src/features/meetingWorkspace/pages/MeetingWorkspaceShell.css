@@ -1,10 +1,10 @@
 #workspace-navigation-trigger { display: none; }
-.authenticated-shell:has(> .meeting-workspace) { padding: 0; height: 100dvh; overflow: hidden; }
+.app-shell.authenticated-shell:has(> .meeting-workspace) { --workspace-sidebar-width: 236px; padding: 0; height: 100dvh; overflow: hidden; }
 .authenticated-shell:has(> .meeting-workspace) .top-navigation {
   height: 68px; min-height: 68px; margin: 0; padding: 0 28px; gap: 12px;
   background: var(--rt-surface); flex-wrap: nowrap;
 }
-.meeting-workspace.meeting-workspace { grid-template-columns: 236px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0; }
+.meeting-workspace.meeting-workspace { grid-template-columns: var(--workspace-sidebar-width) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); gap: 0; }
 .meeting-workspace > .meeting-navigation {
   border: 0; border-inline-end: 1px solid var(--rt-border); border-radius: 0;
   max-height: none; padding: 12px 0;
@@ -138,3 +138,22 @@
   cursor: pointer;
 }
 .workspace-topic-trigger:hover { text-decoration: underline; }
+
+.meeting-navigation-add { display: flex; justify-content: flex-end; flex: none; padding-inline: 12px; }
+.meeting-navigation-add button { min-width: 40px; min-height: 40px; }
+.workspace-home { position: relative; }
+.workspace-home-prompt { display: grid; place-items: center; color: var(--rt-secondary); }
+.workspace-home-errors { position: absolute; inset: 0 0 auto; z-index: 1; }
+@media (min-width: 1001px) {
+  .authenticated-shell:has(> .meeting-workspace) .top-navigation { padding-inline-start: 0; }
+  .authenticated-shell:has(> .meeting-workspace) .top-navigation .app-brand {
+    flex: 0 0 var(--workspace-sidebar-width); align-self: stretch; display: flex; align-items: center;
+    padding-inline: 20px; border-inline-end: 1px solid var(--rt-border); box-sizing: border-box;
+  }
+}
+@media (max-width: 1000px) {
+  .workspace-home > .meeting-navigation { display: flex; padding: 0 0 env(safe-area-inset-bottom, 0px); border: 0; }
+  .workspace-home > .meeting-navigation .meeting-navigation-list { padding-inline: 0; }
+  .workspace-home .meeting-history-toggle { min-height: 44px; }
+  .workspace-home-prompt { display: none; }
+}
