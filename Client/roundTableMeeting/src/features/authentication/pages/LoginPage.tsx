@@ -1,4 +1,3 @@
-import { SourceRepositoryLink } from '@/shared/components/SourceRepositoryLink'
 import { LoginArtwork } from '../components/LoginArtwork'
 import './LoginPage.css'
 import { Link, Navigate, useLocation } from 'react-router-dom'
@@ -35,7 +34,6 @@ export function LoginPage({ registration = false }: { registration?: boolean }) 
         <div className="signin-switch">
           {registration ? '已有账号？' : '还没有账号？'} <Link to={registration ? '/login' : '/register'} state={location.state}>{registration ? '登录' : '立即注册'}</Link>
         </div>
-        <SourceRepositoryLink />
       </div>
     </section>
     <LoginArtwork variant="panel" />

@@ -306,6 +306,7 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .account-trigger .anticon-down { font-size: 10px; color: var(--rt-secondary); }
 
 .account-menu-identity { min-width: 142px; display: grid; gap: 3px; color: var(--rt-text); }
+.account-menu-identity strong { max-width: min(24em, calc(100vw - 64px)); overflow-wrap: anywhere; }
 .account-menu-identity small { color: var(--rt-secondary); }
 .account-trigger strong { max-width: 12em; overflow: hidden; text-overflow: ellipsis; }
 
@@ -378,7 +379,12 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 
 .meeting-list-caption { display: flex; justify-content: space-between; align-items: center; color: var(--rt-secondary); font-size: 13px; }
 .meeting-navigation-item.selected { background: var(--rt-subtle); color: var(--rt-text); }
-.meeting-navigation-item.selected .meeting-chat-icon { mask-image: url('/meeting-selected.png'); }
+.meeting-navigation-select strong { font-weight: 400; }
+.meeting-navigation-item.selected strong { font-weight: 650; }
+.meeting-navigation-content > .meeting-navigation-scroll { flex: 1; }
+.meeting-navigation-history { display: flex; flex-direction: column; min-height: 0; max-height: 45%; }
+.meeting-history-toggle { flex: none; display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 8px; background: transparent; border: 0; color: var(--rt-secondary); font: inherit; text-align: left; cursor: pointer; }
+.meeting-history-toggle:hover { background: var(--rt-subtle); }
 .meeting-navigation-item.selected .meeting-navigation-actions button { color: inherit; }
 
 .conversation-tabs { flex: none; min-width: 0; }
@@ -404,6 +410,17 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 
 .source-repository-link { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; color: var(--rt-secondary); font-size: 20px; }
 .source-repository-link:hover { color: var(--rt-primary); }
-.signin-form > .source-repository-link { display: flex; margin: 10px auto 0; }
 .top-navigation .source-repository-link { margin-inline-start: auto; }
 .top-navigation .source-repository-link + .current-user-bar { margin-inline-start: 0; }
+
+@media (max-width: 600px) {
+  .authenticated-shell .top-navigation:has(> .source-repository-link) { flex-wrap: nowrap; gap: 8px; }
+  .top-navigation > .source-repository-link { flex: none; }
+  .top-navigation > .source-repository-link + .current-user-bar { min-width: 0; align-items: flex-end; }
+  .top-navigation > .source-repository-link + .current-user-bar .account-trigger { max-width: 100%; }
+  .source-repository-link + .current-user-bar .account-avatar { flex-shrink: 0; }
+}
+@media (max-width: 360px) {
+  .source-repository-link + .current-user-bar .account-trigger > strong,
+  .source-repository-link + .current-user-bar .account-trigger > .anticon-down { display: none; }
+}
