@@ -20,6 +20,8 @@
 .signin-form .ant-form-item-label > label { color: var(--rt-text); font-size: 16px; font-weight: 700; }
 .signin-form :is(input.ant-input, .ant-input-affix-wrapper) { min-height: 48px; font-size: 16px; }
 .signin-form .ant-input-affix-wrapper input.ant-input { min-height: 0; }
+.signin-switch { margin-top: 18px; text-align: center; color: var(--rt-secondary); font-size: 14px; }
+.signin-switch a { color: var(--rt-text); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .signin-feedback { min-height: 22px; margin: 8px 0; color: var(--rt-danger); font-size: 14px; }
 .signin-form button[type="submit"] { height: 46px; margin-top: 10px; font-size: 16px; font-weight: 700; }
 .signin-art {

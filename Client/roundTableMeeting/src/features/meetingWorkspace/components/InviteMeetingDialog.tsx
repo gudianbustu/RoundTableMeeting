@@ -19,7 +19,9 @@ export function InviteMeetingDialog({ open, invitation, meetingName, loading, on
     } catch { messageApi.error('复制失败，请手动选择并复制') }
   }
   const title = meetingName?.replace(/\s+/g, ' ').trim()
-  const humanCopy = [title ? `邀请你加入「${title}」。` : '邀请你加入圆桌会议。', `网站地址：${siteUrl}`, `会议码：${meetingCode}`].join('\n\n')
+  const inviteUrl = new URL(siteUrl)
+  inviteUrl.hash = new URLSearchParams({ join: meetingCode }).toString()
+  const humanCopy = [title ? `邀请你加入「${title}」。` : '邀请你加入圆桌会议。', `网站地址：${inviteUrl.href}`, `会议码：${meetingCode}`].join('\n\n')
   return <Modal centered className="meeting-form-modal invite-form-modal" open={open} width={560} footer={null} onCancel={onCancel} title="邀请入会">
     {contextHolder}
     {title && <p>{title}</p>}

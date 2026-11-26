@@ -14,6 +14,21 @@ namespace RoundTableMeeting.IntegrationTests;
 
 public sealed class AuthenticationContractTests
 {
+    [Fact]
+    public async Task PublicRegistrationCreatesOrdinarySessionAndRejectsDuplicateUsername()
+    {
+        using var factory = new TestApplicationFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Add("Origin", "http://localhost:5173");
+        var created = await client.PostAsJsonAsync("/api/auth/register", new { username = " Visitor ", password = "visitor-password", isAdmin = true });
+        Assert.Equal(HttpStatusCode.OK, created.StatusCode);
+        var user = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        Assert.Equal("Visitor", user.GetProperty("nickname").GetString());
+        Assert.False(user.GetProperty("isAdmin").GetBoolean());
+        var duplicate = await client.PostAsJsonAsync("/api/auth/register", new { username = "VISITOR", password = "different-password" });
+        Assert.Equal(HttpStatusCode.Conflict, duplicate.StatusCode);
+    }
+
     [Theory]
     [InlineData("http://localhost:5173/path")]
     [InlineData("http://localhost:5173/?query=value")]

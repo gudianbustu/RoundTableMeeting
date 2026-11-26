@@ -23,14 +23,23 @@ public sealed class UserManagementService(
     public async Task<IReadOnlyList<UserSummaryDto>> ListUsersAsync(CancellationToken cancellationToken = default)
         => (await userAccountRepository.ListAllAsync(cancellationToken)).Select(ToDto).ToArray();
 
-    public async Task<UserManagementResult> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
+    public Task<UserManagementResult> RegisterAsync(string username, string password, CancellationToken cancellationToken = default)
+        => CreateAccountAsync(new CreateUserRequest { Username = username, Nickname = username, InitialPassword = password }, false, cancellationToken);
+
+    public Task<UserManagementResult> CreateUserAsync(CreateUserRequest request, CancellationToken cancellationToken = default)
+        => CreateAccountAsync(request, true, cancellationToken);
+
+    private async Task<UserManagementResult> CreateAccountAsync(CreateUserRequest request, bool requiresAdministrator, CancellationToken cancellationToken)
     {
         try
         {
             return await transactionRunner.RunAsync(async token =>
             {
-                var access = await CheckAccessAsync(token);
-                if (access is not null) return access;
+                if (requiresAdministrator)
+                {
+                    var access = await CheckAccessAsync(token);
+                    if (access is not null) return access;
+                }
                 var errors = ValidateCreate(request);
                 if (errors.Count > 0) return new(UserManagementStatus.ValidationFailed, Errors: errors);
 

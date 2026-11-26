@@ -133,7 +133,7 @@ export function useMeetingWorkspace() {
     clearJoin()
     return () => previewRequest.current?.abort()
   }, [routeId, clearJoin])
-  const previewCode = async (code: string) => {
+  const previewCode = useCallback(async (code: string) => {
     clearJoin()
     const controller = new AbortController()
     previewRequest.current = controller
@@ -146,7 +146,7 @@ export function useMeetingWorkspace() {
     } finally {
       if (!controller.signal.aborted) setPreviewLoading(false)
     }
-  }
+  }, [clearJoin])
   const join = async (code: string, displayName: string) => {
     setJoinError(undefined); setJoinSucceeded(false); setOperationLoading(true)
     try {

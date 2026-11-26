@@ -14,7 +14,7 @@ export type AuthenticationState =
 /** AuthenticationProvider 暴露的状态和操作 */
 export type AuthenticationContextValue = {
   state: AuthenticationState
-  login: (username: string, password: string) => Promise<CurrentUserViewModel>
+  login: (username: string, password: string, registration?: boolean) => Promise<CurrentUserViewModel>
   logout: () => Promise<void>
   retry: () => Promise<void>
   refreshCurrentUser: () => Promise<RefreshCurrentUserResult>

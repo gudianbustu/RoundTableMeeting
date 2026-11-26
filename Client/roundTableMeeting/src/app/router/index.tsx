@@ -12,6 +12,7 @@ import { MeetingWorkspacePage } from '@/features/meetingWorkspace'
 
 /** 公共页面、认证页面和回退页面的浏览器路由树 */
 export const router = createBrowserRouter([
+  { path: '/register', element: <LoginPage registration /> },
   { path: '/login', element: <LoginPage /> },
   {
     element: <AppLayout />,

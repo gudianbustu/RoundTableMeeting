@@ -4,6 +4,8 @@
 // @ts-ignore
 import { createAvatarEntryFromDiscriminatorValue, type AvatarEntry } from '../../models/index.js';
 // @ts-ignore
+import { GroupsRequestBuilderRequestsMetadata, type GroupsRequestBuilder } from './groups/index.js';
+// @ts-ignore
 import { AvatarsItemRequestBuilderNavigationMetadata, type AvatarsItemRequestBuilder } from './item/index.js';
 // @ts-ignore
 import { MultipartBody, serializeMultipartBody, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type Parsable, type ParsableFactory, type RequestConfiguration, type RequestInformation, type RequestsMetadata } from '@microsoft/kiota-abstractions';
@@ -12,6 +14,10 @@ import { MultipartBody, serializeMultipartBody, type BaseRequestBuilder, type Ke
  * Builds and executes requests for operations under /api/avatars
  */
 export interface AvatarsRequestBuilder extends BaseRequestBuilder<AvatarsRequestBuilder> {
+    /**
+     * The groups property
+     */
+    get groups(): GroupsRequestBuilder;
     /**
      * Gets an item from the ApiSdk.api.avatars.item collection
      * @param id Unique identifier of the item
@@ -52,6 +58,9 @@ export const AvatarsRequestBuilderNavigationMetadata: Record<Exclude<keyof Avata
     byId: {
         navigationMetadata: AvatarsItemRequestBuilderNavigationMetadata,
         pathParametersMappings: ["id"],
+    },
+    groups: {
+        requestsMetadata: GroupsRequestBuilderRequestsMetadata,
     },
 };
 /**

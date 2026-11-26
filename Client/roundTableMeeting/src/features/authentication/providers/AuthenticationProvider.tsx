@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PropsWithChildr
 import { subscribeUnauthorized } from '@/api/client/authenticationEvents'
 import type { ApiError } from '@/api/errors/ApiError'
 import { getCurrentUser } from '../api/getCurrentUser'
-import { login as loginRequest } from '../api/login'
+import { login as loginRequest, register } from '../api/login'
 import { logout as logoutRequest } from '../api/logout'
 import { AuthenticationContext } from '../context/AuthenticationContext'
 import type { AuthenticationState, RefreshCurrentUserResult } from '../types/authentication'
@@ -78,11 +78,13 @@ export function AuthenticationProvider({ children }: PropsWithChildren) {
     })
     return () => { cancelOperation(); unsubscribe() }
   }, [beginOperation, cancelOperation, initialization])
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string, registration = false) => {
     const { id, controller } = beginOperation()
     setIsLoggingIn(true); setOperationError(undefined)
     try {
-      const user = await loginRequest({ username, password }, controller.signal)
+      const user = registration
+        ? await register({ username, password }, controller.signal)
+        : await loginRequest({ username, password }, controller.signal)
       if (id === operationId.current) setState({ status: 'authenticated', user })
       return user
     } catch (error) {

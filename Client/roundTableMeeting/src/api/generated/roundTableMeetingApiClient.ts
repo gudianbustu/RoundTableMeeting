@@ -6,6 +6,8 @@ import { AgentRequestBuilderNavigationMetadata, type AgentRequestBuilder } from 
 // @ts-ignore
 import { ApiRequestBuilderNavigationMetadata, type ApiRequestBuilder } from './api/index.js';
 // @ts-ignore
+import { AvatarsRequestBuilderNavigationMetadata, type AvatarsRequestBuilder } from './avatars/index.js';
+// @ts-ignore
 import { McpFilesRequestBuilderRequestsMetadata, type McpFilesRequestBuilder } from './mcpFiles/index.js';
 // @ts-ignore
 import { apiClientProxifier, ParseNodeFactoryRegistry, SerializationWriterFactoryRegistry, type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata, type RequestAdapter } from '@microsoft/kiota-abstractions';
@@ -62,6 +64,10 @@ export interface RoundTableMeetingApiClient extends BaseRequestBuilder<RoundTabl
      */
     get api(): ApiRequestBuilder;
     /**
+     * The Avatars property
+     */
+    get avatars(): AvatarsRequestBuilder;
+    /**
      * The mcpFiles property
      */
     get mcpFiles(): McpFilesRequestBuilder;
@@ -79,6 +85,9 @@ export const RoundTableMeetingApiClientNavigationMetadata: Record<Exclude<keyof 
     },
     api: {
         navigationMetadata: ApiRequestBuilderNavigationMetadata,
+    },
+    avatars: {
+        navigationMetadata: AvatarsRequestBuilderNavigationMetadata,
     },
     mcpFiles: {
         requestsMetadata: McpFilesRequestBuilderRequestsMetadata,

@@ -3,7 +3,7 @@ import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
 import { CloseOutlined, MenuOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { FirstMeetingHome } from '../components/FirstMeetingHome'
 import { MeetingDirectory } from '../components/MeetingDirectory'
 import type { MessageComposerHandle } from '../components/MessageComposer'
@@ -19,7 +19,7 @@ import { DiscussionModeControl } from '../components/DiscussionModeControl'
 import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { InviteMeetingDialog } from '../components/InviteMeetingDialog'
-import { JoinMeetingDialog } from '../components/JoinMeetingDialog'
+import { JoinMeetingDialog, meetingCodePattern } from '../components/JoinMeetingDialog'
 import { useMeetingWorkspace } from '../hooks/useMeetingWorkspace'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
@@ -45,6 +45,12 @@ export function MeetingWorkspacePage() {
     unreadCounts[id] = Object.values(meeting.scopes).reduce((sum, scope) => sum + scope.count, 0)
   }
   const navigate = useNavigate()
+  const location = useLocation()
+  const invitedCode = new URLSearchParams(location.hash.slice(1)).get('join') ?? ''
+  const previewCode = workspace.previewCode
+  useEffect(() => {
+    if (meetingCodePattern.test(invitedCode)) void previewCode(invitedCode)
+  }, [invitedCode, previewCode])
   const chatCache = useRef<ChatSessionCache>({ states: new Map(), selection: {} })
   const composerRef = useRef<MessageComposerHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
@@ -179,7 +185,7 @@ export function MeetingWorkspacePage() {
       meetingName={workspace.details.name} name={workspace.details.currentParticipant.displayName} onSaved={workspace.refresh} onClose={() => setNicknameOpen(false)} />}
     <CreateMeetingDialog open={createOpen} loading={workspace.operationLoading} onCancel={() => setCreateOpen(false)} onSubmit={value => void workspace.create(value)} />
     <InviteMeetingDialog meetingName={workspace.details?.name} open={inviteOpen} invitation={workspace.invitation} loading={!workspace.invitation && workspace.operationLoading} onCancel={() => setInviteOpen(false)} />
-    <JoinMeetingDialog open={joinOpen} loading={workspace.operationLoading} succeeded={workspace.joinSucceeded} previewLoading={workspace.previewLoading} preview={workspace.preview} error={workspace.joinError?.message} errorCode={workspace.joinError?.code} retryAfterSeconds={workspace.joinError?.retryAfterSeconds} onCancel={() => { workspace.clearJoin(); setJoinOpen(false) }} onCodeChange={workspace.clearJoin} onPreview={workspace.previewCode} onSubmit={value => void workspace.join(value.code, value.displayName)} />
+    <JoinMeetingDialog initialCode={invitedCode} open={joinOpen || Boolean(invitedCode)} loading={workspace.operationLoading} succeeded={workspace.joinSucceeded} previewLoading={workspace.previewLoading} preview={workspace.preview} error={workspace.joinError?.message} errorCode={workspace.joinError?.code} retryAfterSeconds={workspace.joinError?.retryAfterSeconds} onCancel={() => { workspace.clearJoin(); setJoinOpen(false); if (invitedCode) navigate(location.pathname + location.search, { replace: true }) }} onCodeChange={workspace.clearJoin} onPreview={workspace.previewCode} onSubmit={value => void workspace.join(value.code, value.displayName)} />
     <Modal open={leaveOpen} title="退出会议" okText="确认退出" cancelText="取消" confirmLoading={workspace.operationLoading} onCancel={() => setLeaveOpen(false)} onOk={() => void workspace.leave().then(success => { if (success) setLeaveOpen(false) })}>
       <Typography.Paragraph>退出后不再接收新消息，可以在历史会议中查看退出前有权访问的消息。之后可在历史会议中重新入会，也可通过邀请码加入。</Typography.Paragraph>
     </Modal>

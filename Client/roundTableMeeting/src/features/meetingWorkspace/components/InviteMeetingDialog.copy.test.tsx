@@ -22,7 +22,7 @@ it('copies human invitation address and code on HTTP', async () => {
   render(<InviteMeetingDialog open meetingName={'  设计\n  评审  '} invitation={invitation} onCancel={() => {}} siteUrl="http://test.local" />)
   fireEvent.click(screen.getByRole('radio', { name: '人类成员' }))
   fireEvent.click(screen.getByRole('button', { name: '复制完整邀请文案' }))
-  await waitFor(() => expect(copied).toEqual(['邀请你加入「设计 评审」。\n\n网站地址：http://test.local\n\n会议码：copy-code']))
+  await waitFor(() => expect(copied).toEqual(['邀请你加入「设计 评审」。\n\n网站地址：http://test.local/#join=copy-code\n\n会议码：copy-code']))
 })
 it('copies the complete multiline Agent prompt on HTTP', async () => {
   vi.spyOn(avatarApi, 'listAvatars').mockResolvedValue([{ id: 'fox', name: '狐狸', imageUrl: '/fox.png' }])

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using RoundTableMeeting.Abstraction.Contracts.UserManagement;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -35,7 +36,28 @@ public sealed class AuthenticationController(AppAuthenticationService authentica
         var result = await authenticationService.AuthenticateAsync(request, cancellationToken);
         if (result.Status == AuthenticateStatus.ValidationFailed) return AuthenticationProblemDetailsExtensions.Result(HttpContext, StatusCodes.Status400BadRequest, "validation_failed", result.Errors);
         if (result.Status == AuthenticateStatus.InvalidCredentials) return AuthenticationProblemDetailsExtensions.Result(HttpContext, StatusCodes.Status401Unauthorized, "invalid_credentials");
+        return await SignInUser(result.User!);
+    }
+
+    [HttpPost("register")]
+    [AllowAnonymous]
+    [RequireBrowserOrigin(true)]
+    [ProducesResponseType(typeof(CurrentUserDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType(typeof(ApiProblemDetails), StatusCodes.Status409Conflict, "application/problem+json")]
+    public async Task<IActionResult> Register(LoginRequest request, [FromServices] IUserManagementService accounts, CancellationToken cancellationToken)
+    {
+        var result = await accounts.RegisterAsync(request.Username!, request.Password!, cancellationToken);
+        if (result.Status == UserManagementStatus.UsernameConflict)
+            return ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status409Conflict, "username_conflict");
+        if (result.Status == UserManagementStatus.ValidationFailed)
+            return ApiProblemDetailsWriter.CreateResult(HttpContext, StatusCodes.Status400BadRequest, "validation_failed", result.Errors);
         var user = result.User!;
+        return await SignInUser(new CurrentUserDto(user.UserId, user.Username, user.Nickname, user.IsAdmin));
+    }
+
+    private async Task<IActionResult> SignInUser(CurrentUserDto user)
+    {
         await HttpContext.SignInAsync(AuthenticationConstants.Scheme, new ClaimsPrincipal(new ClaimsIdentity([new Claim(AuthenticationConstants.ClaimType, user.UserId.ToString())], AuthenticationConstants.Scheme)), new AuthenticationProperties { IsPersistent = false, AllowRefresh = false });
         return Ok(user);
     }

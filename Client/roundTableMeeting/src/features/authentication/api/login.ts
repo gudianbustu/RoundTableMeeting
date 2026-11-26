@@ -11,6 +11,15 @@ export function toCurrentUserViewModel(value: Partial<CurrentUserDto>): CurrentU
   return { avatarUrl: avatarUrl(value.avatarUrl ?? value.additionalData?.avatarUrl), userId: value.userId, username: value.username, nickname: value.nickname, isAdmin: value.isAdmin }
 }
 
+export async function register(input: LoginInput, signal?: AbortSignal): Promise<CurrentUserViewModel> {
+  try {
+    const value = await getApiClient().api.auth.register.post(input, signal ? { options: [new AbortRequestOption(signal)] } : undefined)
+    return toCurrentUserViewModel(value ?? {})
+  } catch (error) {
+    throw toApiError(error)
+  }
+}
+
 /** 发送登录凭据并返回规范化的当前用户 */
 export async function login(input: LoginInput, signal?: AbortSignal): Promise<CurrentUserViewModel> {
   try {

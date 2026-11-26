@@ -1,3 +1,4 @@
+import { SourceRepositoryLink } from '@/shared/components/SourceRepositoryLink'
 import { AccountUnreadProvider } from '@/features/meetingWorkspace/chat/AccountUnreadProvider'
 import { MentionNotificationListener } from '@/features/meetingWorkspace/chat/MentionNotificationListener'
 import { Link, Outlet, useLocation } from 'react-router-dom'
@@ -12,6 +13,7 @@ export function AuthenticatedLayout() {
       {pathname.startsWith('/meetings/') && <span id="workspace-navigation-trigger" />}
       <Link className="app-brand" to="/"><img className="brand-mark" src="/roundtable-mark.png" alt="" />圆桌会议</Link>
       {pathname.startsWith('/meetings/') && <div id="workspace-topbar-content" />}
+      {pathname === '/' && <SourceRepositoryLink />}
       {pathname.replace(/\/$/, '') === '/admin/avatars' ? <Link to="/settings/profile">返回个人设置 ›</Link> :
         ['/settings/profile', '/users'].includes(pathname.replace(/\/$/, '')) ? <Link to={returnTo}>返回</Link> : <CurrentUserBar />}
     </header>

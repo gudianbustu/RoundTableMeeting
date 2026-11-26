@@ -112,6 +112,16 @@ export interface AvatarEntry extends AdditionalDataHolder, Parsable {
      */
     name?: string | null;
 }
+export interface AvatarGroup extends AdditionalDataHolder, Parsable {
+    /**
+     * The items property
+     */
+    items?: AvatarEntry[] | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+}
 export interface AvatarInvitationRequest extends AdditionalDataHolder, Parsable {
     /**
      * The avatarId property
@@ -209,6 +219,15 @@ export function createAttachmentPageDtoFromDiscriminatorValue(parseNode: ParseNo
 // @ts-ignore
 export function createAvatarEntryFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoAvatarEntry;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {AvatarGroup}
+ */
+// @ts-ignore
+export function createAvatarGroupFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoAvatarGroup;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -326,6 +345,15 @@ export function createJoinPreviewDtoFromDiscriminatorValue(parseNode: ParseNode 
 // @ts-ignore
 export function createLeaveMeetingRequestFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
     return deserializeIntoLeaveMeetingRequest;
+}
+/**
+ * Creates a new instance of the appropriate class based on discriminator value
+ * @param parseNode The parse node to use to read the discriminator value and create the object
+ * @returns {LibraryEdit}
+ */
+// @ts-ignore
+export function createLibraryEditFromDiscriminatorValue(parseNode: ParseNode | undefined) : ((instance?: Parsable) => Record<string, (node: ParseNode) => void>) {
+    return deserializeIntoLibraryEdit;
 }
 /**
  * Creates a new instance of the appropriate class based on discriminator value
@@ -772,6 +800,18 @@ export function deserializeIntoAvatarEntry(avatarEntry: Partial<AvatarEntry> | u
 }
 /**
  * The deserialization information for the current model
+ * @param AvatarGroup The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoAvatarGroup(avatarGroup: Partial<AvatarGroup> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "items": n => { avatarGroup.items = n.getCollectionOfObjectValues<AvatarEntry>(createAvatarEntryFromDiscriminatorValue); },
+        "name": n => { avatarGroup.name = n.getStringValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
  * @param AvatarInvitationRequest The instance to deserialize into.
  * @returns {Record<string, (node: ParseNode) => void>}
  */
@@ -933,6 +973,22 @@ export function deserializeIntoJoinPreviewDto(joinPreviewDto: Partial<JoinPrevie
 export function deserializeIntoLeaveMeetingRequest(leaveMeetingRequest: Partial<LeaveMeetingRequest> | undefined = {}) : Record<string, (node: ParseNode) => void> {
     return {
         "operationId": n => { leaveMeetingRequest.operationId = n.getGuidValue(); },
+    }
+}
+/**
+ * The deserialization information for the current model
+ * @param LibraryEdit The instance to deserialize into.
+ * @returns {Record<string, (node: ParseNode) => void>}
+ */
+// @ts-ignore
+export function deserializeIntoLibraryEdit(libraryEdit: Partial<LibraryEdit> | undefined = {}) : Record<string, (node: ParseNode) => void> {
+    return {
+        "action": n => { libraryEdit.action = n.getStringValue(); },
+        "after": n => { libraryEdit.after = n.getBooleanValue() ?? false; },
+        "direction": n => { libraryEdit.direction = n.getNumberValue() ?? 0; },
+        "group": n => { libraryEdit.group = n.getStringValue(); },
+        "name": n => { libraryEdit.name = n.getStringValue(); },
+        "target": n => { libraryEdit.target = n.getStringValue(); },
     }
 }
 /**
@@ -1409,6 +1465,32 @@ export interface LeaveMeetingRequest extends AdditionalDataHolder, Parsable {
      * The operationId property
      */
     operationId?: Guid | null;
+}
+export interface LibraryEdit extends AdditionalDataHolder, Parsable {
+    /**
+     * The action property
+     */
+    action?: string | null;
+    /**
+     * The after property
+     */
+    after?: boolean | null;
+    /**
+     * The direction property
+     */
+    direction?: number | null;
+    /**
+     * The group property
+     */
+    group?: string | null;
+    /**
+     * The name property
+     */
+    name?: string | null;
+    /**
+     * The target property
+     */
+    target?: string | null;
 }
 export interface LoginRequest extends AdditionalDataHolder, Parsable {
     /**
@@ -1916,6 +1998,19 @@ export function serializeAvatarEntry(writer: SerializationWriter, avatarEntry: P
 }
 /**
  * Serializes information the current object
+ * @param AvatarGroup The instance to serialize from.
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeAvatarGroup(writer: SerializationWriter, avatarGroup: Partial<AvatarGroup> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!avatarGroup || isSerializingDerivedType) { return; }
+    writer.writeCollectionOfObjectValues<AvatarEntry>("items", avatarGroup.items, serializeAvatarEntry);
+    writer.writeStringValue("name", avatarGroup.name);
+    writer.writeAdditionalData(avatarGroup.additionalData);
+}
+/**
+ * Serializes information the current object
  * @param AvatarInvitationRequest The instance to serialize from.
  * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
  * @param writer Serialization writer to use to serialize this model
@@ -2091,6 +2186,23 @@ export function serializeLeaveMeetingRequest(writer: SerializationWriter, leaveM
     if (!leaveMeetingRequest || isSerializingDerivedType) { return; }
     writer.writeGuidValue("operationId", leaveMeetingRequest.operationId);
     writer.writeAdditionalData(leaveMeetingRequest.additionalData);
+}
+/**
+ * Serializes information the current object
+ * @param isSerializingDerivedType A boolean indicating whether the serialization is for a derived type.
+ * @param LibraryEdit The instance to serialize from.
+ * @param writer Serialization writer to use to serialize this model
+ */
+// @ts-ignore
+export function serializeLibraryEdit(writer: SerializationWriter, libraryEdit: Partial<LibraryEdit> | undefined | null = {}, isSerializingDerivedType: boolean = false) : void {
+    if (!libraryEdit || isSerializingDerivedType) { return; }
+    writer.writeStringValue("action", libraryEdit.action);
+    writer.writeBooleanValue("after", libraryEdit.after ?? false);
+    writer.writeNumberValue("direction", libraryEdit.direction ?? 0);
+    writer.writeStringValue("group", libraryEdit.group);
+    writer.writeStringValue("name", libraryEdit.name);
+    writer.writeStringValue("target", libraryEdit.target);
+    writer.writeAdditionalData(libraryEdit.additionalData);
 }
 /**
  * Serializes information the current object

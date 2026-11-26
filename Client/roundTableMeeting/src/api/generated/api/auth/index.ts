@@ -8,6 +8,8 @@ import { LogoutRequestBuilderRequestsMetadata, type LogoutRequestBuilder } from 
 // @ts-ignore
 import { MeRequestBuilderRequestsMetadata, type MeRequestBuilder } from './me/index.js';
 // @ts-ignore
+import { RegisterRequestBuilderRequestsMetadata, type RegisterRequestBuilder } from './register/index.js';
+// @ts-ignore
 import { type BaseRequestBuilder, type KeysToExcludeForNavigationMetadata, type NavigationMetadata } from '@microsoft/kiota-abstractions';
 
 /**
@@ -26,6 +28,10 @@ export interface AuthRequestBuilder extends BaseRequestBuilder<AuthRequestBuilde
      * The me property
      */
     get me(): MeRequestBuilder;
+    /**
+     * The register property
+     */
+    get register(): RegisterRequestBuilder;
 }
 /**
  * Uri template for the request builder.
@@ -43,6 +49,9 @@ export const AuthRequestBuilderNavigationMetadata: Record<Exclude<keyof AuthRequ
     },
     me: {
         requestsMetadata: MeRequestBuilderRequestsMetadata,
+    },
+    register: {
+        requestsMetadata: RegisterRequestBuilderRequestsMetadata,
     },
 };
 /* tslint:enable */
