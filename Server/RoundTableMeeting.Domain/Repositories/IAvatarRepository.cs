@@ -6,9 +6,7 @@ public sealed record AvatarImage(byte[] Bytes, Guid? OwnerId);
 
 public interface IAvatarRepository
 {
-    Task<IReadOnlyList<AvatarEntry>> ListUploadsAsync(CancellationToken ct);
-    Task<AvatarEntry?> FindPublicUploadAsync(string id, CancellationToken ct);
-    Task<AvatarEntry> SaveUploadAsync(string name, byte[] png, Guid? ownerId, CancellationToken ct);
+    Task<AvatarEntry> SaveUploadAsync(string name, byte[] png, Guid ownerId, CancellationToken ct);
     Task<AvatarImage?> ReadImageAsync(string id, Guid viewer, CancellationToken ct);
     Task SetAccountAsync(Guid userId, string url, CancellationToken ct);
     Task<string?> GetAccountAsync(Guid userId, CancellationToken ct);

@@ -47,12 +47,14 @@ try
         });
     });
     builder.AddRoundTableMeetingServices();
+    builder.Services.AddSingleton<RoundTableMeeting.Avatars.PublicAvatarLibrary>();
 
     var app = builder.Build();
     // 在接受请求前完成迁移和幂等账号播种
     using (var scope = app.Services.CreateScope())
     {
         await scope.ServiceProvider.GetRequiredService<IDatabaseInitializer>().InitializeAsync();
+        await scope.ServiceProvider.GetRequiredService<RoundTableMeeting.Avatars.PublicAvatarLibrary>().InitializeAsync();
         var authenticationOptions = scope.ServiceProvider.GetRequiredService<IOptions<AuthenticationOptions>>().Value;
         await scope.ServiceProvider.GetRequiredService<IAccountSeeder>().SeedAsync(
             authenticationOptions.SeedAccounts.Select(account => new SeedAccountInput(account.Username!, account.Nickname!, account.Password!)).ToArray(),

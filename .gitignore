@@ -86,6 +86,7 @@ logs/
 # agent相关文件
 .gitnexus/
 .claude/
+.local/
 .agents/skills/generated/
 .agents/skills/gitnexus/
 CLAUDE.md

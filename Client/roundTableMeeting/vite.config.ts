@@ -18,6 +18,6 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
-    proxy: { '/agent/0.1.0/native-guide.txt': 'http://localhost:5043', '/api': { target: 'http://localhost:5043', changeOrigin: false }, '/hubs': { target: 'http://localhost:5043', changeOrigin: false, ws: true }, '/mcp': { target: 'http://localhost:5043', changeOrigin: false } },
+    proxy: { '/Avatars/': 'http://localhost:5043', '/agent/0.1.0/native-guide.txt': 'http://localhost:5043', '/api': { target: 'http://localhost:5043', changeOrigin: false }, '/hubs': { target: 'http://localhost:5043', changeOrigin: false, ws: true }, '/mcp': { target: 'http://localhost:5043', changeOrigin: false } },
   },
 })

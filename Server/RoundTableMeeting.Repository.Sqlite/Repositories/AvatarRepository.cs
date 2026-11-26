@@ -11,21 +11,14 @@ public sealed class AvatarRepository(RoundTableMeetingDbContext db) : IAvatarRep
 {
     private static AvatarEntry Entry(string id, string name) => new(id, name, $"/api/avatars/{id}/image", "uploaded");
 
-    public async Task<IReadOnlyList<AvatarEntry>> ListUploadsAsync(CancellationToken ct) =>
-        await db.Set<AvatarAsset>().Where(x => x.OwnerId == null).OrderBy(x => x.Name).ThenBy(x => x.Id)
-            .Select(x => Entry(x.Id, x.Name)).ToArrayAsync(ct);
-
-    public Task<AvatarEntry?> FindPublicUploadAsync(string id, CancellationToken ct) =>
-        db.Set<AvatarAsset>().Where(x => x.Id == id && x.OwnerId == null).Select(x => Entry(x.Id, x.Name)).SingleOrDefaultAsync(ct);
-
-    public async Task<AvatarEntry> SaveUploadAsync(string name, byte[] png, Guid? ownerId, CancellationToken ct)
+    public async Task<AvatarEntry> SaveUploadAsync(string name, byte[] png, Guid ownerId, CancellationToken ct)
     {
         var id = Guid.NewGuid().ToString("N");
         var entry = Entry(id, name);
         await using var transaction = await db.Database.BeginTransactionAsync(ct);
         db.Add(new AvatarAsset { Id = id, Name = name, Png = png, OwnerId = ownerId });
         await db.SaveChangesAsync(ct);
-        if (ownerId.HasValue) await SetAccountAsync(ownerId.Value, entry.ImageUrl, ct);
+        await SetAccountAsync(ownerId, entry.ImageUrl, ct);
         await transaction.CommitAsync(ct);
         return entry;
     }

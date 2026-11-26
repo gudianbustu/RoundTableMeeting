@@ -38,7 +38,7 @@ public sealed class AvatarLibraryTests
         var key = Guid.NewGuid().ToString("N");
         if (useAvatarInvitation)
         {
-            var invitation = await owner.PostAsJsonAsync(meetingPath + "/agent-invitations", new { displayName = "Returning", avatarId = "claude" });
+            var invitation = await owner.PostAsJsonAsync(meetingPath + "/agent-invitations", new { displayName = "Returning", avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/Claude.png" });
             invitation.EnsureSuccessStatusCode();
             key = (await invitation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("invitationKey").GetString()!;
         }
@@ -72,7 +72,7 @@ public sealed class AvatarLibraryTests
         Assert.Equal(first.GetProperty("participantId").GetGuid(), recovered.GetProperty("participantId").GetGuid());
         foreach (var seat in new[] { first, recovered })
         {
-            Assert.Equal(useAvatarInvitation ? "/avatars/builtin/claude.png" : null,
+            Assert.Equal(useAvatarInvitation ? "/Avatars/%E6%A8%A1%E5%9E%8B/Claude.png" : null,
                 seat.TryGetProperty("avatarUrl", out var url) ? url.GetString() : null);
             Assert.Equal(useAvatarInvitation ? 0 : (int?)null,
                 seat.TryGetProperty("avatarColorSlot", out var color) && color.ValueKind == JsonValueKind.Number ? color.GetInt32() : null);
@@ -94,8 +94,11 @@ public sealed class AvatarLibraryTests
             (await client.PostAsJsonAsync("/api/auth/login", new { username = name, password = "test-password-" + name })).EnsureSuccessStatusCode();
         }
         var initial = await member.GetFromJsonAsync<JsonElement>(library);
-        Assert.Equal(46, initial.GetArrayLength());
-        Assert.Equal(46, initial.EnumerateArray().Select(a => a.GetProperty("id").GetString()).Distinct().Count());
+        var seedRoot = Path.Combine(AppContext.BaseDirectory, "AvatarSeed");
+        var expectedCount = Directory.EnumerateFiles(seedRoot, "*.png", SearchOption.AllDirectories).Count();
+        Assert.True(expectedCount > 0);
+        Assert.Equal(expectedCount, initial.GetArrayLength());
+        Assert.Equal(expectedCount, initial.EnumerateArray().Select(a => a.GetProperty("id").GetString()).Distinct().Count());
 
         using var png = new MemoryStream();
         using (var image = new Image<Rgba32>(3, 2)) await image.SaveAsPngAsync(png);
@@ -122,7 +125,7 @@ public sealed class AvatarLibraryTests
         var ownPhoto = (await mine.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("avatarUrl").GetString()!;
         Assert.NotEqual(photo, ownPhoto);
         Assert.Equal(HttpStatusCode.NotFound, (await owner.GetAsync(ownPhoto)).StatusCode);
-        Assert.Equal(47, (await member.GetFromJsonAsync<JsonElement>(library)).GetArrayLength());
+        Assert.Equal(expectedCount + 1, (await member.GetFromJsonAsync<JsonElement>(library)).GetArrayLength());
         var me = await member.GetFromJsonAsync<JsonElement>("/api/auth/me");
         Assert.Equal(ownPhoto, me.GetProperty("avatarUrl").GetString());
 
@@ -165,11 +168,21 @@ public sealed class AvatarLibraryTests
             (await member.GetFromJsonAsync<JsonElement>(path)).GetProperty("participants").EnumerateArray()
                 .Single(p => p.GetProperty("displayName").GetString() == "Member").GetProperty("avatarColorSlot").GetInt32();
         Assert.Equal(1, await ReadMemberColor());
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "gpt" })).EnsureSuccessStatusCode();
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png" })).EnsureSuccessStatusCode();
         Assert.Equal(0, await ReadMemberColor());
         (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id })).EnsureSuccessStatusCode();
         Assert.Equal(1, await ReadMemberColor());
-        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "gpt" })).EnsureSuccessStatusCode();
-        Assert.Equal("/avatars/builtin/gpt.png", (await member.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("avatarUrl").GetString());
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = "/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png" })).EnsureSuccessStatusCode();
+        Assert.Equal("/Avatars/%E6%A8%A1%E5%9E%8B/GPT.png", (await member.GetFromJsonAsync<JsonElement>("/api/auth/me")).GetProperty("avatarUrl").GetString());
+        // Both participants use the migrated public upload before its group is renamed.
+        (await member.PutAsJsonAsync("/api/account/avatar", new { avatarId = id })).EnsureSuccessStatusCode();
+        (await owner.PostAsJsonAsync(library + "/groups", new { action = "renameGroup", group = "自定义", name = "公共收藏" })).EnsureSuccessStatusCode();
+        Assert.Equal(1, await ReadMemberColor());
+        var renamed = await member.GetFromJsonAsync<JsonElement>(path + "/messages");
+        var author = renamed.GetProperty("items").EnumerateArray().Single(x => x.GetProperty("content").GetString() == "avatar history sample").GetProperty("author");
+        var renamedPhoto = author.GetProperty("avatarUrl").GetString();
+        Assert.Contains(Uri.EscapeDataString("公共收藏"), renamedPhoto);
+        Assert.Equal(0, author.GetProperty("avatarColorSlot").GetInt32());
+        Assert.Equal(HttpStatusCode.OK, (await member.GetAsync(renamedPhoto)).StatusCode);
     }
 }

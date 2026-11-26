@@ -25,6 +25,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Content Remove="AvatarSeed/**/*" />
+    <Content Include="AvatarSeed/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="AgentCollaboration/native-guide.txt" LogicalName="RoundTableMeeting.NativeGuide.v0.1.0" />
   </ItemGroup>
 

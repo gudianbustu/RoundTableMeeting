@@ -20,17 +20,18 @@ export async function listAvatars(signal?: AbortSignal): Promise<AvatarChoice[]>
   })
 }
 
-async function upload(path: string, file: File, name?: string) {
+async function upload(path: string, file: File, name?: string, group?: string) {
   const body = new FormData()
   body.append('file', file)
   if (name !== undefined) body.append('name', name)
+  if (group !== undefined) body.append('group', group)
   const response = await fetch(path, { method: 'POST', body, credentials: 'same-origin' })
   if (response.status === 401) notifyUnauthorized()
   if (!response.ok) throw avatarError({ responseStatusCode: response.status, responseBody: await response.text() })
   return response.json()
 }
 
-export const uploadPublicAvatar = (name: string, file: File) => upload('/api/avatars', file, name)
+export const uploadPublicAvatar = (name: string, file: File, group: string) => upload('/api/avatars', file, name, group)
 export const uploadPersonalAvatar = (file: File) => upload('/api/account/avatar', file)
 export const selectPersonalAvatar = (avatarId: string) => getApiClient().api.account.avatar.put({ avatarId })
   .catch(cause => { throw avatarError(cause) })

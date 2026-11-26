@@ -3,15 +3,13 @@ import { Tooltip } from 'antd'
 import { AvatarImage } from './AvatarImage'
 import type { AvatarChoice } from './avatar'
 
-const groupNames: Record<string, string> = { model: '模型', tool: '工具', character: 'Q 版伙伴', 'ai-girl': 'AI娘', uploaded: '自定义' }
-
 export function AvatarGrid({ items, selected, onSelect, disabled = false, label = '选择头像' }: {
   items: AvatarChoice[]; selected?: string; onSelect?: (id: string) => void; disabled?: boolean; label?: string
 }) {
   const name = useId()
   const groups = new Map<string, AvatarChoice[]>()
   for (const item of items) {
-    const group = groupNames[item.category ?? ''] ?? '可用头像'
+    const group = item.category ?? '可用头像'
     const entries = groups.get(group)
     if (entries) entries.push(item)
     else groups.set(group, [item])
