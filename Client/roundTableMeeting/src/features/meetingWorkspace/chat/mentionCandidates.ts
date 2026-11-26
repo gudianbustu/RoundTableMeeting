@@ -29,3 +29,12 @@ export function getMentionCandidates(value: string, participants: Participant[],
 export function normalizeCandidates(content: string, candidates: MentionCandidate[]): MentionCandidate[] {
   const normalized = content.normalize('NFC').trim(); return candidates.filter(c => c.startOffset >= 0 && c.length > 1 && c.startOffset + c.length <= normalized.length)
 }
+
+export function replyMentionName(authorId: string | undefined, draft: string, participants: Participant[], publicChat: boolean) {
+  const author = participants.find(person => person.participantId === authorId)
+  if (!author || author.isCurrentUser || author.membershipState === 'left') return
+  const name = author.displayName.normalize('NFC')
+  if (getMentionCandidates('@' + name, participants, publicChat)[0]?.participantId !== authorId) return
+  if (getMentionCandidates(draft, participants, publicChat).some(item => item.participantId === authorId)) return
+  return name
+}

@@ -1,6 +1,6 @@
 import { AnnotationDraftContext } from '../components/AnnotationDraftContext'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
-import type { CSSProperties, ReactNode, Ref } from 'react'
+import type { CSSProperties, ReactNode, Ref, RefObject } from 'react'
 import { useMessageNotifications } from '../hooks/useMessageNotifications'
 import { useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { CloseOutlined } from '@ant-design/icons'
@@ -20,7 +20,7 @@ import { MessageTimeline } from '../components/MessageTimeline'
 import { AttachmentUpload, MeetingAttachmentList, type AttachmentUploadHandle } from '../components/AttachmentControls'
 import type { AgentActivity, ChatMessage, ChatScrollPosition, ChatState, FailedSubmission } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
-import { getMentionCandidates } from '../chat/mentionCandidates'
+import { getMentionCandidates, replyMentionName } from '../chat/mentionCandidates'
 
 export type ChatSessionCache = { states: Map<string, ChatState>; selection: Record<string, string | undefined>; tabs?: Record<string, string[]> }
 type ChatProps = { sessionCache?: ChatSessionCache; composerRef?: Ref<MessageComposerHandle>; composerTools?: ReactNode; meetingId: string; participants: Participant[]; readOnly?: boolean; onMeetingUnavailable?: () => void; onMeetingDetailsChanged?: () => void; onMembershipChanged?: () => void; onPresenceChanged?: (presence: Record<string, 'online' | 'offline'>) => void; onAgentActivitiesChanged?: (activities: Record<string, AgentActivity>) => void }
@@ -91,7 +91,7 @@ export function RealtimeChatRegion(props: ChatProps) {
   </div>
 }
 
-function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMeetingDetailsChanged, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { notificationControl: (seenThrough: number) => ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
+function ScopedChat({ notificationControl, onNotificationMessage, onNotificationSnapshot, scopeControl, composerRef, composerTools, meetingId, participants, peerId, readOnly = false, initialState, onStateChanged, onPrivateChat, onMeetingUnavailable, onMeetingDetailsChanged, onMembershipChanged, onPresenceChanged, onAgentActivitiesChanged }: ChatProps & { composerRef: RefObject<MessageComposerHandle | null>; notificationControl: (seenThrough: number) => ReactNode; onNotificationMessage: (message: ChatMessage) => void; onNotificationSnapshot: (through: number) => Promise<void>; scopeControl: ReactNode; peerId?: string; initialState?: ChatState; onStateChanged: (state: ChatState) => void; onPrivateChat: (id?: string) => void }) {
   const [readingWidth, setReadingWidth] = useState<number>()
   const savedInitial = useRef(initialState)
   const generation = useRef(initialState?.generation ?? 1)
@@ -350,7 +350,12 @@ function ScopedChat({ notificationControl, onNotificationMessage, onNotification
     if (result === 'not_found' && state.send !== 'pending_confirmation' && !readOnly && expected === generation.current) await transmit(submission, expected)
   }
   const clearNewCount = useCallback(() => dispatch({ ...scope(), type: 'newMessageNoticeRead' }), [scope])
-  const replyTo = useCallback((message: ChatMessage) => dispatch({ ...scope(), type: 'replyChanged', message }), [scope])
+  const replyTo = useCallback((message: ChatMessage) => {
+    dispatch({ ...scope(), type: 'replyChanged', message })
+    const name = message.author.kind === 'system' ? undefined : replyMentionName(message.author.participantId, state.draft, participants, !peerId)
+    if (name) composerRef.current?.mention(name)
+    else composerRef.current?.focus?.()
+  }, [scope, participants, peerId, state.draft, composerRef])
   const locate = useCallback(async (id: string) => {
     const expected = generation.current
     const target = await getMessage(meetingId, id)

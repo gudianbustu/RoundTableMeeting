@@ -5,7 +5,7 @@ import { SendOutlined } from '@ant-design/icons'
 import type { MentionCandidate, SendState } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 import { getMentionCandidates, groupMentionNames, mentionableParticipants } from '../chat/mentionCandidates'
-export interface MessageComposerHandle { mention: (displayName: string) => void; privateChat?: (participantId: string) => void }
+export interface MessageComposerHandle { mention: (displayName: string) => void; focus?: () => void; privateChat?: (participantId: string) => void }
 export function MessageComposer({ publicChat = false, placeholder = '输入消息', composerRef, attachments, onCancelReply, onFiles, tools, value, send, participants, onChange, onSend, hasAttachments = false, disabled = false }: { publicChat?: boolean; placeholder?: string; composerRef?: Ref<MessageComposerHandle>; attachments?: ReactNode; onCancelReply?: () => void; onFiles?: (files: File[]) => void; tools?: ReactNode; hasAttachments?: boolean; disabled?: boolean; value: string; send: SendState; participants: Participant[]; onChange: (value: string) => void; onSend: (candidates: MentionCandidate[]) => void }) {
   const inputRef = useRef<MentionsRef>(null)
   const composer = useRef<HTMLDivElement>(null)
@@ -42,6 +42,7 @@ export function MessageComposer({ publicChat = false, placeholder = '输入消�
   const focusPending = useRef(false)
   const mentionPopupRef = useRef<HTMLDivElement>(null)
   useImperativeHandle(composerRef, () => ({
+    focus() { inputRef.current?.nativeElement.querySelector('textarea')?.focus({ preventScroll: true }) },
     mention(displayName) {
       if (disabled || send === 'sending' || send === 'pending_confirmation') return
       const separator = value && !/\s$/u.test(value) ? ' ' : ''
