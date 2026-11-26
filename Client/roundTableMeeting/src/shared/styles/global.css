@@ -383,7 +383,7 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 .meeting-navigation-item.selected strong { font-weight: 650; }
 .meeting-navigation-content > .meeting-navigation-scroll { flex: 1; }
 .meeting-navigation-history { display: flex; flex-direction: column; min-height: 0; max-height: 45%; }
-.meeting-history-toggle { flex: none; display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 8px; background: transparent; border: 0; color: var(--rt-secondary); font: inherit; text-align: left; cursor: pointer; }
+.meeting-history-toggle { flex: none; display: flex; align-items: center; gap: 8px; width: 100%; padding: 4px 8px; background: transparent; border: 0; color: var(--rt-secondary); font: inherit; font-size: 12px; line-height: 18px; text-align: left; cursor: pointer; }
 .meeting-history-toggle:hover { background: var(--rt-subtle); }
 .meeting-navigation-item.selected .meeting-navigation-actions button { color: inherit; }
 

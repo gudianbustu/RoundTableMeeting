@@ -3,7 +3,7 @@ import { Badge, Button, Dropdown, Empty, Flex, Popover, Segmented, Skeleton, Typ
 import { RightOutlined, DeleteOutlined, EllipsisOutlined, InfoCircleOutlined, LoginOutlined, PlusOutlined } from '@ant-design/icons'
 import type { MeetingDetails, MeetingListItem } from '../types/meetingWorkspace'
 
-export function MeetingNavigation({ unreadCounts = {}, meetings, historyMeetings = [], selectedId, details, detailLoading, onDelete, onLeave, onRejoin, onHide, operationLoading, loading, onSelect, onCreate, onJoin, onAll, view = 'active', onViewChange }: { unreadCounts?: Record<string, number>; onAll?: () => void; details?: MeetingDetails; detailLoading?: boolean; onRejoin?: (id: string) => void; onHide?: (id: string) => void; operationLoading?: boolean; onDelete?: () => void; onLeave?: () => void; view?: 'active' | 'history'; onViewChange?: (view: 'active' | 'history') => void; meetings: MeetingListItem[]; historyMeetings?: MeetingListItem[]; selectedId?: string; loading?: boolean; onSelect: (id: string) => void; onCreate: () => void; onJoin: () => void }) {
+export function MeetingNavigation({ unreadCounts = {}, meetings, historyMeetings, selectedId, details, detailLoading, onDelete, onLeave, onRejoin, onHide, operationLoading, loading, onSelect, onCreate, onJoin, view = 'active', onViewChange }: { unreadCounts?: Record<string, number>; details?: MeetingDetails; detailLoading?: boolean; onRejoin?: (id: string) => void; onHide?: (id: string) => void; operationLoading?: boolean; onDelete?: () => void; onLeave?: () => void; view?: 'active' | 'history'; onViewChange?: (view: 'active' | 'history') => void; meetings: MeetingListItem[]; historyMeetings?: MeetingListItem[]; selectedId?: string; loading?: boolean; onSelect: (id: string) => void; onCreate: () => void; onJoin: () => void }) {
   const [historyExpanded, setHistoryExpanded] = useState(false)
   const [infoId, setInfoId] = useState<string>()
   const [menuId, setMenuId] = useState<string>()
@@ -21,7 +21,7 @@ export function MeetingNavigation({ unreadCounts = {}, meetings, historyMeetings
           ...(!current.canLeave && !current.canDelete ? [{ key: 'none', label: '暂无可用操作', disabled: true }] : []),
         ]
       return <div key={meeting.meetingId} className={selectedId === meeting.meetingId ? 'meeting-navigation-item selected' : 'meeting-navigation-item'}>
-        <button type="button" className="meeting-navigation-select" aria-current={selectedId === meeting.meetingId ? 'page' : undefined} onClick={() => { setInfoId(undefined); setMenuId(undefined); onSelect(meeting.meetingId) }}><i aria-hidden="true" className="meeting-chat-icon" /><span><span className="meeting-nav-title"><strong>{meeting.name}</strong>{count > 0 && <Badge count={count} overflowCount={999} aria-label={`未读 ${count > 999 ? '999+' : count} 条`} />}</span>{!onAll && <small>{meeting.myDisplayName}</small>}</span></button>
+        <button type="button" className="meeting-navigation-select" aria-current={selectedId === meeting.meetingId ? 'page' : undefined} onClick={() => { setInfoId(undefined); setMenuId(undefined); onSelect(meeting.meetingId) }}><i aria-hidden="true" className="meeting-chat-icon" /><span><span className="meeting-nav-title"><strong>{meeting.name}</strong>{count > 0 && <Badge count={count} overflowCount={999} aria-label={`未读 ${count > 999 ? '999+' : count} 条`} />}</span>{!historyMeetings && <small>{meeting.myDisplayName}</small>}</span></button>
         <div className={`meeting-navigation-actions${infoId === meeting.meetingId || menuId === meeting.meetingId ? ' is-open' : ''}`}>
           <Popover trigger="click" placement="rightTop" open={infoId === meeting.meetingId} onOpenChange={open => { setInfoId(open ? meeting.meetingId : undefined); setMenuId(undefined); if (open) activate(meeting.meetingId) }} title={meeting.name} content={<div className="meeting-description">{current ? current.description || '暂无会议描述' : '会议详情加载中或暂不可用，请稍后重试。'}</div>}>
             <Button type="text" size="small" aria-label={`会议信息 ${meeting.name}`} title="会议信息" icon={<InfoCircleOutlined />} />
@@ -33,10 +33,10 @@ export function MeetingNavigation({ unreadCounts = {}, meetings, historyMeetings
       </div>
     })}</nav>
   return <aside className="meeting-navigation"><Flex vertical gap="middle" className="meeting-navigation-content">
-    <Flex align="center" justify="space-between" wrap gap="small" className="meeting-navigation-heading"><Typography.Title level={4} style={{ margin: 0 }}>我的会议</Typography.Title><Flex gap="small">{onAll ? <Button size="small" onClick={onAll}>全部会议 ›</Button> : <><Button aria-label="创建会议" title="创建会议" icon={<PlusOutlined />} onClick={onCreate} /><Button aria-label="加入会议" title="加入会议" icon={<LoginOutlined />} onClick={onJoin} /></>}</Flex></Flex>
-    {!onAll && <Segmented block value={view} options={[{ label: '当前会议', value: 'active' }, { label: '历史会议', value: 'history' }]} onChange={value => { setInfoId(undefined); setMenuId(undefined); onViewChange?.(value as 'active' | 'history') }} />}
-    <div className="meeting-navigation-scroll">{renderList(meetings, !onAll && view === 'history')}</div>
-    {onAll && <div className="meeting-navigation-history">
+    {!historyMeetings && <Flex align="center" justify="space-between" wrap gap="small" className="meeting-navigation-heading"><Typography.Title level={4} style={{ margin: 0 }}>我的会议</Typography.Title><Flex gap="small"><Button aria-label="创建会议" title="创建会议" icon={<PlusOutlined />} onClick={onCreate} /><Button aria-label="加入会议" title="加入会议" icon={<LoginOutlined />} onClick={onJoin} /></Flex></Flex>}
+    {!historyMeetings && <Segmented block value={view} options={[{ label: '当前会议', value: 'active' }, { label: '历史会议', value: 'history' }]} onChange={value => { setInfoId(undefined); setMenuId(undefined); onViewChange?.(value as 'active' | 'history') }} />}
+    <div className="meeting-navigation-scroll">{renderList(meetings, !historyMeetings && view === 'history')}</div>
+    {historyMeetings && <div className="meeting-navigation-history">
       <button type="button" className="meeting-history-toggle" aria-expanded={historyExpanded} onClick={() => setHistoryExpanded(open => !open)}>
         <RightOutlined rotate={historyExpanded ? 90 : 0} aria-hidden="true" />历史会议
       </button>
