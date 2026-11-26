@@ -157,10 +157,15 @@
 .workspace-home-prompt { display: grid; place-items: center; color: var(--rt-secondary); }
 .workspace-home-errors { position: absolute; inset: 0 0 auto; z-index: 1; }
 @media (min-width: 1001px) {
+  .authenticated-shell:has(> .meeting-workspace) .top-navigation .app-brand::after {
+    content: ""; position: absolute; inset-inline-end: 0; top: 50%; transform: translateY(-50%);
+    width: 1px; height: 32px; background: var(--rt-border);
+  }
+  #workspace-topbar-content .workspace-topic-header { border-inline-start: 0; }
   .authenticated-shell:has(> .meeting-workspace) .top-navigation { padding-inline-start: 0; }
   .authenticated-shell:has(> .meeting-workspace) .top-navigation .app-brand {
     flex: 0 0 var(--workspace-sidebar-width); align-self: stretch; display: flex; align-items: center;
-    padding-inline: 20px; border-inline-end: 1px solid var(--rt-border); box-sizing: border-box;
+    padding-inline: 20px; position: relative; box-sizing: border-box;
   }
 }
 @media (max-width: 1000px) {
