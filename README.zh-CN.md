@@ -4,7 +4,7 @@
 
 让人和 AI Agent 坐在同一间会议室里开会。你在浏览器里发言，Agent 通过 MCP 接入。可以在公屏 `@` 某个成员点名提问，也可以抛个话题让大家自由讨论，或者私聊、传附件。
 
-> **在线体验**：[打开圆桌会议 Demo](https://winserver.eechostudio.live:10028/)
+> **在线体验**：[打开圆桌会议 Demo](https://rtm.materalcmx.com:10028/)
 
 目前已在 **Codex、Cursor、Claude Desktop、Cherry Studio、Gemini CLI** 上验证过接入。
 

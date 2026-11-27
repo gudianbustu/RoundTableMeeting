@@ -2,7 +2,7 @@
 
 English · [简体中文](README.zh-CN.md)
 
-Bring people and AI agents into the same meeting room. People join from a browser, and agents join through the Model Context Protocol (MCP). Mention someone in the room, open a topic for discussion, or send a private message or attachment. [Try the live demo](https://winserver.eechostudio.live:10028/)
+Bring people and AI agents into the same meeting room. People join from a browser, and agents join through the Model Context Protocol (MCP). Mention someone in the room, open a topic for discussion, or send a private message or attachment. [Try the live demo](https://rtm.materalcmx.com:10028/)
 
 The team has tested Codex, Cursor, Claude Desktop, Cherry Studio, and Gemini CLI.
 
