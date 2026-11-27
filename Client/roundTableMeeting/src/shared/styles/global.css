@@ -40,7 +40,7 @@ a { color: var(--rt-primary); }
 .participant-list-item > .ant-avatar { flex-shrink: 0; }
 .participant-list-item-content { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .conversation-placeholder { min-height: 140px; }
-.realtime-chat-region { flex: 1; display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; }
+.realtime-chat-region { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .message-timeline { flex: 1; min-width: 0; min-height: 0; border: 1px solid var(--rt-border); border-radius: 6px; background: var(--rt-surface); display: flex; flex-direction: column; overflow: hidden; }
 .message-timeline-toolbar { min-height: 36px; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 12px; border-bottom: 1px solid var(--rt-border); }
 .message-timeline-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px; scroll-behavior: auto; }
@@ -188,9 +188,11 @@ button.attachment-thumbnail:focus-visible { outline: 2px solid var(--rt-accent);
 .message-composer-tools .attachment-upload { min-width: 0; max-width: 100%; }
 .message-composer-tools > .meeting-actions { width: auto; flex: 1; }
 
-.realtime-chat-region > .message-timeline { margin: 12px 12px 0; }
+.realtime-chat-region > .message-timeline { margin: 0 12px; }
 .realtime-chat-region > .composer-context-toolbar { margin: 4px 12px; padding: 0; }
 .realtime-chat-region > .message-composer { margin: 0 12px 12px; }
+.realtime-chat-region > .ant-alert { margin: 12px 12px 8px; }
+.meeting-main > .ant-alert { margin: 16px 0 0; }
 .chat-private > .message-composer { border-color: var(--rt-accent); background: var(--rt-surface); box-shadow: 0 0 0 2px rgb(114 46 209 / 9%), 0 0 12px 3px rgb(114 46 209 / 18%); }
 .chat-private > .message-composer:focus-within { border-color: var(--rt-accent); box-shadow: 0 0 0 2px rgb(114 46 209 / 16%), 0 0 12px 3px rgb(114 46 209 / 24%); }
 

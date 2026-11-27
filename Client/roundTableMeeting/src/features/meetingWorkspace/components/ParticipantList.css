@@ -1,5 +1,7 @@
 .participant-list { container-type: inline-size; }
 .participant-list .participant-list-item { cursor: default; }
+.participant-list .participant-list-item-content > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.participant-list .participant-list-item-content .ant-tag { margin-inline-end: 0; }
 .participant-list .participant-list-item-actions { gap: 4px; }
 .participant-list .participant-list-item-actions .ant-btn {
   height: 36px;

@@ -1,5 +1,7 @@
 .app-shell:has(.first-home) {
   padding: 0;
+  /* 建立 BFC，避免子元素上下外边距折叠到 shell 之外撑出多余滚动条 */
+  display: flow-root;
 }
 .authenticated-shell:has(.first-home) > .top-navigation {
   min-height: 72px;
