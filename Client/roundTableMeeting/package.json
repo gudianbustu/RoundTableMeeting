@@ -10,6 +10,11 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
+    "test:browser": "vitest run --project browser",
+    "test:browser:ui": "vitest --project browser",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:codegen": "playwright codegen http://localhost:5173",
     "generate:api": "node scripts/generate-api.mjs",
     "check:format": "node scripts/check-text-format.mjs",
     "check:toolchain": "node scripts/check-toolchain.mjs"
@@ -37,6 +42,7 @@
     "remark-gfm": "4.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.65.1",
     "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.6",
@@ -44,6 +50,8 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "6.1.0",
+    "@vitest/browser": "4.1.11",
+    "@vitest/browser-playwright": "4.1.11",
     "@vitest/coverage-v8": "4.1.11",
     "jsdom": "30.0.1",
     "mdast-util-from-markdown": "2.1.0",
