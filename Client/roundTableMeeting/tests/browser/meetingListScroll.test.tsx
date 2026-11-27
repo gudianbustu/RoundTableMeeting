@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RealtimeChatApiError } from '@/features/meetingWorkspace/api/listMessages'
 import {
@@ -6,6 +6,7 @@ import {
   defaultMessages,
   detailsDto,
   makeMessage,
+  mockImageUrls,
   mockStateRef,
   participants,
   renderWorkspace,
@@ -24,6 +25,7 @@ vi.mock('@/api/client/apiClient', () => ({
         byMeetingId: () => ({
           get: () => mockStateRef.state.meetings.details(),
           messages: { get: (request: Record<string, unknown>) => mockStateRef.state.meetings.messages(request) },
+          attachments: { get: () => mockStateRef.state.meetings.attachments() },
           invitation: { post: () => mockStateRef.state.meetings.invitation() },
           discussionMode: { put: () => Promise.resolve() },
         }),
@@ -65,8 +67,18 @@ vi.mock('@/features/meetingWorkspace/api/listMessages', () => ({
   listMessages: vi.fn(async () => mockStateRef.state.messagesPage),
 }))
 
+vi.mock('@/features/meetingWorkspace/api/messageResources', async importOriginal => {
+  const actual = await importOriginal<typeof import('@/features/meetingWorkspace/api/messageResources')>()
+  return {
+    ...actual,
+    attachmentUrl: (meetingId: string, attachmentId: string, preview = false) =>
+      mockImageUrls[attachmentId] ?? actual.attachmentUrl(meetingId, attachmentId, preview),
+  }
+})
+
 beforeEach(() => {
   // 每条用例默认干净状态；renderWorkspace 的 overrides 再按需覆盖
+  localStorage.removeItem('rtm-right-panel-width-v1')
   mockStateRef.apply({})
 })
 
@@ -171,5 +183,44 @@ describe('会议工作区完整布局', () => {
 
     await screen.findByText('这是带附件的消息', undefined, { timeout: 5000 })
     expect(screen.getByText('设计稿.pdf')).toBeTruthy()
+  })
+
+  it('右侧上下文分栏：支持一级切换成员/文件/图片，并可拖拽调整宽度', async () => {
+    await renderWorkspace({
+      subscription: { onlineParticipantIds: [participants[0].participantId, participants[1].participantId] },
+    })
+    await waitForFirstMessage()
+
+    const infoTab = screen.getByRole('tab', { name: '信息' })
+    const filesTab = screen.getByRole('tab', { name: '文件' })
+    const imagesTab = screen.getByRole('tab', { name: '图片' })
+    const resizer = screen.getByRole('separator', { name: '调整右侧栏宽度' })
+
+    const initialWidth = Number(resizer.getAttribute('aria-valuenow'))
+    fireEvent.keyDown(resizer, { key: 'ArrowLeft' })
+    expect(Number(resizer.getAttribute('aria-valuenow'))).toBeGreaterThan(initialWidth)
+
+    fireEvent.click(infoTab)
+    expect(await screen.findByText('整体布局预览用模拟会议', undefined, { timeout: 5000 })).toBeTruthy()
+    expect(screen.getByText('讨论模式')).toBeTruthy()
+
+    fireEvent.click(filesTab)
+    expect(await screen.findByText('Agent接入体验报告.md', undefined, { timeout: 5000 })).toBeTruthy()
+    expect(await screen.findByText(/让人和 AI Agent 坐在同一间会议室里开会/, undefined, { timeout: 5000 })).toBeTruthy()
+    expect(screen.getByText('圆桌会议界面优化方案-v2.pdf')).toBeTruthy()
+
+    fireEvent.click(imagesTab)
+    expect(await screen.findByRole('button', { name: '预览 架构草图.png' }, { timeout: 5000 })).toBeTruthy()
+    expect(document.querySelectorAll('.meeting-image-tile')).toHaveLength(6)
+
+    // 历史会议展开后在限定高度内可正常滚动
+    fireEvent.click(screen.getByRole('button', { name: '历史会议' }))
+    await vi.waitFor(() => {
+      const historyScroll = document.querySelector<HTMLElement>('.meeting-navigation-history .meeting-navigation-scroll')
+      expect(historyScroll).not.toBeNull()
+      expect(historyScroll!.scrollHeight).toBeGreaterThan(historyScroll!.clientHeight)
+      historyScroll!.scrollTop = 120
+      expect(historyScroll!.scrollTop).toBeGreaterThan(0)
+    }, { timeout: 2000 })
   })
 })

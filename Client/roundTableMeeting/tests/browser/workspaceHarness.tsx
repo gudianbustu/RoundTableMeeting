@@ -81,6 +81,31 @@ export const defaultMessages: ChatMessage[] = [
   makeMessage(5, authorOf(participants[0]), '正常，1280×720 视口下整体可读性不错。'),
 ]
 
+export const mockImageUrls: Record<string, string> = {
+  'file-1': 'data:text/plain;charset=utf-8,' + encodeURIComponent('# Agent 接入体验报告\n\n让人和 AI Agent 坐在同一间会议室里开会。你在浏览器里发言，Agent 通过 MCP 接入，支持公屏点名、自由讨论与附件协作。'),
+  'file-3': 'data:text/plain;charset=utf-8,' + encodeURIComponent('{"tools": ["join_meeting", "send_message", "wait_messages"], "version": "0.1.0", "transport": "stdio"}'),
+  'file-4': 'data:text/plain;charset=utf-8,' + encodeURIComponent('2026-11-27 09:04:01 INFO 并发 50 路 SignalR 连接稳定，平均推送延迟 18ms，P99 42ms，零断线重连。'),
+  'img-1': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#2563eb"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">架构草图.png</text></svg>'),
+  'img-2': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#0d9488"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">交互稿-01.png</text></svg>'),
+  'img-3': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#d97706"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">性能监控.webp</text></svg>'),
+  'img-4': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#7c3aed"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">白板记录.jpg</text></svg>'),
+  'img-5': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#e11d48"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">告警截图.png</text></svg>'),
+  'img-6': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#16a34a"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">验收通过.png</text></svg>'),
+}
+
+export const defaultAttachments = [
+  { attachment: { attachmentId: 'file-1', name: 'Agent接入体验报告.md', sizeBytes: 18420, mediaType: 'text/markdown', state: 'saved' }, messageId: defaultMessages[2].messageId, sequence: 3, author: { displayName: '纪要助手' }, createdAt: new Date(2026, 0, 1, 9, 3).toISOString() },
+  { attachment: { attachmentId: 'file-2', name: '圆桌会议界面优化方案-v2.pdf', sizeBytes: 2457600, mediaType: 'application/pdf', state: 'saved' }, messageId: defaultMessages[0].messageId, sequence: 1, author: { displayName: 'alice' }, createdAt: new Date(2026, 0, 1, 9, 1).toISOString() },
+  { attachment: { attachmentId: 'file-3', name: 'mcp-tools-schema.json', sizeBytes: 6340, mediaType: 'application/json', state: 'saved' }, messageId: defaultMessages[1].messageId, sequence: 2, author: { displayName: 'bob' }, createdAt: new Date(2026, 0, 1, 9, 2).toISOString() },
+  { attachment: { attachmentId: 'file-4', name: '压测日志-2026-11-27.txt', sizeBytes: 94210, mediaType: 'text/plain', state: 'saved' }, messageId: defaultMessages[3].messageId, sequence: 4, author: { displayName: 'carol' }, createdAt: new Date(2026, 0, 1, 9, 4).toISOString() },
+  { attachment: { attachmentId: 'img-1', name: '架构草图.png', sizeBytes: 215040, mediaType: 'image/png', state: 'saved' }, messageId: defaultMessages[0].messageId, sequence: 1, author: { displayName: 'alice' }, createdAt: new Date(2026, 0, 1, 9, 1).toISOString() },
+  { attachment: { attachmentId: 'img-2', name: '交互稿-01.png', sizeBytes: 184320, mediaType: 'image/png', state: 'saved' }, messageId: defaultMessages[1].messageId, sequence: 2, author: { displayName: 'bob' }, createdAt: new Date(2026, 0, 1, 9, 2).toISOString() },
+  { attachment: { attachmentId: 'img-3', name: '性能监控.webp', sizeBytes: 92160, mediaType: 'image/webp', state: 'saved' }, messageId: defaultMessages[2].messageId, sequence: 3, author: { displayName: '纪要助手' }, createdAt: new Date(2026, 0, 1, 9, 3).toISOString() },
+  { attachment: { attachmentId: 'img-4', name: '白板记录.jpg', sizeBytes: 312000, mediaType: 'image/jpeg', state: 'saved' }, messageId: defaultMessages[3].messageId, sequence: 4, author: { displayName: 'carol' }, createdAt: new Date(2026, 0, 1, 9, 4).toISOString() },
+  { attachment: { attachmentId: 'img-5', name: '告警截图.png', sizeBytes: 128000, mediaType: 'image/png', state: 'saved' }, messageId: defaultMessages[4].messageId, sequence: 5, author: { displayName: 'alice' }, createdAt: new Date(2026, 0, 1, 9, 5).toISOString() },
+  { attachment: { attachmentId: 'img-6', name: '验收通过.png', sizeBytes: 156000, mediaType: 'image/png', state: 'saved' }, messageId: defaultMessages[4].messageId, sequence: 5, author: { displayName: 'bob' }, createdAt: new Date(2026, 0, 1, 9, 5).toISOString() },
+]
+
 export const defaultSubscription = {
   onlineParticipantIds: participants.map(p => p.participantId),
   highWatermarkSequence: defaultMessages.length,
@@ -132,6 +157,7 @@ export const mockStateRef = {
       list: vi.fn(),
       details: vi.fn(),
       messages: vi.fn(),
+      attachments: vi.fn(),
       invitation: vi.fn(),
       capabilities: vi.fn(),
     },
@@ -152,6 +178,7 @@ export const mockStateRef = {
       if (overrides.messagesError) throw overrides.messagesError
       return { items: messages, hasMoreBefore: false, hasMoreAfter: false, firstSequence: 1, lastSequence: messages.length }
     })
+    s.meetings.attachments.mockImplementation(async () => ({ items: defaultAttachments, nextBeforeSequence: undefined }))
     s.meetings.invitation.mockImplementation(async () => {
       if (overrides.invitationError) throw overrides.invitationError
       return { meetingId: details.meetingId, meetingCode: 'ABC123' }

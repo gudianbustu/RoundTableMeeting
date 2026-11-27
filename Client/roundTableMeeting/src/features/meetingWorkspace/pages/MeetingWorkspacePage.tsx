@@ -3,18 +3,19 @@ import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
-import { CloseOutlined, MenuOutlined } from '@ant-design/icons'
+import { CloseOutlined, FolderOpenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react'
 import { getApiClient } from '@/api/client/apiClient'
 import { createUuid } from '@/shared/utils/createUuid'
 import { meetingError } from '../api/helpers'
-import { MeetingInformationDialog } from '../components/MeetingInformationDialog'
+import { MeetingInformationPanel } from '../components/MeetingInformationDialog'
 import { MeetingNicknameDialog } from '../components/MeetingNicknameDialog'
 import { MeetingNavigation } from '../components/MeetingNavigation'
 import { DiscussionModeControl } from '../components/DiscussionModeControl'
+import { MeetingAttachmentPanel } from '../components/AttachmentControls'
 import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { InviteMeetingDialog } from '../components/InviteMeetingDialog'
@@ -22,7 +23,19 @@ import { JoinMeetingDialog, meetingCodePattern } from '../components/JoinMeeting
 import { useMeetingWorkspace } from '../hooks/useMeetingWorkspace'
 import type { AgentActivity } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
-import { RealtimeChatRegion, type ChatSessionCache } from './RealtimeChatRegion'
+import { RealtimeChatRegion, type ActiveChatScopeContext, type ChatSessionCache } from './RealtimeChatRegion'
+
+const RIGHT_PANEL_MIN = 280
+const RIGHT_PANEL_MAX = 520
+const RIGHT_PANEL_DEFAULT = 330
+const rightPanelWidthKey = 'rtm-right-panel-width-v1'
+
+function readRightPanelWidth() {
+  try {
+    const value = Number(localStorage.getItem(rightPanelWidthKey))
+    return Number.isSafeInteger(value) && value >= RIGHT_PANEL_MIN && value <= RIGHT_PANEL_MAX ? value : RIGHT_PANEL_DEFAULT
+  } catch { return RIGHT_PANEL_DEFAULT }
+}
 
 export function hasUnknownOnlineParticipant(participants: Participant[], presence: Record<string, 'online' | 'offline'>) {
   const participantIds = new Set(participants.filter(p => p.membershipState !== 'left').map(p => p.participantId))
@@ -55,7 +68,6 @@ export function MeetingWorkspacePage() {
   const composerRef = useRef<MessageComposerHandle>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
-  const [informationId, setInformationId] = useState<string>()
   const meetingName = workspace.details?.name
   useEffect(() => {
     if (!meetingName) return
@@ -79,7 +91,58 @@ export function MeetingWorkspacePage() {
     } catch (reason) { setRemovalError(meetingError(reason).message) }
     finally { setRemoving(false) }
   }
-  const [membersOpen, setMembersOpen] = useState(false)
+  const [wideDesktop, setWideDesktop] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+    ? window.matchMedia('(min-width: 1200px)').matches : false)
+  const [rightPanel, setRightPanel] = useState<'info' | 'members' | 'files' | 'images' | null>(() =>
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1200px)').matches ? 'members' : null)
+  const [renderedPanel, setRenderedPanel] = useState<'info' | 'members' | 'files' | 'images'>('members')
+  useEffect(() => { if (rightPanel) setRenderedPanel(rightPanel) }, [rightPanel])
+  const [rightPanelWidth, setRightPanelWidth] = useState(readRightPanelWidth)
+  const [resizingRightPanel, setResizingRightPanel] = useState(false)
+  const rightDrag = useRef<{ pointer: number; startX: number; startWidth: number; lastWidth?: number } | undefined>(undefined)
+  const clampRightWidth = (value: number) => Math.max(RIGHT_PANEL_MIN, Math.min(RIGHT_PANEL_MAX, Math.round(value)))
+  const saveRightPanelWidth = (value: number) => {
+    const next = clampRightWidth(value)
+    setRightPanelWidth(next)
+    try { localStorage.setItem(rightPanelWidthKey, String(next)) } catch { /* ignore storage failure */ }
+  }
+  const startRightResize = (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    rightDrag.current = { pointer: event.pointerId, startX: event.clientX, startWidth: rightPanelWidth }
+    setResizingRightPanel(true)
+  }
+  const moveRightResize = (event: PointerEvent<HTMLDivElement>) => {
+    const active = rightDrag.current
+    if (active?.pointer !== event.pointerId) return
+    active.lastWidth = clampRightWidth(active.startWidth + (active.startX - event.clientX))
+    setRightPanelWidth(active.lastWidth)
+  }
+  const finishRightResize = () => {
+    if (rightDrag.current?.lastWidth !== undefined) saveRightPanelWidth(rightDrag.current.lastWidth)
+    rightDrag.current = undefined
+    setResizingRightPanel(false)
+  }
+  const keydownRightResize = (event: KeyboardEvent<HTMLDivElement>) => {
+    const map: Record<string, number> = {
+      ArrowLeft: rightPanelWidth + 16,
+      ArrowRight: rightPanelWidth - 16,
+      Home: RIGHT_PANEL_MIN,
+      End: RIGHT_PANEL_MAX,
+    }
+    if (!Object.hasOwn(map, event.key)) return
+    event.preventDefault()
+    saveRightPanelWidth(map[event.key])
+  }
+  const [activeScope, setActiveScope] = useState<ActiveChatScopeContext>()
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia('(min-width: 1200px)')
+    const sync = () => setWideDesktop(query.matches)
+    sync()
+    query.addEventListener?.('change', sync)
+    return () => query.removeEventListener?.('change', sync)
+  }, [])
   const [navigationOpen, setNavigationOpen] = useState(false)
   const [navigationTrigger, setNavigationTrigger] = useState<HTMLElement | null>(null)
   useEffect(() => { setNavigationTrigger(document.getElementById('workspace-navigation-trigger')) }, [workspace.selectedId])
@@ -92,7 +155,8 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.createSucceeded) setCreateOpen(false) }, [workspace.createSucceeded])
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
-    setRemoval(undefined); setInformationId(undefined); setMembersOpen(false); setNicknameOpen(false); setNavigationOpen(false)
+    setRemoval(undefined); setNicknameOpen(false); setNavigationOpen(false)
+    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined)
     setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
@@ -120,18 +184,50 @@ export function MeetingWorkspacePage() {
   const topicHeader = workspace.details && !historical && <div className="workspace-topic-header">
     <h1 aria-label={workspace.details.name} className="workspace-topbar-title" title={workspace.details.name}><button type="button"
       className="workspace-topic-trigger" aria-label={workspace.details.currentParticipant?.isCreator ? '编辑会议信息' : '查看会议信息'}
-      onClick={() => setInformationId(workspace.details?.meetingId)}>{workspace.details.name}</button></h1>
-    {informationId === workspace.details.meetingId && <MeetingInformationDialog meeting={workspace.details}
-      onClose={() => setInformationId(undefined)} onSaved={workspace.refreshDetails} />}
+      aria-expanded={rightPanel === 'info'}
+      onClick={() => setRightPanel(current => current === 'info' ? null : 'info')}>{workspace.details.name}</button></h1>
     <div className="workspace-member-tools">
-      <button type="button" className="workspace-members-toggle" aria-expanded={membersOpen} onClick={() => setMembersOpen(true)} aria-label={`查看 ${members.length} 位成员，${onlineMembers.length} 位在线`}>
+      <button type="button" className="workspace-members-toggle" aria-expanded={rightPanel === 'members'} onClick={() => setRightPanel(current => current === 'members' ? null : 'members')} aria-label={`查看 ${members.length} 位成员，${onlineMembers.length} 位在线`}>
         {onlineMembers.length > 0 && <span className="workspace-member-faces" aria-hidden="true">{onlineMembers.slice(0, 3).map(person =>
           <i key={person.participantId}><AvatarImage src={person.avatarUrl} colorSlot={person.avatarColorSlot} fallback={Array.from(person.displayName)[0]} /></i>)}</span>}{onlineMembers.length}/{members.length} 在线
       </button>
       {workspace.details.canManageInvitation && <Button type="primary" onClick={openInvite}>邀请入会</Button>}
     </div>
   </div>
-  return <section className={workspace.selectedId ? 'meeting-workspace' : 'meeting-workspace workspace-home'}>
+  const closePanelOnMobile = () => { if (!wideDesktop) setRightPanel(null) }
+  const memberList = workspace.details && <ParticipantList compact onRemove={!historical && workspace.details.currentParticipant?.isCreator ? member => {
+    setRemovalError('')
+    setRemoval({ member, operationId: createUuid(), meetingId: workspace.details!.meetingId })
+  } : undefined} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities}
+    onEditNickname={historical ? undefined : () => { closePanelOnMobile(); setNicknameOpen(true) }}
+    onPrivateChat={participant => { closePanelOnMobile(); composerRef.current?.privateChat?.(participant.participantId) }}
+    onMention={historical ? undefined : participant => { closePanelOnMobile(); composerRef.current?.mention(participant.displayName) }} />
+  const activePanelTab = rightPanel ?? renderedPanel
+  const rightPanelBody = workspace.details && <div key={activePanelTab} className="workspace-right-panel-view">
+    {activePanelTab === 'info'
+      ? <MeetingInformationPanel meeting={workspace.details} onSaved={workspace.refreshDetails} />
+      : activePanelTab === 'files' || activePanelTab === 'images'
+        ? <MeetingAttachmentPanel kind={activePanelTab} meetingId={workspace.details.meetingId} scope={activeScope?.scope ?? 'public'} peerParticipantId={activeScope?.peerParticipantId}
+            onLocate={id => activeScope ? activeScope.locate(id) : Promise.resolve()} onClose={closePanelOnMobile} />
+        : memberList}
+  </div>
+  const rightPanelHeader = <div className="workspace-right-panel-header">
+    <div className="workspace-right-panel-tabs" role="tablist" aria-label="右侧信息面板">
+      <button type="button" role="tab" aria-selected={rightPanel === 'info'} className={rightPanel === 'info' ? 'is-active' : undefined}
+        onClick={() => setRightPanel('info')}><InfoCircleOutlined aria-hidden="true" /><span>信息</span></button>
+      <button type="button" role="tab" aria-selected={rightPanel === 'members'} className={rightPanel === 'members' ? 'is-active' : undefined}
+        onClick={() => setRightPanel('members')}><TeamOutlined aria-hidden="true" /><span>成员</span><small>{onlineMembers.length}/{members.length}</small></button>
+      <button type="button" role="tab" aria-selected={rightPanel === 'files'} className={rightPanel === 'files' ? 'is-active' : undefined}
+        onClick={() => setRightPanel('files')}><FolderOpenOutlined aria-hidden="true" /><span>文件</span></button>
+      <button type="button" role="tab" aria-selected={rightPanel === 'images'} className={rightPanel === 'images' ? 'is-active' : undefined}
+        onClick={() => setRightPanel('images')}><PictureOutlined aria-hidden="true" /><span>图片</span></button>
+    </div>
+    <Button type="text" size="small" aria-label="关闭右侧面板" icon={<CloseOutlined />} onClick={() => setRightPanel(null)} />
+  </div>
+  const canShowRightPanel = Boolean(workspace.selectedId && workspace.details)
+  const showRightPanel = canShowRightPanel && Boolean(rightPanel)
+  return <section className={(workspace.selectedId ? 'meeting-workspace' : 'meeting-workspace workspace-home') + (wideDesktop && canShowRightPanel ? ' workspace-with-panel' : '') + (wideDesktop && showRightPanel ? ' workspace-has-rail' : '') + (resizingRightPanel ? ' workspace-right-resizing' : '')}
+    style={{ '--workspace-right-panel-width': rightPanelWidth + 'px' } as CSSProperties}>
     {navigation}
     {!workspace.selectedId ? <>
       {(listError || workspace.error) && <div className="workspace-home-errors">{listError}
@@ -157,21 +253,26 @@ export function MeetingWorkspacePage() {
             </div>
           </div>
         </header> : topbarSlot ? createPortal(topicHeader, topbarSlot) : topicHeader}
-        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} composerTools={discussionMode} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} />
+        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} onActiveScopeChanged={setActiveScope} onOpenAttachments={() => setRightPanel(current => current === 'files' || current === 'images' ? null : 'files')} />
         {readOnly && discussionMode}
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
+    {wideDesktop && canShowRightPanel && <aside className={showRightPanel ? 'workspace-right-panel is-open' : 'workspace-right-panel'}
+      aria-label={activePanelTab === 'info' ? '会议信息' : activePanelTab === 'files' ? '会话文件' : activePanelTab === 'images' ? '会话图片' : '会议成员'}
+      aria-hidden={!showRightPanel} inert={!showRightPanel || undefined}>
+      {showRightPanel && <div className="workspace-right-resizer" role="separator" aria-orientation="vertical" aria-label="调整右侧栏宽度"
+        aria-valuemin={RIGHT_PANEL_MIN} aria-valuemax={RIGHT_PANEL_MAX} aria-valuenow={rightPanelWidth} tabIndex={0}
+        onPointerDown={startRightResize} onPointerMove={moveRightResize} onPointerUp={finishRightResize}
+        onPointerCancel={finishRightResize} onLostPointerCapture={finishRightResize} onKeyDown={keydownRightResize} />}
+      <div className="workspace-right-panel-inner">
+        {rightPanelHeader}
+        <div className="workspace-right-panel-body">{rightPanelBody}</div>
+      </div>
+    </aside>}
     </>}
-    {workspace.details && <Drawer title={<span>会议成员 <small className="drawer-member-count">{members.length} 人</small></span>} closable={false}
-      extra={<Button type="text" aria-label="关闭成员列表" icon={<CloseOutlined />} onClick={() => setMembersOpen(false)} />} placement="right" size="min(450px, calc(100vw - 18px))"
-      open={membersOpen} onClose={() => setMembersOpen(false)} rootClassName="workspace-member-drawer">
-      <ParticipantList onRemove={!historical && workspace.details.currentParticipant?.isCreator ? member => {
-        setRemovalError('')
-        setRemoval({ member, operationId: createUuid(), meetingId: workspace.details!.meetingId })
-      } : undefined} participants={workspace.details.participants} presence={presence} agentActivities={agentActivities}
-        onEditNickname={historical ? undefined : () => { setMembersOpen(false); setNicknameOpen(true) }}
-        onPrivateChat={participant => { setMembersOpen(false); composerRef.current?.privateChat?.(participant.participantId) }}
-        onMention={historical ? undefined : participant => { setMembersOpen(false); composerRef.current?.mention(participant.displayName) }} />
+    {!wideDesktop && workspace.details && <Drawer title={rightPanelHeader} closable={false} placement="right" size="min(360px, calc(100vw - 18px))"
+      open={Boolean(rightPanel)} onClose={() => setRightPanel(null)} rootClassName="workspace-right-drawer">
+      {rightPanel && rightPanelBody}
     </Drawer>}
     <Modal open={!!removal} title="移除会议成员" okText="移除" cancelText="取消" okButtonProps={{ danger: true }}
       confirmLoading={removing} onOk={() => void removeMember()} onCancel={() => { if (!removing) setRemoval(undefined) }}>

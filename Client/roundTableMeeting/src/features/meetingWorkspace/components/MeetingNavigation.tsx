@@ -1,4 +1,4 @@
-import { useState, type ButtonHTMLAttributes } from 'react'
+import { useEffect, useState, type ButtonHTMLAttributes } from 'react'
 import { CSS } from '@dnd-kit/utilities'
 import { useSortable } from '@dnd-kit/sortable'
 import { SortableList } from '@/features/avatars/AvatarLibrarySort'
@@ -19,6 +19,16 @@ export function MeetingNavigation({ orderOwner, unreadCounts = {}, meetings, his
   const [search, setSearch] = useState('')
   const query = search.trim().toLocaleLowerCase()
   const [historyExpanded, setHistoryExpanded] = useState(false)
+  const [historyScrollable, setHistoryScrollable] = useState(false)
+  useEffect(() => {
+    if (!historyExpanded) { setHistoryScrollable(false); return }
+    if (typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setHistoryScrollable(true)
+      return
+    }
+    const timer = window.setTimeout(() => setHistoryScrollable(true), 220)
+    return () => window.clearTimeout(timer)
+  }, [historyExpanded])
   const [infoId, setInfoId] = useState<string>()
   const [menuId, setMenuId] = useState<string>()
   const { ordered, move } = useMeetingOrder(meetings, orderOwner)
@@ -75,11 +85,14 @@ export function MeetingNavigation({ orderOwner, unreadCounts = {}, meetings, his
       </Dropdown>
     </div>}
     <div className="meeting-navigation-scroll" data-sort-viewport>{renderList(query ? ordered.filter(meeting => meeting.name.toLocaleLowerCase().includes(query)) : ordered, !historyMeetings && view === 'history')}</div>
-    {historyMeetings && <div className="meeting-navigation-history">
+    {historyMeetings && <div className={'meeting-navigation-history' + (historyExpanded ? ' is-expanded' : '') + (historyScrollable ? ' is-scrollable' : '')}>
       <button type="button" className="meeting-history-toggle" aria-expanded={historyExpanded} onClick={() => setHistoryExpanded(open => !open)}>
-        <RightOutlined rotate={historyExpanded ? 90 : 0} aria-hidden="true" />历史会议
+        <RightOutlined className="meeting-history-arrow" aria-hidden="true" />历史会议
       </button>
-      {historyExpanded && <div className="meeting-navigation-scroll">{renderList(historyMeetings, true)}</div>}
+      <div className="meeting-history-collapse" aria-hidden={!historyExpanded} inert={!historyExpanded || undefined}
+        onTransitionEnd={event => { if (historyExpanded && event.propertyName === 'grid-template-rows') setHistoryScrollable(true) }}>
+        <div className="meeting-navigation-scroll">{renderList(historyMeetings, true)}</div>
+      </div>
     </div>}
   </Flex></aside>
 }

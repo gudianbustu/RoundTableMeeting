@@ -79,49 +79,49 @@ export function MessageComposer({ publicChat = false, placeholder = '输入消�
       if (!disabled && send !== 'sending' && send !== 'pending_confirmation') onFiles?.(Array.from(event.dataTransfer.files))
     }}>
     {attachments}
-    <Mentions
-      placement="top"
-      popupRender={menu => <div ref={mentionPopupRef}>{menu}</div>}
-      options={[
-        ...(publicChat ? groupMentionNames.map(name => ({
-          key: 'group:' + name, value: name,
-          label: <span className="mention-option"><span>{name}</span><Tag>群体</Tag></span>,
-        })) : []),
-        ...mentionableParticipants(participants, publicChat).map(participant => ({
-          key: participant.participantId,
-          value: participant.displayName.normalize('NFC'),
-          label: <span className="mention-option"><span>{participant.displayName}</span><Tag color={participant.type === 'agent' ? 'cyan' : 'blue'}>{participant.type === 'agent' ? 'Agent' : '人类'}</Tag></span>,
-        })),
-      ]}
-      filterOption={(query, option) => (option.value ?? '').normalize('NFC').toLocaleLowerCase().includes(query.normalize('NFC').toLocaleLowerCase())}
-      notFoundContent="没有匹配的参与者"
-      className="composer-mentions"
-      onKeyDownCapture={event => {
-        if (event.nativeEvent.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.shiftKey)) {
-          event.stopPropagation()
-          return
-        }
-        if (event.key === 'Backspace' && !value.length && onCancelReply && !disabled && send !== 'sending' && send !== 'pending_confirmation') {
-          event.preventDefault()
-          onCancelReply()
-          return
-        }
-        if (event.key === 'Tab' && !event.shiftKey) {
-          // Scope the lookup to this composer's mounted popup and reuse its selection handler.
-          const activeOption = mentionPopupRef.current?.querySelector<HTMLElement>('.ant-mentions-dropdown-menu-item-active:not(.ant-mentions-dropdown-menu-item-disabled)')
-          if (activeOption) {
-            event.preventDefault()
+    <div className="message-composer-row">
+      {tools && <div className="message-composer-leading">{tools}</div>}
+      <Mentions
+        placement="top"
+        popupRender={menu => <div ref={mentionPopupRef}>{menu}</div>}
+        options={[
+          ...(publicChat ? groupMentionNames.map(name => ({
+            key: 'group:' + name, value: name,
+            label: <span className="mention-option"><span>{name}</span><Tag>群体</Tag></span>,
+          })) : []),
+          ...mentionableParticipants(participants, publicChat).map(participant => ({
+            key: participant.participantId,
+            value: participant.displayName.normalize('NFC'),
+            label: <span className="mention-option"><span>{participant.displayName}</span><Tag color={participant.type === 'agent' ? 'cyan' : 'blue'}>{participant.type === 'agent' ? 'Agent' : '人类'}</Tag></span>,
+          })),
+        ]}
+        filterOption={(query, option) => (option.value ?? '').normalize('NFC').toLocaleLowerCase().includes(query.normalize('NFC').toLocaleLowerCase())}
+        notFoundContent="没有匹配的参与者"
+        className="composer-mentions"
+        onKeyDownCapture={event => {
+          if (event.nativeEvent.isComposing || event.keyCode === 229 || (event.key === 'Enter' && event.shiftKey)) {
             event.stopPropagation()
-            activeOption.click()
+            return
           }
-        }
-      }}
-      ref={inputRef} variant="borderless" value={value} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} autoSize={{ minRows: 2, maxRows: 6 }} placeholder={placeholder} onChange={onChange} onPressEnter={event => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!disabled && !recording && (value.trim() || hasAttachments)) onSend(candidates) } }} />
-    <div className="message-composer-footer">
-      {tools && <div className="message-composer-tools">{tools}</div>}
+          if (event.key === 'Backspace' && !value.length && onCancelReply && !disabled && send !== 'sending' && send !== 'pending_confirmation') {
+            event.preventDefault()
+            onCancelReply()
+            return
+          }
+          if (event.key === 'Tab' && !event.shiftKey) {
+            // Scope the lookup to this composer's mounted popup and reuse its selection handler.
+            const activeOption = mentionPopupRef.current?.querySelector<HTMLElement>('.ant-mentions-dropdown-menu-item-active:not(.ant-mentions-dropdown-menu-item-disabled)')
+            if (activeOption) {
+              event.preventDefault()
+              event.stopPropagation()
+              activeOption.click()
+            }
+          }
+        }}
+        ref={inputRef} variant="borderless" value={value} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} autoSize={{ minRows: 1, maxRows: 6 }} placeholder={placeholder} onChange={onChange} onPressEnter={event => { if (!event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!disabled && !recording && (value.trim() || hasAttachments)) onSend(candidates) } }} />
       <div className="message-composer-actions">
-      {onFiles && <VoiceRecorder onActiveChange={setRecording} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} onFile={file => onFiles([file])} />}
-      {!recording && <Button type="primary" aria-label="发送" title="发送" icon={<SendOutlined />} loading={send === 'sending'} disabled={disabled || send === 'pending_confirmation' || (!value.trim() && !hasAttachments)} onClick={() => onSend(candidates)}>发送</Button>}
+        {onFiles && <VoiceRecorder onActiveChange={setRecording} disabled={disabled || send === 'sending' || send === 'pending_confirmation'} onFile={file => onFiles([file])} />}
+        {!recording && <Button type="primary" aria-label="发送" title="发送" icon={<SendOutlined />} loading={send === 'sending'} disabled={disabled || send === 'pending_confirmation' || (!value.trim() && !hasAttachments)} onClick={() => onSend(candidates)} />}
       </div>
     </div>
   </div>
