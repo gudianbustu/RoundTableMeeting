@@ -277,7 +277,7 @@ export function MeetingWorkspacePage() {
     {navigation}
     {!workspace.selectedId ? <>
       {(listError || workspace.error) && <div className="workspace-home-errors">{listError}
-        {workspace.error && <Alert closable onClose={workspace.clearError} type="error" title={workspace.error.message} />}
+        {workspace.error && <Alert closable showIcon onClose={workspace.clearError} type="error" title={workspace.error.code === 'meeting_not_found' ? '会议已不可访问' : workspace.error.message} />}
       </div>}
       <div className="workspace-home-prompt">选择一个会议，开始讨论</div>
     </> : <>

@@ -125,6 +125,20 @@ describe('authentication pages and components', () => {
     expect(await screen.findByText('safe root')).toBeInTheDocument()
   })
 
+  it('ignores non-root returnTo after registration and lands on root', async () => {
+    const context = value({ state: { status: 'authenticated', user } })
+    withContext(context, <MemoryRouter initialEntries={[{ pathname: '/register', state: { returnTo: { pathname: '/meetings/11111111-1111-1111-1111-111111111111', search: '', hash: '' } } }]}><Routes><Route path="/register" element={<LoginPage registration />} /><Route path="/meetings/:meetingId" element={<span>other meeting</span>} /><Route path="/" element={<span>safe root</span>} /></Routes></MemoryRouter>)
+
+    expect(await screen.findByText('safe root')).toBeInTheDocument()
+  })
+
+  it('preserves root invite hash returnTo after registration', async () => {
+    const context = value({ state: { status: 'authenticated', user } })
+    withContext(context, <MemoryRouter initialEntries={[{ pathname: '/register', state: { returnTo: { pathname: '/', search: '', hash: '#join=ABCD1234' } } }]}><Routes><Route path="/register" element={<LoginPage registration />} /><Route path="/" element={<span>invite root</span>} /></Routes></MemoryRouter>)
+
+    expect(await screen.findByText('invite root')).toBeInTheDocument()
+  })
+
   it('renders AuthenticatedLayout and Home only with authenticated user data', () => {
     const context = value({ state: { status: 'authenticated', user } })
     withContext(context, <MemoryRouter><Routes><Route element={<AuthenticatedLayout />}><Route path="*" element={<AuthenticatedHomePage />} /></Route></Routes></MemoryRouter>)
