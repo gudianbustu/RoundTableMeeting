@@ -302,13 +302,14 @@
   position: relative;
   padding: 0;
   border-radius: 12px;
-  overflow: hidden;
+  overflow: visible;
   background: var(--rt-surface);
   border: 1px solid var(--rt-border);
 }
 .workspace-reader-modal.is-fullscreen .ant-modal-container {
   border-radius: 0;
   border: 0;
+  overflow: hidden;
 }
 .workspace-reader-modal .ant-modal-body {
   position: relative;
@@ -324,24 +325,25 @@
 }
 .workspace-reader-modal-resizer {
   position: absolute;
-  inset-block: 0;
+  inset-block: 10px;
   width: 8px;
   z-index: 4;
   cursor: col-resize;
   touch-action: none;
 }
-.workspace-reader-modal-resizer.is-left { inset-inline-start: 0; }
-.workspace-reader-modal-resizer.is-right { inset-inline-end: 0; }
+.workspace-reader-modal-resizer.is-left { inset-inline-start: -8px; }
+.workspace-reader-modal-resizer.is-right { inset-inline-end: -8px; }
 .workspace-reader-modal-resizer::after {
   content: '';
   position: absolute;
   inset-block: 0;
   width: 3px;
+  border-radius: 999px;
   background: transparent;
   transition: background-color 0.12s ease;
 }
-.workspace-reader-modal-resizer.is-left::after { inset-inline-start: 0; }
-.workspace-reader-modal-resizer.is-right::after { inset-inline-end: 0; }
+.workspace-reader-modal-resizer.is-left::after { inset-inline-end: 0; }
+.workspace-reader-modal-resizer.is-right::after { inset-inline-start: 0; }
 .workspace-reader-modal-resizer:hover::after,
 .workspace-reader-modal-resizer:focus-visible::after,
 .workspace-reader-modal.is-resizing .workspace-reader-modal-resizer::after {
@@ -355,7 +357,12 @@
   gap: 12px;
   padding: 10px 14px 10px 20px;
   border-bottom: 1px solid var(--rt-border);
+  border-radius: 11px 11px 0 0;
   background: var(--rt-page);
+}
+.workspace-reader-modal.is-fullscreen .workspace-reader-modal-header,
+.workspace-reader-modal.is-fullscreen .workspace-reader-modal-body {
+  border-radius: 0;
 }
 .workspace-reader-modal-title {
   min-width: 0;
@@ -380,7 +387,9 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   overscroll-behavior: contain;
+  border-radius: 0 0 11px 11px;
   padding: 16px 24px 28px;
 }
 @media (max-width: 640px) {
