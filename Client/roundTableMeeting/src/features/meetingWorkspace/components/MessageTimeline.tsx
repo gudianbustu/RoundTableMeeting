@@ -1,7 +1,7 @@
 import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { ReadingPane } from './ReadingPane'
 import './WorkspaceMessages.css'
-import { RobotOutlined, InfoCircleOutlined, DownOutlined, UpOutlined, ReadOutlined } from '@ant-design/icons'
+import { RobotOutlined, InfoCircleOutlined, DownOutlined, UpOutlined, ReadOutlined, ExpandOutlined } from '@ant-design/icons'
 import { MessageBody } from './MessageBody'
 import type { ReactNode } from 'react'
 import { memo, useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
@@ -49,8 +49,8 @@ function isGroupedWithPrevious(previous: ChatMessage | undefined, current: ChatM
   return delta >= 0 && delta <= GROUP_WINDOW_MS
 }
 
-type Props = { onWidthChange?: (width: number) => void; onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; onReadInPanel?: (message: ChatMessage) => void; onReadMarkdownFile?: (entry: { file: ChatAttachment; author?: string; createdAt?: Date }) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
-export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, newMessageCount, onNewMessageClick, onReply, onPrivateChat, onReadInPanel, onReadMarkdownFile, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
+type Props = { onWidthChange?: (width: number) => void; onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; onReadInPanel?: (message: ChatMessage) => void; onReadExpanded?: (message: ChatMessage) => void; onReadMarkdownFile?: (entry: { file: ChatAttachment; author?: string; createdAt?: Date }) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
+export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, newMessageCount, onNewMessageClick, onReply, onPrivateChat, onReadInPanel, onReadExpanded, onReadMarkdownFile, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
   const [previewId, setPreviewId] = useState<string>()
   const originals = useMemo(() => new Map(messages.map(message => [message.messageId, message])), [messages])
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -159,7 +159,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
         grouped={isGroupedWithPrevious(messages[index - 1], message)}
         quoted={message.replyToMessageId ? originals.get(message.replyToMessageId) : undefined}
         currentParticipantId={currentParticipantId} onReply={canReply ? onReply : undefined}
-        onPrivateChat={onPrivateChat} onReadInPanel={onReadInPanel} onReadMarkdownFile={onReadMarkdownFile} onLocate={onLocate} onPreview={setPreviewId} />)}
+        onPrivateChat={onPrivateChat} onReadInPanel={onReadInPanel} onReadExpanded={onReadExpanded} onReadMarkdownFile={onReadMarkdownFile} onLocate={onLocate} onPreview={setPreviewId} />)}
       {pendingMessage}
     </div></div></ReadingPane>
     {!atBottom && <Button className="timeline-jump-latest" shape="round" size="small" onClick={jumpToLatest}>
@@ -172,8 +172,8 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
 
 const COLLAPSE_THRESHOLD_PX = 420
 
-const MessageRow = memo(function MessageRow({ message, grouped, quoted, currentParticipantId, onReply, onPrivateChat, onReadInPanel, onReadMarkdownFile, onLocate, onPreview }:
-  Pick<Props, 'currentParticipantId' | 'onReply' | 'onPrivateChat' | 'onReadInPanel' | 'onReadMarkdownFile' | 'onLocate'> & {
+const MessageRow = memo(function MessageRow({ message, grouped, quoted, currentParticipantId, onReply, onPrivateChat, onReadInPanel, onReadExpanded, onReadMarkdownFile, onLocate, onPreview }:
+  Pick<Props, 'currentParticipantId' | 'onReply' | 'onPrivateChat' | 'onReadInPanel' | 'onReadExpanded' | 'onReadMarkdownFile' | 'onLocate'> & {
     message: ChatMessage; grouped: boolean; quoted?: ChatMessage; onPreview: (id: string) => void
   }) {
   const bodyHostRef = useRef<HTMLDivElement>(null)
@@ -229,6 +229,9 @@ const MessageRow = memo(function MessageRow({ message, grouped, quoted, currentP
           </button>
           {onReadInPanel && <button type="button" className="message-collapse-toggle" onClick={() => onReadInPanel(message)}>
             <ReadOutlined aria-hidden="true" /><span>在右侧栏阅读</span>
+          </button>}
+          {onReadExpanded && <button type="button" className="message-collapse-toggle" onClick={() => onReadExpanded(message)}>
+            <ExpandOutlined aria-hidden="true" /><span>放大阅读</span>
           </button>}
         </div>}
       </div>}

@@ -79,6 +79,7 @@ vi.mock('@/features/meetingWorkspace/api/messageResources', async importOriginal
 beforeEach(() => {
   // 每条用例默认干净状态；renderWorkspace 的 overrides 再按需覆盖
   localStorage.removeItem('rtm-right-panel-width-v1')
+  localStorage.removeItem('rtm-reader-panel-width-v1')
   mockStateRef.apply({})
 })
 
@@ -289,6 +290,32 @@ describe('会议工作区完整布局', () => {
       '| 一级标题字号 | 默认 2em | 15.5px 加粗 + 细分割线 |',
       '| 段落间距 | 0.6em | 0.35em |',
       '',
+      '## 二级标题：列表排版基准',
+      '',
+      '1. **有序列表（松散）**：序号与正文之间带空行时，正文不应另起一行、序号不应独占高度。',
+      '',
+      '   这是第一项展开的第二段说明，仍然停留在同一个列表项内部。',
+      '',
+      '2. **有序列表（紧凑）**：序号与正文同行显示。',
+      '3. **嵌套有序**：',
+      '   1. 子项一',
+      '   2. 子项二',
+      '',
+      '- **无序列表**：圆点与正文同行，段落间距收紧。',
+      '',
+      '  无序列表的松散第二段同样不增加额外高度。',
+      '',
+      '- 嵌套无序：',
+      '  - 子项 A',
+      '  - 子项 B',
+      '',
+      '## 二级标题：任务清单基准',
+      '',
+      '- [ ] 未完成任务：复选框与首行文字对齐，不使用原生控件外观。',
+      '- [x] 已完成任务：复选框展示选中态，文字保持正常排版。',
+      '',
+      '  - [ ] 嵌套任务也可以对齐缩进层级。',
+      '',
       '### 代码片段示例',
       '',
       '```typescript',
@@ -319,11 +346,62 @@ describe('会议工作区完整布局', () => {
     expect(document.querySelector('.message-body h3')).not.toBeNull()
     expect(document.querySelector('.message-body table')).not.toBeNull()
     expect(document.querySelector('.message-body .hljs-keyword')).not.toBeNull()
+
+    // 列表排版基准：有序/无序/任务列表都渲染，且松散列表项首段与列表项顶边对齐、无序/任务列表样式符合预期
+    const orderedItems = document.querySelectorAll<HTMLLIElement>('.message-body ol > li')
+    const unorderedItems = document.querySelectorAll<HTMLLIElement>('.message-body ul > li')
+    expect(orderedItems.length).toBeGreaterThanOrEqual(3)
+    expect(unorderedItems.length).toBeGreaterThanOrEqual(3)
+    const looseLi = document.querySelector<HTMLLIElement>('.message-body ol > li:has(> p)')
+    const looseFirstP = looseLi?.querySelector<HTMLParagraphElement>(':scope > p')
+    expect(looseLi).not.toBeNull()
+    expect(looseFirstP).not.toBeNull()
+    expect(getComputedStyle(looseLi!).whiteSpace).toBe('normal')
+    expect(Math.abs(looseFirstP!.getBoundingClientRect().top - looseLi!.getBoundingClientRect().top)).toBeLessThanOrEqual(2)
+
+    const checkboxes = document.querySelectorAll<HTMLInputElement>('.message-body input[type="checkbox"]')
+    expect(checkboxes.length).toBe(3)
+    expect(Array.from(checkboxes).filter(box => box.checked).length).toBe(1)
+    for (const box of checkboxes) {
+      expect(box.disabled).toBe(true)
+      expect(getComputedStyle(box).appearance).toBe('none')
+      const taskLi = box.closest<HTMLLIElement>('li.task-list-item')
+      expect(taskLi).not.toBeNull()
+      expect(getComputedStyle(taskLi!).listStyleType).toBe('none')
+    }
+    expect(checkboxes[2].getBoundingClientRect().left).toBeGreaterThan(checkboxes[0].getBoundingClientRect().left + 10)
+    const offsetOf = (box: HTMLInputElement) => box.getBoundingClientRect().top - box.closest('li')!.getBoundingClientRect().top
+    expect(Math.abs(offsetOf(checkboxes[1]) - offsetOf(checkboxes[0]))).toBeLessThanOrEqual(1)
+    expect(Math.abs(offsetOf(checkboxes[2]) - offsetOf(checkboxes[0]))).toBeLessThanOrEqual(1)
+
     const expandBtn = await screen.findByRole('button', { name: '展开全部' }, { timeout: 5000 })
     expect(expandBtn).toBeTruthy()
+    // 长消息底部折叠条支持一键「放大阅读」直达宽屏弹窗
+    fireEvent.click(screen.getByRole('button', { name: '放大阅读' }))
+    expect(document.querySelector('.workspace-reader-modal .message-body h1')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '退出放大阅读' }))
+    await vi.waitFor(() => expect(document.querySelector('.workspace-reader-modal .message-body')).toBeNull(), { timeout: 3000 })
+
     const readerBtn = screen.getByRole('button', { name: '在右侧栏阅读' })
     fireEvent.click(readerBtn)
     expect(await screen.findByText('文档阅读', undefined, { timeout: 5000 })).toBeTruthy()
+
+    // 方案 C：文档阅读拥有独立宽度与动态上限（可超出普通侧栏 520px），且支持弹窗放大阅读；返回侧栏自动恢复原宽
+    const resizer = screen.getByRole('separator', { name: '调整右侧栏宽度' })
+    const readerDefaultWidth = Number(resizer.getAttribute('aria-valuenow'))
+    expect(readerDefaultWidth).toBeGreaterThanOrEqual(520)
+    expect(Number(resizer.getAttribute('aria-valuemax'))).toBeGreaterThan(520)
+    fireEvent.keyDown(resizer, { key: 'End' })
+    expect(Number(resizer.getAttribute('aria-valuenow'))).toBeGreaterThan(520)
+
+    const panelExpandButtons = screen.getAllByRole('button', { name: '放大阅读' })
+    fireEvent.click(panelExpandButtons[panelExpandButtons.length - 1])
+    expect(document.querySelector('.workspace-reader-modal .message-body h1')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '退出放大阅读' }))
+    await vi.waitFor(() => expect(document.querySelector('.workspace-reader-modal .message-body')).toBeNull(), { timeout: 3000 })
+
+    fireEvent.click(screen.getByRole('button', { name: '返回侧边栏' }))
+    expect(Number(resizer.getAttribute('aria-valuenow'))).toBe(330)
   })
 
   it('普通消息中的行内代码与无语言代码块：保持干净行内胶囊，不误触发语法高亮', async () => {

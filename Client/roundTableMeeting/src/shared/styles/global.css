@@ -54,11 +54,50 @@ a { color: var(--rt-primary); }
 .message-meta .message-sequence { color: var(--rt-secondary); background: var(--rt-subtle); border-color: transparent; font-variant-numeric: tabular-nums; }
 .message-meta .message-author { min-width: 0; overflow-wrap: anywhere; color: var(--rt-text); }
 .message-time { color: var(--rt-muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.message-body { white-space: normal; }
 .message-item .message-body { margin: 0; line-height: 1.75; overflow-wrap: anywhere; white-space: normal; min-width: 0; }
 .message-body > :first-child { margin-top: 0; }
 .message-body > :last-child { margin-bottom: 0; }
-.message-body p, .message-body li { white-space: pre-wrap; }
-.message-body p { margin: 0 0 .6em; }
+.message-body p { white-space: pre-wrap; margin: 0 0 .6em; }
+.message-body ul, .message-body ol { margin: 0 0 .5em; padding-inline-start: 1.5em; }
+.message-body li { margin: 2px 0; }
+.message-body li::marker { color: var(--rt-secondary); font-variant-numeric: tabular-nums; }
+.message-body li > p { margin: 0 0 .3em; }
+.message-body li > p:last-child { margin-bottom: 0; }
+.message-body li > ul, .message-body li > ol { margin: .2em 0 0; }
+.message-body ul.contains-task-list { list-style: none; padding-inline-start: 0; }
+.message-body li > ul.contains-task-list { padding-inline-start: 1.5em; }
+.message-body li.task-list-item { list-style: none; padding-inline-start: 1.55em; }
+.message-body li.task-list-item input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin: 0 .2em 0 -1.55em;
+  vertical-align: -0.18em;
+  border: 1.5px solid var(--rt-muted);
+  border-radius: 4px;
+  background: var(--rt-surface);
+  overflow: hidden;
+  cursor: default;
+}
+.message-body li.task-list-item input[type="checkbox"]:checked {
+  border-color: var(--rt-primary);
+  background: var(--rt-primary);
+}
+.message-body li.task-list-item input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 4.5px;
+  border-left: 1.8px solid var(--rt-surface);
+  border-bottom: 1.8px solid var(--rt-surface);
+  transform: translate(-50%, -65%) rotate(-45deg);
+}
 .message-body pre, .message-body .message-table { max-width: 100%; overflow-x: auto; }
 .message-body pre { padding: 8px 12px; background: var(--rt-subtle); border-radius: 6px; white-space: pre; }
 .message-body blockquote { margin-inline: 0; padding-inline-start: 12px; border-inline-start: 3px solid var(--rt-border); }
@@ -432,35 +471,35 @@ body:has(.profile-settings) { min-width: min(320px, 100%); }
 
 /* Sleek thin overlay-like scrollbars for workspace scroll containers */
 @supports not selector(::-webkit-scrollbar) {
-  .meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre) {
+  :is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table) {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in srgb, var(--rt-muted) 26%, transparent) transparent;
   }
-  .meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre):hover,
-  .meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre):focus-within {
+  :is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table):hover,
+  :is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table):focus-within {
     scrollbar-color: color-mix(in srgb, var(--rt-muted) 48%, transparent) transparent;
   }
 }
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre)::-webkit-scrollbar {
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table)::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre)::-webkit-scrollbar-track {
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table)::-webkit-scrollbar-track {
   background: transparent;
 }
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre)::-webkit-scrollbar-button {
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table)::-webkit-scrollbar-button {
   display: none;
   width: 0;
   height: 0;
 }
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre)::-webkit-scrollbar-thumb {
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table)::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background-color: color-mix(in srgb, var(--rt-muted) 26%, transparent);
 }
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre):hover::-webkit-scrollbar-thumb,
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre):focus-within::-webkit-scrollbar-thumb {
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table):hover::-webkit-scrollbar-thumb,
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table):focus-within::-webkit-scrollbar-thumb {
   background-color: color-mix(in srgb, var(--rt-muted) 48%, transparent);
 }
-.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre)::-webkit-scrollbar-thumb:hover {
+:is(.meeting-workspace :is(.message-timeline-scroll, .meeting-navigation-scroll, .workspace-right-panel-body, .composer-mentions textarea, .draft-attachments, .message-code-block pre), .workspace-reader-modal-body, .workspace-reader-modal .message-code-block pre, .workspace-reader-modal .message-table)::-webkit-scrollbar-thumb:hover {
   background-color: color-mix(in srgb, var(--rt-muted) 72%, transparent);
 }

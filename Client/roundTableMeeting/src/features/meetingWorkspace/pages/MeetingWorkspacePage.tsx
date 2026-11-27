@@ -3,7 +3,7 @@ import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
-import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, FolderOpenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, ExpandOutlined, FolderOpenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
@@ -31,13 +31,24 @@ import { RealtimeChatRegion, type ActiveChatScopeContext, type ChatSessionCache 
 const RIGHT_PANEL_MIN = 280
 const RIGHT_PANEL_MAX = 520
 const RIGHT_PANEL_DEFAULT = 330
+const READER_PANEL_MIN = 360
+const READER_PANEL_DEFAULT = 520
+const READER_PANEL_HARD_MAX = 960
+const WORKSPACE_SIDEBAR_WIDTH = 236
+const CHAT_COLUMN_MIN = 380
 const rightPanelWidthKey = 'rtm-right-panel-width-v1'
+const readerPanelWidthKey = 'rtm-reader-panel-width-v1'
 
-function readRightPanelWidth() {
+function computeReaderMaxWidth(viewportWidth: number) {
+  const available = viewportWidth - WORKSPACE_SIDEBAR_WIDTH - CHAT_COLUMN_MIN
+  return Math.max(READER_PANEL_MIN, Math.min(READER_PANEL_HARD_MAX, Math.round(available)))
+}
+
+function readStoredWidth(key: string, min: number, max: number, fallback: number) {
   try {
-    const value = Number(localStorage.getItem(rightPanelWidthKey))
-    return Number.isSafeInteger(value) && value >= RIGHT_PANEL_MIN && value <= RIGHT_PANEL_MAX ? value : RIGHT_PANEL_DEFAULT
-  } catch { return RIGHT_PANEL_DEFAULT }
+    const value = Number(localStorage.getItem(key))
+    return Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback
+  } catch { return fallback }
 }
 
 export function hasUnknownOnlineParticipant(participants: Participant[], presence: Record<string, 'online' | 'offline'>) {
@@ -103,43 +114,63 @@ export function MeetingWorkspacePage() {
     | { kind: 'message'; message: ChatMessage; returnTab: 'info' | 'members' | 'files' | 'images' }
     | { kind: 'markdownFile'; meetingId: string; file: ChatAttachment; author?: string; createdAt?: Date; returnTab: 'info' | 'members' | 'files' | 'images' }
   >()
+  const [readerExpanded, setReaderExpanded] = useState(false)
   useEffect(() => { if (rightPanel) setRenderedPanel(rightPanel) }, [rightPanel])
-  const [rightPanelWidth, setRightPanelWidth] = useState(readRightPanelWidth)
+  const [viewportWidth, setViewportWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1280)
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sync = () => setViewportWidth(window.innerWidth)
+    window.addEventListener('resize', sync)
+    return () => window.removeEventListener('resize', sync)
+  }, [])
+  const readerMaxWidth = computeReaderMaxWidth(viewportWidth)
+  const [rightPanelWidth, setRightPanelWidth] = useState(() => readStoredWidth(rightPanelWidthKey, RIGHT_PANEL_MIN, RIGHT_PANEL_MAX, RIGHT_PANEL_DEFAULT))
+  const [readerPanelWidth, setReaderPanelWidth] = useState(() => readStoredWidth(readerPanelWidthKey, READER_PANEL_MIN, READER_PANEL_HARD_MAX, READER_PANEL_DEFAULT))
   const [resizingRightPanel, setResizingRightPanel] = useState(false)
-  const rightDrag = useRef<{ pointer: number; startX: number; startWidth: number; lastWidth?: number } | undefined>(undefined)
-  const clampRightWidth = (value: number) => Math.max(RIGHT_PANEL_MIN, Math.min(RIGHT_PANEL_MAX, Math.round(value)))
-  const saveRightPanelWidth = (value: number) => {
-    const next = clampRightWidth(value)
-    setRightPanelWidth(next)
-    try { localStorage.setItem(rightPanelWidthKey, String(next)) } catch { /* ignore storage failure */ }
+  const rightDrag = useRef<{ pointer: number; startX: number; startWidth: number; isReader: boolean; lastWidth?: number } | undefined>(undefined)
+  const isReaderPanel = (rightPanel ?? renderedPanel) === 'reader'
+  const activePanelMin = isReaderPanel ? READER_PANEL_MIN : RIGHT_PANEL_MIN
+  const activePanelMax = isReaderPanel ? readerMaxWidth : RIGHT_PANEL_MAX
+  const clampPanelWidth = (value: number, forReader: boolean) => {
+    const min = forReader ? READER_PANEL_MIN : RIGHT_PANEL_MIN
+    const max = forReader ? readerMaxWidth : RIGHT_PANEL_MAX
+    return Math.max(min, Math.min(max, Math.round(value)))
+  }
+  const activePanelWidth = isReaderPanel ? clampPanelWidth(readerPanelWidth, true) : rightPanelWidth
+  const saveActivePanelWidth = (value: number, forReader = isReaderPanel) => {
+    const next = clampPanelWidth(value, forReader)
+    if (forReader) setReaderPanelWidth(next)
+    else setRightPanelWidth(next)
+    try { localStorage.setItem(forReader ? readerPanelWidthKey : rightPanelWidthKey, String(next)) } catch { /* ignore storage failure */ }
   }
   const startRightResize = (event: PointerEvent<HTMLDivElement>) => {
     if (!event.isPrimary || event.button !== 0) return
     event.currentTarget.setPointerCapture(event.pointerId)
-    rightDrag.current = { pointer: event.pointerId, startX: event.clientX, startWidth: rightPanelWidth }
+    rightDrag.current = { pointer: event.pointerId, startX: event.clientX, startWidth: activePanelWidth, isReader: isReaderPanel }
     setResizingRightPanel(true)
   }
   const moveRightResize = (event: PointerEvent<HTMLDivElement>) => {
     const active = rightDrag.current
     if (active?.pointer !== event.pointerId) return
-    active.lastWidth = clampRightWidth(active.startWidth + (active.startX - event.clientX))
-    setRightPanelWidth(active.lastWidth)
+    active.lastWidth = clampPanelWidth(active.startWidth + (active.startX - event.clientX), active.isReader)
+    if (active.isReader) setReaderPanelWidth(active.lastWidth)
+    else setRightPanelWidth(active.lastWidth)
   }
   const finishRightResize = () => {
-    if (rightDrag.current?.lastWidth !== undefined) saveRightPanelWidth(rightDrag.current.lastWidth)
+    if (rightDrag.current?.lastWidth !== undefined) saveActivePanelWidth(rightDrag.current.lastWidth, rightDrag.current.isReader)
     rightDrag.current = undefined
     setResizingRightPanel(false)
   }
   const keydownRightResize = (event: KeyboardEvent<HTMLDivElement>) => {
     const map: Record<string, number> = {
-      ArrowLeft: rightPanelWidth + 16,
-      ArrowRight: rightPanelWidth - 16,
-      Home: RIGHT_PANEL_MIN,
-      End: RIGHT_PANEL_MAX,
+      ArrowLeft: activePanelWidth + 16,
+      ArrowRight: activePanelWidth - 16,
+      Home: activePanelMin,
+      End: activePanelMax,
     }
     if (!Object.hasOwn(map, event.key)) return
     event.preventDefault()
-    saveRightPanelWidth(map[event.key])
+    saveActivePanelWidth(map[event.key], isReaderPanel)
   }
   const [activeScope, setActiveScope] = useState<ActiveChatScopeContext>()
   useEffect(() => {
@@ -163,7 +194,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
     setRemoval(undefined); setNicknameOpen(false); setNavigationOpen(false)
-    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined); setReaderTarget(undefined)
+    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined); setReaderTarget(undefined); setReaderExpanded(false)
     setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
@@ -211,9 +242,10 @@ export function MeetingWorkspacePage() {
     onMention={historical ? undefined : participant => { closePanelOnMobile(); composerRef.current?.mention(participant.displayName) }} />
   const currentBaseTab = (): 'info' | 'members' | 'files' | 'images' =>
     rightPanel && rightPanel !== 'reader' ? rightPanel : 'members'
-  const openMessageInReader = (message: ChatMessage) => {
+  const openMessageInReader = (message: ChatMessage, expanded = false) => {
     setReaderTarget({ kind: 'message', message, returnTab: currentBaseTab() })
-    setRightPanel('reader')
+    setReaderExpanded(expanded)
+    if (!expanded) setRightPanel('reader')
   }
   const openMarkdownFileInReader = (entry: { file: ChatAttachment; author?: string; createdAt?: Date }, returnTab = currentBaseTab()) => {
     if (!workspace.details) return
@@ -222,23 +254,30 @@ export function MeetingWorkspacePage() {
   }
   const activePanelTab = rightPanel ?? renderedPanel
   const readerKey = readerTarget?.kind === 'message' ? `reader:msg:${readerTarget.message.messageId}` : readerTarget?.kind === 'markdownFile' ? `reader:file:${readerTarget.file.attachmentId}` : activePanelTab
+  const readerDocumentBody = readerTarget
+    ? readerTarget.kind === 'message'
+      ? <MessageBody diagrams content={readerTarget.message.content} mentions={readerTarget.message.mentions} />
+      : <TextAttachmentPreview key={readerTarget.file.attachmentId} markdown url={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId, true)} sizeBytes={readerTarget.file.sizeBytes} />
+    : null
   const rightPanelBody = workspace.details && <div key={activePanelTab === 'reader' ? readerKey : activePanelTab} className="workspace-right-panel-view">
     {activePanelTab === 'reader' && readerTarget
-      ? readerTarget.kind === 'message'
-        ? <article className="workspace-reader-doc">
-            <div className="workspace-reader-meta">
-              <strong>{readerTarget.message.author.displayName}</strong>
-              <time dateTime={readerTarget.message.createdAt.toISOString()}>{readerTarget.message.createdAt.toLocaleString('zh-CN')}</time>
-            </div>
-            <MessageBody diagrams content={readerTarget.message.content} mentions={readerTarget.message.mentions} />
-          </article>
-        : <article className="workspace-reader-doc">
-            <div className="workspace-reader-meta">
-              <strong title={readerTarget.file.name}>{readerTarget.file.name}</strong>
-              {readerTarget.createdAt && <time dateTime={readerTarget.createdAt.toISOString()}>{readerTarget.author ? `${readerTarget.author} · ` : ''}{readerTarget.createdAt.toLocaleString('zh-CN')}</time>}
-            </div>
-            <TextAttachmentPreview key={readerTarget.file.attachmentId} markdown url={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId, true)} sizeBytes={readerTarget.file.sizeBytes} />
-          </article>
+      ? readerExpanded
+        ? <div className="workspace-reader-expanded-hint">文档已在宽屏弹窗中打开</div>
+        : readerTarget.kind === 'message'
+          ? <article className="workspace-reader-doc">
+              <div className="workspace-reader-meta">
+                <strong>{readerTarget.message.author.displayName}</strong>
+                <time dateTime={readerTarget.message.createdAt.toISOString()}>{readerTarget.message.createdAt.toLocaleString('zh-CN')}</time>
+              </div>
+              {readerDocumentBody}
+            </article>
+          : <article className="workspace-reader-doc">
+              <div className="workspace-reader-meta">
+                <strong title={readerTarget.file.name}>{readerTarget.file.name}</strong>
+                {readerTarget.createdAt && <time dateTime={readerTarget.createdAt.toISOString()}>{readerTarget.author ? `${readerTarget.author} · ` : ''}{readerTarget.createdAt.toLocaleString('zh-CN')}</time>}
+              </div>
+              {readerDocumentBody}
+            </article>
       : activePanelTab === 'info'
         ? <MeetingInformationPanel meeting={workspace.details} onSaved={workspace.refreshDetails} />
         : activePanelTab === 'files' || activePanelTab === 'images'
@@ -249,13 +288,14 @@ export function MeetingWorkspacePage() {
   </div>
   const rightPanelHeader = activePanelTab === 'reader' ? <div className="workspace-right-panel-header">
     <div className="workspace-reader-head">
-      <Button type="text" size="small" aria-label="返回侧边栏" icon={<ArrowLeftOutlined />} onClick={() => setRightPanel(readerTarget?.returnTab ?? 'members')} />
+      <Button type="text" size="small" aria-label="返回侧边栏" icon={<ArrowLeftOutlined />} onClick={() => { setReaderExpanded(false); setRightPanel(readerTarget?.returnTab ?? 'members') }} />
       <span>文档阅读</span>
     </div>
     <div className="workspace-reader-actions">
+      <Button type="text" size="small" aria-label="放大阅读" title="放大阅读" icon={<ExpandOutlined />} onClick={() => setReaderExpanded(true)} />
       {readerTarget?.kind === 'markdownFile' && <Button type="text" size="small" aria-label={`下载 ${readerTarget.file.name}`} icon={<DownloadOutlined />}
         href={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId)} target="_blank" rel="noopener noreferrer" />}
-      <Button type="text" size="small" aria-label="关闭右侧面板" icon={<CloseOutlined />} onClick={() => setRightPanel(null)} />
+      <Button type="text" size="small" aria-label="关闭右侧面板" icon={<CloseOutlined />} onClick={() => { setReaderExpanded(false); setRightPanel(null) }} />
     </div>
   </div> : <div className="workspace-right-panel-header">
     <div className="workspace-right-panel-tabs" role="tablist" aria-label="右侧信息面板">
@@ -273,7 +313,7 @@ export function MeetingWorkspacePage() {
   const canShowRightPanel = Boolean(workspace.selectedId && workspace.details)
   const showRightPanel = canShowRightPanel && Boolean(rightPanel)
   return <section className={(workspace.selectedId ? 'meeting-workspace' : 'meeting-workspace workspace-home') + (wideDesktop && canShowRightPanel ? ' workspace-with-panel' : '') + (wideDesktop && showRightPanel ? ' workspace-has-rail' : '') + (resizingRightPanel ? ' workspace-right-resizing' : '')}
-    style={{ '--workspace-right-panel-width': rightPanelWidth + 'px' } as CSSProperties}>
+    style={{ '--workspace-right-panel-width': activePanelWidth + 'px' } as CSSProperties}>
     {navigation}
     {!workspace.selectedId ? <>
       {(listError || workspace.error) && <div className="workspace-home-errors">{listError}
@@ -299,7 +339,7 @@ export function MeetingWorkspacePage() {
             </div>
           </div>
         </header> : topbarSlot ? createPortal(topicHeader, topbarSlot) : topicHeader}
-        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} onActiveScopeChanged={setActiveScope} onOpenAttachments={() => setRightPanel(current => current === 'files' || current === 'images' ? null : 'files')} onReadMessageInPanel={openMessageInReader} onReadMarkdownFile={entry => openMarkdownFileInReader(entry)} />
+        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} onActiveScopeChanged={setActiveScope} onOpenAttachments={() => setRightPanel(current => current === 'files' || current === 'images' ? null : 'files')} onReadMessageInPanel={openMessageInReader} onReadMessageExpanded={message => openMessageInReader(message, true)} onReadMarkdownFile={entry => openMarkdownFileInReader(entry)} />
         {readOnly && discussionMode}
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
@@ -307,7 +347,7 @@ export function MeetingWorkspacePage() {
       aria-label={activePanelTab === 'reader' ? '文档阅读' : activePanelTab === 'info' ? '会议信息' : activePanelTab === 'files' ? '会话文件' : activePanelTab === 'images' ? '会话图片' : '会议成员'}
       aria-hidden={!showRightPanel} inert={!showRightPanel || undefined}>
       {showRightPanel && <div className="workspace-right-resizer" role="separator" aria-orientation="vertical" aria-label="调整右侧栏宽度"
-        aria-valuemin={RIGHT_PANEL_MIN} aria-valuemax={RIGHT_PANEL_MAX} aria-valuenow={rightPanelWidth} tabIndex={0}
+        aria-valuemin={activePanelMin} aria-valuemax={activePanelMax} aria-valuenow={activePanelWidth} tabIndex={0}
         onPointerDown={startRightResize} onPointerMove={moveRightResize} onPointerUp={finishRightResize}
         onPointerCancel={finishRightResize} onLostPointerCapture={finishRightResize} onKeyDown={keydownRightResize} />}
       <div className="workspace-right-panel-inner">
@@ -317,9 +357,30 @@ export function MeetingWorkspacePage() {
     </aside>}
     </>}
     {!wideDesktop && workspace.details && <Drawer title={rightPanelHeader} closable={false} placement="right" size="min(360px, calc(100vw - 18px))"
-      open={Boolean(rightPanel)} onClose={() => setRightPanel(null)} rootClassName="workspace-right-drawer">
+      open={Boolean(rightPanel)} onClose={() => { setReaderExpanded(false); setRightPanel(null) }} rootClassName="workspace-right-drawer">
       {rightPanel && rightPanelBody}
     </Drawer>}
+    <Modal open={Boolean(readerExpanded && readerTarget)} onCancel={() => setReaderExpanded(false)} footer={null} centered closable={false} destroyOnHidden
+      width="min(960px, calc(100vw - 32px))" className="workspace-reader-modal" styles={{ mask: { backgroundColor: 'rgb(20 23 19 / 45%)' } }}>
+      {readerTarget && <>
+        <div className="workspace-reader-modal-header">
+          <div className="workspace-reader-modal-title">
+            <strong title={readerTarget.kind === 'message' ? readerTarget.message.author.displayName : readerTarget.file.name}>
+              {readerTarget.kind === 'message' ? readerTarget.message.author.displayName : readerTarget.file.name}
+            </strong>
+            {readerTarget.kind === 'message'
+              ? <time dateTime={readerTarget.message.createdAt.toISOString()}>{readerTarget.message.createdAt.toLocaleString('zh-CN')}</time>
+              : readerTarget.createdAt && <time dateTime={readerTarget.createdAt.toISOString()}>{readerTarget.author ? `${readerTarget.author} · ` : ''}{readerTarget.createdAt.toLocaleString('zh-CN')}</time>}
+          </div>
+          <div className="workspace-reader-actions">
+            {readerTarget.kind === 'markdownFile' && <Button type="text" size="small" aria-label={`下载 ${readerTarget.file.name}`} icon={<DownloadOutlined />}
+              href={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId)} target="_blank" rel="noopener noreferrer" />}
+            <Button type="text" size="small" aria-label="退出放大阅读" title="退出放大阅读" icon={<CloseOutlined />} onClick={() => setReaderExpanded(false)} />
+          </div>
+        </div>
+        <div className="workspace-reader-modal-body">{readerDocumentBody}</div>
+      </>}
+    </Modal>
     <Modal open={!!removal} title="移除会议成员" okText="移除" cancelText="取消" okButtonProps={{ danger: true }}
       confirmLoading={removing} onOk={() => void removeMember()} onCancel={() => { if (!removing) setRemoval(undefined) }}>
       <p>确定将「{removal?.member.displayName}」移出本场会议？对方可以重新加入。</p>
