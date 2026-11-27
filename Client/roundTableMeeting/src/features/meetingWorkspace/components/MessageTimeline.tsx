@@ -1,12 +1,12 @@
 import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { ReadingPane } from './ReadingPane'
 import './WorkspaceMessages.css'
-import { RobotOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { RobotOutlined, InfoCircleOutlined, DownOutlined, UpOutlined, ReadOutlined } from '@ant-design/icons'
 import { MessageBody } from './MessageBody'
 import type { ReactNode } from 'react'
 import { memo, useMemo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Button, Empty, Tag, Typography } from 'antd'
-import type { ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
+import type { ChatAttachment, ChatMessage, ChatScrollPosition } from '../types/realtimeChat'
 import { getMessage } from '../api/messageResources'
 import { OriginalMessageText } from './OriginalMessageText'
 import { ConversationAttachmentViewer } from './ConversationAttachmentViewer'
@@ -49,8 +49,8 @@ function isGroupedWithPrevious(previous: ChatMessage | undefined, current: ChatM
   return delta >= 0 && delta <= GROUP_WINDOW_MS
 }
 
-type Props = { onWidthChange?: (width: number) => void; onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
-export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, newMessageCount, onNewMessageClick, onReply, onPrivateChat, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
+type Props = { onWidthChange?: (width: number) => void; onLocate?: (id: string) => Promise<void>; pendingMessage?: ReactNode; messages: ChatMessage[]; hasEarlierMessages: boolean; loading: boolean; onLoadEarlier: () => void; newMessageCount: number; onNewMessageClick: () => void; onReply?: (message: ChatMessage) => void; onPrivateChat?: (id: string) => void; onReadInPanel?: (message: ChatMessage) => void; onReadMarkdownFile?: (entry: { file: ChatAttachment; author?: string; createdAt?: Date }) => void; currentParticipantId?: string; focusMessageId?: string; focusRevision?: number; canReply?: boolean; scrollPosition?: ChatScrollPosition; onScrollPositionChanged?: (position: ChatScrollPosition) => void }
+export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messages, hasEarlierMessages, loading, onLoadEarlier, newMessageCount, onNewMessageClick, onReply, onPrivateChat, onReadInPanel, onReadMarkdownFile, currentParticipantId, focusMessageId, focusRevision, canReply = true, scrollPosition, onScrollPositionChanged }: Props) {
   const [previewId, setPreviewId] = useState<string>()
   const originals = useMemo(() => new Map(messages.map(message => [message.messageId, message])), [messages])
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -159,7 +159,7 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
         grouped={isGroupedWithPrevious(messages[index - 1], message)}
         quoted={message.replyToMessageId ? originals.get(message.replyToMessageId) : undefined}
         currentParticipantId={currentParticipantId} onReply={canReply ? onReply : undefined}
-        onPrivateChat={onPrivateChat} onLocate={onLocate} onPreview={setPreviewId} />)}
+        onPrivateChat={onPrivateChat} onReadInPanel={onReadInPanel} onReadMarkdownFile={onReadMarkdownFile} onLocate={onLocate} onPreview={setPreviewId} />)}
       {pendingMessage}
     </div></div></ReadingPane>
     {!atBottom && <Button className="timeline-jump-latest" shape="round" size="small" onClick={jumpToLatest}>
@@ -170,13 +170,32 @@ export function MessageTimeline({ onWidthChange, onLocate, pendingMessage, messa
   </section>
 }
 
-const MessageRow = memo(function MessageRow({ message, grouped, quoted, currentParticipantId, onReply, onPrivateChat, onLocate, onPreview }:
-  Pick<Props, 'currentParticipantId' | 'onReply' | 'onPrivateChat' | 'onLocate'> & {
+const COLLAPSE_THRESHOLD_PX = 420
+
+const MessageRow = memo(function MessageRow({ message, grouped, quoted, currentParticipantId, onReply, onPrivateChat, onReadInPanel, onReadMarkdownFile, onLocate, onPreview }:
+  Pick<Props, 'currentParticipantId' | 'onReply' | 'onPrivateChat' | 'onReadInPanel' | 'onReadMarkdownFile' | 'onLocate'> & {
     message: ChatMessage; grouped: boolean; quoted?: ChatMessage; onPreview: (id: string) => void
   }) {
+  const bodyHostRef = useRef<HTMLDivElement>(null)
+  const [collapsible, setCollapsible] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+  useLayoutEffect(() => {
+    const host = bodyHostRef.current
+    if (!host || !message.content) { setCollapsible(false); return }
+    const measure = () => {
+      const fullHeight = host.scrollHeight
+      setCollapsible(fullHeight > COLLAPSE_THRESHOLD_PX + 24)
+    }
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(measure)
+    observer.observe(host)
+    return () => observer.disconnect()
+  }, [message.content])
   const original = message.originalTextAttachmentId
     ? message.attachments?.find(file => file.attachmentId === message.originalTextAttachmentId) : undefined
   const attachments = original ? message.attachments?.filter(file => file !== original) : message.attachments
+  const isCollapsed = collapsible && !expanded
   return <article data-message-id={message.messageId} tabIndex={0}
     className={'message-item message-' + message.author.kind
       + (currentParticipantId && message.author.participantId === currentParticipantId ? ' message-own' : '')
@@ -197,20 +216,35 @@ const MessageRow = memo(function MessageRow({ message, grouped, quoted, currentP
         {message.visibility === 'private' && <Tag color="purple">私聊</Tag>}
       </header>}
       <MessageActions message={message} onReply={onReply}
-        onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined} />
+        onPrivateChat={message.author.participantId !== currentParticipantId ? onPrivateChat : undefined}
+        onReadInPanel={collapsible ? onReadInPanel : undefined} />
       {message.replyToMessageId && <ReplyQuote key={message.meetingId + message.replyToMessageId} meetingId={message.meetingId} id={message.replyToMessageId} loaded={quoted} onLocate={onLocate} />}
-      {message.content && <MessageBody diagrams content={message.content} mentions={message.mentions} />}
+      {message.content && <div className={isCollapsed ? 'message-body-collapsible is-collapsed' : 'message-body-collapsible'}>
+        <div ref={bodyHostRef} className="message-body-viewport">
+          <MessageBody diagrams content={message.content} mentions={message.mentions} />
+        </div>
+        {collapsible && <div className="message-collapse-bar">
+          <button type="button" className="message-collapse-toggle" onClick={() => setExpanded(open => !open)}>
+            {expanded ? <><UpOutlined aria-hidden="true" /><span>收起</span></> : <><DownOutlined aria-hidden="true" /><span>展开全部</span></>}
+          </button>
+          {onReadInPanel && <button type="button" className="message-collapse-toggle" onClick={() => onReadInPanel(message)}>
+            <ReadOutlined aria-hidden="true" /><span>在右侧栏阅读</span>
+          </button>}
+        </div>}
+      </div>}
       {original && <OriginalMessageText key={original.attachmentId} meetingId={message.meetingId} source={original} />}
-      {!!attachments?.length && <AttachmentLinks compact meetingId={message.meetingId} attachments={attachments} onOpenViewer={onPreview} />}
+      {!!attachments?.length && <AttachmentLinks compact meetingId={message.meetingId} attachments={attachments} onOpenViewer={onPreview}
+        onOpenMarkdownFile={onReadMarkdownFile ? file => onReadMarkdownFile({ file, author: message.author.displayName, createdAt: message.createdAt }) : undefined} />}
     </div>
   </article>
 })
 
-function MessageActions({ message, onReply, onPrivateChat }: Pick<Props, 'onReply' | 'onPrivateChat'> & { message: ChatMessage }) {
+function MessageActions({ message, onReply, onPrivateChat, onReadInPanel }: Pick<Props, 'onReply' | 'onPrivateChat' | 'onReadInPanel'> & { message: ChatMessage }) {
   const authorId = message.author.participantId
   const items = [
     ...(onReply ? [{ key: 'reply', label: '回复', onClick: () => onReply(message) }] : []),
     ...(authorId && onPrivateChat ? [{ key: 'private', label: '私聊', onClick: () => onPrivateChat(authorId) }] : []),
+    ...(onReadInPanel ? [{ key: 'read', label: '侧栏阅读', onClick: () => onReadInPanel(message) }] : []),
   ]
   if (!items.length) return null
   return <span className="message-inline-actions" role="group" aria-label={message.author.displayName + '的快捷操作'}>

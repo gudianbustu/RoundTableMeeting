@@ -193,6 +193,46 @@
 .workspace-right-drawer .ant-drawer-header-title { width: 100%; }
 .workspace-right-drawer .workspace-right-panel-header { padding: 2px 0; border-bottom: 0; }
 .workspace-right-drawer .ant-drawer-body { padding: 8px 10px 16px; }
+.workspace-reader-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--rt-text);
+}
+.workspace-reader-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.workspace-reader-doc {
+  padding: 10px 12px 16px;
+  border-radius: 10px;
+  background: var(--rt-surface);
+  border: 1px solid var(--rt-border);
+}
+.workspace-reader-meta {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--rt-border);
+  font-size: 12px;
+}
+.workspace-reader-meta time {
+  color: var(--rt-muted);
+  font-variant-numeric: tabular-nums;
+}
+.workspace-reader-doc .message-body {
+  font-size: 14px;
+  line-height: 1.6;
+}
+.workspace-reader-doc .message-body h1 { font-size: 18px; margin: 12px 0 6px; }
+.workspace-reader-doc .message-body h2 { font-size: 16px; margin: 10px 0 5px; }
+.workspace-reader-doc .message-body h3 { font-size: 14.5px; margin: 8px 0 4px; }
 .meeting-info-panel {
   display: flex;
   flex-direction: column;

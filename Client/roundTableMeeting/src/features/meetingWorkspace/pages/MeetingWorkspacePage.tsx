@@ -3,7 +3,7 @@ import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
-import { CloseOutlined, FolderOpenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, FolderOpenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
@@ -15,13 +15,16 @@ import { MeetingInformationPanel } from '../components/MeetingInformationDialog'
 import { MeetingNicknameDialog } from '../components/MeetingNicknameDialog'
 import { MeetingNavigation } from '../components/MeetingNavigation'
 import { DiscussionModeControl } from '../components/DiscussionModeControl'
+import { attachmentUrl } from '../api/messageResources'
 import { MeetingAttachmentPanel } from '../components/AttachmentControls'
+import { MessageBody } from '../components/MessageBody'
+import TextAttachmentPreview from '../components/TextAttachmentPreview'
 import { ParticipantList } from '../components/ParticipantList'
 import { CreateMeetingDialog } from '../components/CreateMeetingDialog'
 import { InviteMeetingDialog } from '../components/InviteMeetingDialog'
 import { JoinMeetingDialog, meetingCodePattern } from '../components/JoinMeetingDialog'
 import { useMeetingWorkspace } from '../hooks/useMeetingWorkspace'
-import type { AgentActivity } from '../types/realtimeChat'
+import type { AgentActivity, ChatAttachment, ChatMessage } from '../types/realtimeChat'
 import type { Participant } from '../types/meetingWorkspace'
 import { RealtimeChatRegion, type ActiveChatScopeContext, type ChatSessionCache } from './RealtimeChatRegion'
 
@@ -93,9 +96,13 @@ export function MeetingWorkspacePage() {
   }
   const [wideDesktop, setWideDesktop] = useState(() => typeof window !== 'undefined' && typeof window.matchMedia === 'function'
     ? window.matchMedia('(min-width: 1200px)').matches : false)
-  const [rightPanel, setRightPanel] = useState<'info' | 'members' | 'files' | 'images' | null>(() =>
+  const [rightPanel, setRightPanel] = useState<'info' | 'members' | 'files' | 'images' | 'reader' | null>(() =>
     typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(min-width: 1200px)').matches ? 'members' : null)
-  const [renderedPanel, setRenderedPanel] = useState<'info' | 'members' | 'files' | 'images'>('members')
+  const [renderedPanel, setRenderedPanel] = useState<'info' | 'members' | 'files' | 'images' | 'reader'>('members')
+  const [readerTarget, setReaderTarget] = useState<
+    | { kind: 'message'; message: ChatMessage; returnTab: 'info' | 'members' | 'files' | 'images' }
+    | { kind: 'markdownFile'; meetingId: string; file: ChatAttachment; author?: string; createdAt?: Date; returnTab: 'info' | 'members' | 'files' | 'images' }
+  >()
   useEffect(() => { if (rightPanel) setRenderedPanel(rightPanel) }, [rightPanel])
   const [rightPanelWidth, setRightPanelWidth] = useState(readRightPanelWidth)
   const [resizingRightPanel, setResizingRightPanel] = useState(false)
@@ -156,7 +163,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
     setRemoval(undefined); setNicknameOpen(false); setNavigationOpen(false)
-    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined)
+    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined); setReaderTarget(undefined)
     setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
@@ -202,16 +209,55 @@ export function MeetingWorkspacePage() {
     onEditNickname={historical ? undefined : () => { closePanelOnMobile(); setNicknameOpen(true) }}
     onPrivateChat={participant => { closePanelOnMobile(); composerRef.current?.privateChat?.(participant.participantId) }}
     onMention={historical ? undefined : participant => { closePanelOnMobile(); composerRef.current?.mention(participant.displayName) }} />
+  const currentBaseTab = (): 'info' | 'members' | 'files' | 'images' =>
+    rightPanel && rightPanel !== 'reader' ? rightPanel : 'members'
+  const openMessageInReader = (message: ChatMessage) => {
+    setReaderTarget({ kind: 'message', message, returnTab: currentBaseTab() })
+    setRightPanel('reader')
+  }
+  const openMarkdownFileInReader = (entry: { file: ChatAttachment; author?: string; createdAt?: Date }, returnTab = currentBaseTab()) => {
+    if (!workspace.details) return
+    setReaderTarget({ kind: 'markdownFile', meetingId: workspace.details.meetingId, ...entry, returnTab })
+    setRightPanel('reader')
+  }
   const activePanelTab = rightPanel ?? renderedPanel
-  const rightPanelBody = workspace.details && <div key={activePanelTab} className="workspace-right-panel-view">
-    {activePanelTab === 'info'
-      ? <MeetingInformationPanel meeting={workspace.details} onSaved={workspace.refreshDetails} />
-      : activePanelTab === 'files' || activePanelTab === 'images'
-        ? <MeetingAttachmentPanel kind={activePanelTab} meetingId={workspace.details.meetingId} scope={activeScope?.scope ?? 'public'} peerParticipantId={activeScope?.peerParticipantId}
-            onLocate={id => activeScope ? activeScope.locate(id) : Promise.resolve()} onClose={closePanelOnMobile} />
-        : memberList}
+  const readerKey = readerTarget?.kind === 'message' ? `reader:msg:${readerTarget.message.messageId}` : readerTarget?.kind === 'markdownFile' ? `reader:file:${readerTarget.file.attachmentId}` : activePanelTab
+  const rightPanelBody = workspace.details && <div key={activePanelTab === 'reader' ? readerKey : activePanelTab} className="workspace-right-panel-view">
+    {activePanelTab === 'reader' && readerTarget
+      ? readerTarget.kind === 'message'
+        ? <article className="workspace-reader-doc">
+            <div className="workspace-reader-meta">
+              <strong>{readerTarget.message.author.displayName}</strong>
+              <time dateTime={readerTarget.message.createdAt.toISOString()}>{readerTarget.message.createdAt.toLocaleString('zh-CN')}</time>
+            </div>
+            <MessageBody diagrams content={readerTarget.message.content} mentions={readerTarget.message.mentions} />
+          </article>
+        : <article className="workspace-reader-doc">
+            <div className="workspace-reader-meta">
+              <strong title={readerTarget.file.name}>{readerTarget.file.name}</strong>
+              {readerTarget.createdAt && <time dateTime={readerTarget.createdAt.toISOString()}>{readerTarget.author ? `${readerTarget.author} · ` : ''}{readerTarget.createdAt.toLocaleString('zh-CN')}</time>}
+            </div>
+            <TextAttachmentPreview key={readerTarget.file.attachmentId} markdown url={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId, true)} sizeBytes={readerTarget.file.sizeBytes} />
+          </article>
+      : activePanelTab === 'info'
+        ? <MeetingInformationPanel meeting={workspace.details} onSaved={workspace.refreshDetails} />
+        : activePanelTab === 'files' || activePanelTab === 'images'
+          ? <MeetingAttachmentPanel kind={activePanelTab} meetingId={workspace.details.meetingId} scope={activeScope?.scope ?? 'public'} peerParticipantId={activeScope?.peerParticipantId}
+              onLocate={id => activeScope ? activeScope.locate(id) : Promise.resolve()} onClose={closePanelOnMobile}
+              onOpenMarkdownFile={entry => openMarkdownFileInReader(entry, 'files')} />
+          : memberList}
   </div>
-  const rightPanelHeader = <div className="workspace-right-panel-header">
+  const rightPanelHeader = activePanelTab === 'reader' ? <div className="workspace-right-panel-header">
+    <div className="workspace-reader-head">
+      <Button type="text" size="small" aria-label="返回侧边栏" icon={<ArrowLeftOutlined />} onClick={() => setRightPanel(readerTarget?.returnTab ?? 'members')} />
+      <span>文档阅读</span>
+    </div>
+    <div className="workspace-reader-actions">
+      {readerTarget?.kind === 'markdownFile' && <Button type="text" size="small" aria-label={`下载 ${readerTarget.file.name}`} icon={<DownloadOutlined />}
+        href={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId)} target="_blank" rel="noopener noreferrer" />}
+      <Button type="text" size="small" aria-label="关闭右侧面板" icon={<CloseOutlined />} onClick={() => setRightPanel(null)} />
+    </div>
+  </div> : <div className="workspace-right-panel-header">
     <div className="workspace-right-panel-tabs" role="tablist" aria-label="右侧信息面板">
       <button type="button" role="tab" aria-selected={rightPanel === 'info'} className={rightPanel === 'info' ? 'is-active' : undefined}
         onClick={() => setRightPanel('info')}><InfoCircleOutlined aria-hidden="true" /><span>信息</span></button>
@@ -253,12 +299,12 @@ export function MeetingWorkspacePage() {
             </div>
           </div>
         </header> : topbarSlot ? createPortal(topicHeader, topbarSlot) : topicHeader}
-        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} onActiveScopeChanged={setActiveScope} onOpenAttachments={() => setRightPanel(current => current === 'files' || current === 'images' ? null : 'files')} />
+        <RealtimeChatRegion sessionCache={chatCache.current} readOnly={readOnly} onMeetingDetailsChanged={workspace.refreshDetails} onMembershipChanged={workspace.membershipChanged} composerRef={composerRef} meetingId={workspace.details.meetingId} participants={workspace.details.participants} onMeetingUnavailable={workspace.handleMeetingUnavailable} onPresenceChanged={setPresence} onAgentActivitiesChanged={setAgentActivities} onActiveScopeChanged={setActiveScope} onOpenAttachments={() => setRightPanel(current => current === 'files' || current === 'images' ? null : 'files')} onReadMessageInPanel={openMessageInReader} onReadMarkdownFile={entry => openMarkdownFileInReader(entry)} />
         {readOnly && discussionMode}
       </> : <Flex vertical gap="middle" className="meeting-empty"><Typography.Title level={2}>开始一场圆桌会议</Typography.Title><Typography.Text type="secondary">创建新会议，或使用邀请码加入已有会议。</Typography.Text><Flex gap="small"><Button type="primary" onClick={() => setCreateOpen(true)}>创建会议</Button><Button onClick={() => setJoinOpen(true)}>加入会议</Button></Flex></Flex>}
     </main>
     {wideDesktop && canShowRightPanel && <aside className={showRightPanel ? 'workspace-right-panel is-open' : 'workspace-right-panel'}
-      aria-label={activePanelTab === 'info' ? '会议信息' : activePanelTab === 'files' ? '会话文件' : activePanelTab === 'images' ? '会话图片' : '会议成员'}
+      aria-label={activePanelTab === 'reader' ? '文档阅读' : activePanelTab === 'info' ? '会议信息' : activePanelTab === 'files' ? '会话文件' : activePanelTab === 'images' ? '会话图片' : '会议成员'}
       aria-hidden={!showRightPanel} inert={!showRightPanel || undefined}>
       {showRightPanel && <div className="workspace-right-resizer" role="separator" aria-orientation="vertical" aria-label="调整右侧栏宽度"
         aria-valuemin={RIGHT_PANEL_MIN} aria-valuemax={RIGHT_PANEL_MAX} aria-valuenow={rightPanelWidth} tabIndex={0}

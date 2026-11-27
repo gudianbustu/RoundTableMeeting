@@ -110,10 +110,11 @@ export function AttachmentUpload({ uploadRef, attachments, disabled, onChange, i
     {error && <Typography.Text type="danger" role="alert" className="attachment-upload-error">{error}</Typography.Text>}
   </div>
 }
-export function AttachmentLinks({ meetingId, attachments, onOpenViewer, compact = false }: { compact?: boolean; meetingId: string; attachments: ChatAttachment[]; onOpenViewer?: (id: string) => void }) {
+export function AttachmentLinks({ meetingId, attachments, onOpenViewer, onOpenMarkdownFile, compact = false }: { compact?: boolean; meetingId: string; attachments: ChatAttachment[]; onOpenViewer?: (id: string) => void; onOpenMarkdownFile?: (file: ChatAttachment) => void }) {
   const [preview, setPreview] = useState<ChatAttachment>()
   const renderCard = (file: ChatAttachment) => <AttachmentCard compact={compact} key={file.attachmentId} meetingId={meetingId} file={file} onPreview={() => {
     const kind = attachmentPreviewKind(file)
+    if (onOpenMarkdownFile && /\.md$/i.test(file.name)) { onOpenMarkdownFile(file); return }
     if (onOpenViewer && (kind === 'image' || (kind === 'text' && /\.md$/i.test(file.name)))) onOpenViewer(file.attachmentId)
     else setPreview(file)
   }} />
@@ -127,8 +128,8 @@ export function AttachmentLinks({ meetingId, attachments, onOpenViewer, compact 
     </Modal>
   </div>
 }
-export function MeetingAttachmentPanel({ meetingId, scope, peerParticipantId, onLocate, onClose, kind }: {
-  meetingId: string; scope: 'public' | 'private'; peerParticipantId?: string; onLocate: (id: string) => Promise<void>; onClose?: () => void; kind?: 'files' | 'images'
+export function MeetingAttachmentPanel({ meetingId, scope, peerParticipantId, onLocate, onClose, onOpenMarkdownFile, kind }: {
+  meetingId: string; scope: 'public' | 'private'; peerParticipantId?: string; onLocate: (id: string) => Promise<void>; onClose?: () => void; onOpenMarkdownFile?: (entry: { file: ChatAttachment; author?: string; createdAt?: Date }) => void; kind?: 'files' | 'images'
 }) {
   const [previewId, setPreviewId] = useState<string>()
   const [modalPreview, setModalPreview] = useState<ChatAttachment>()
@@ -151,7 +152,12 @@ export function MeetingAttachmentPanel({ meetingId, scope, peerParticipantId, on
     void load()
     return () => controller.current?.abort()
   }, [meetingId, scope, peerParticipantId])
-  const openFilePreview = (file: ChatAttachment) => {
+  const openFilePreview = (item: { attachment: ChatAttachment; author: string; createdAt: Date }) => {
+    const file = item.attachment
+    if (onOpenMarkdownFile && /\.md$/i.test(file.name)) {
+      onOpenMarkdownFile({ file, author: item.author, createdAt: item.createdAt })
+      return
+    }
     const previewKind = attachmentPreviewKind(file)
     if (previewKind === 'image' || (previewKind === 'text' && /\.md$/i.test(file.name))) setPreviewId(file.attachmentId)
     else setModalPreview(file)
@@ -183,7 +189,7 @@ export function MeetingAttachmentPanel({ meetingId, scope, peerParticipantId, on
           const ext = fileExtension(item.attachment.name)
           const hasTextSnippet = attachmentPreviewKind(item.attachment) === 'text' || isTextAttachment(item.attachment.name)
           return <article className="meeting-file-row" key={item.attachment.attachmentId}>
-            <button type="button" className="meeting-file-main" onClick={() => openFilePreview(item.attachment)}>
+            <button type="button" className="meeting-file-main" onClick={() => openFilePreview(item)}>
               <span className={`meeting-file-badge ${fileBadgeTone(ext)}`} aria-hidden="true">{ext}</span>
               <span className="meeting-file-info">
                 <span className="meeting-file-name" title={item.attachment.name}>{item.attachment.name}</span>

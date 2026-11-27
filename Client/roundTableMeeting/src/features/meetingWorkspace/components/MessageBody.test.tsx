@@ -1,6 +1,8 @@
-import { render } from '@testing-library/react'
-import { expect, it } from 'vitest'
+import { cleanup, render } from '@testing-library/react'
+import { afterEach, expect, it } from 'vitest'
 import { MessageBody } from './MessageBody'
+
+afterEach(cleanup)
 
 it('renders chat Markdown and preserves source offsets for selected mentions', () => {
   const content = ['## 进展', '', '😀 @A_B **@A_B**', '', '- 完成', '', '| 名称 |', '| --- |', '| 示例 |', '', '```js', '**literal**', '```'].join('\r\n')

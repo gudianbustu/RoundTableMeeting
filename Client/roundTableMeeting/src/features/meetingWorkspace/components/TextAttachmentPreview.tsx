@@ -33,7 +33,7 @@ export default function TextAttachmentPreview({ url, sizeBytes, markdown = false
     const controller = new AbortController()
     setBytes(undefined); setError(false); setTruncated(false)
     void (async () => {
-      const response = await fetch(url, { credentials: 'same-origin', signal: controller.signal, headers: sizeBytes === 0 ? undefined : { Range: `bytes=0-${textPreviewLimit}` } })
+      const response = await fetch(url, { credentials: 'same-origin', signal: controller.signal, headers: sizeBytes === 0 || url.startsWith('data:') ? undefined : { Range: `bytes=0-${textPreviewLimit}` } })
       if (!response.ok || response.status === 204 || !response.body) throw new Error('preview_failed')
       const reader = response.body.getReader()
       const chunks: Uint8Array[] = []; let length = 0
@@ -68,6 +68,6 @@ export default function TextAttachmentPreview({ url, sizeBytes, markdown = false
     {!diagram && truncated && <Alert type="info" title="文件较大，仅预览前 1 MiB，后续内容未显示。" />}
     {diagram && truncated && <Alert type="warning" title="图表文件超过 1 MiB 读取上限，请下载完整文件查看。" />}
     {diagram && !truncated && decoded && 'text' in decoded && <Suspense fallback={<Spin />}><MermaidDiagram key={decoded.text} source={decoded.text} /></Suspense>}
-    {!diagram && decoded && 'text' in decoded && (markdown ? <article aria-label="Markdown 正文"><MessageBody content={decoded.text || '（空文件）'} mentions={[]} /></article> : <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>)}
+    {!diagram && decoded && 'text' in decoded && (markdown ? <article aria-label="Markdown 正文"><MessageBody diagrams content={decoded.text || '（空文件）'} mentions={[]} /></article> : <pre aria-label="文本内容" style={{ maxHeight: '65vh', overflow: 'auto', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{decoded.text || '（空文件）'}</pre>)}
   </div>
 }

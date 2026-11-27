@@ -97,7 +97,172 @@
   font-size: 0.9em;
   font-family: ui-monospace, Consolas, monospace;
 }
-.message-body pre code { padding: 0; background: transparent; }
+.message-body pre code { padding: 0; background: transparent; font-size: 12.5px; line-height: 1.5; }
+
+/* Compact chat-stream Markdown hierarchy (scoped to timeline, not full document preview) */
+.chat-message-column .message-body h1 {
+  font-size: 15.5px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 10px 0 4px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--rt-border);
+}
+.chat-message-column .message-body h2 {
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  margin: 8px 0 3px;
+}
+.chat-message-column .message-body h3 {
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+  margin: 6px 0 2px;
+}
+.chat-message-column .message-body h4,
+.chat-message-column .message-body h5,
+.chat-message-column .message-body h6 {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--rt-secondary);
+  line-height: 1.4;
+  margin: 5px 0 2px;
+}
+.chat-message-column .message-body > :first-child { margin-top: 0; }
+.chat-message-column .message-body p { margin: 0 0 0.35em; }
+.chat-message-column .message-body > :last-child { margin-bottom: 0; }
+.chat-message-column .message-body ul,
+.chat-message-column .message-body ol {
+  margin: 0 0 0.4em;
+  padding-inline-start: 1.4em;
+}
+.chat-message-column .message-body li { margin: 1px 0; }
+.chat-message-column .message-body li > p { margin-bottom: 0.2em; }
+.chat-message-column .message-body blockquote {
+  margin: 4px 0;
+  padding: 2px 10px;
+  color: var(--rt-secondary);
+  border-inline-start: 2px solid var(--rt-border);
+}
+.chat-message-column .message-body .message-table { margin: 5px 0; }
+.chat-message-column .message-body table { font-size: 13px; }
+.chat-message-column .message-body th,
+.chat-message-column .message-body td { padding: 3px 8px; }
+.chat-message-column .message-body hr { margin: 8px 0; border: 0; border-top: 1px solid var(--rt-border); }
+
+/* Code block card + copy header + light/dark syntax highlighting */
+.message-code-block {
+  margin: 5px 0;
+  border: 1px solid var(--rt-border);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--rt-page);
+}
+.message-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--rt-border);
+  background: var(--rt-subtle);
+  font-size: 11px;
+  color: var(--rt-secondary);
+}
+.message-code-lang {
+  font-family: ui-monospace, Consolas, monospace;
+  text-transform: lowercase;
+}
+.message-code-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--rt-secondary);
+  font: inherit;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease;
+}
+.message-code-copy:hover {
+  background: var(--rt-surface);
+  color: var(--rt-text);
+}
+.message-body .message-code-block pre {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 0;
+  background: transparent;
+}
+.hljs-comment, .hljs-quote { color: #6a737d; font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-subst { color: #cf222e; }
+.hljs-string, .hljs-doctag, .hljs-regexp { color: #0a3069; }
+.hljs-title, .hljs-section, .hljs-selector-id { color: #8250df; }
+.hljs-number, .hljs-literal, .hljs-variable, .hljs-template-variable, .hljs-attr { color: #0550ae; }
+.hljs-type, .hljs-class .hljs-title, .hljs-built_in { color: #953800; }
+.hljs-tag, .hljs-name, .hljs-attribute { color: #116329; }
+:root[data-appearance-mode="dark"] .hljs-comment,
+:root[data-appearance-mode="dark"] .hljs-quote { color: #8b949e; }
+:root[data-appearance-mode="dark"] .hljs-keyword,
+:root[data-appearance-mode="dark"] .hljs-selector-tag,
+:root[data-appearance-mode="dark"] .hljs-subst { color: #ff7b72; }
+:root[data-appearance-mode="dark"] .hljs-string,
+:root[data-appearance-mode="dark"] .hljs-doctag,
+:root[data-appearance-mode="dark"] .hljs-regexp { color: #a5d6ff; }
+:root[data-appearance-mode="dark"] .hljs-title,
+:root[data-appearance-mode="dark"] .hljs-section,
+:root[data-appearance-mode="dark"] .hljs-selector-id { color: #d2a8ff; }
+:root[data-appearance-mode="dark"] .hljs-number,
+:root[data-appearance-mode="dark"] .hljs-literal,
+:root[data-appearance-mode="dark"] .hljs-variable,
+:root[data-appearance-mode="dark"] .hljs-template-variable,
+:root[data-appearance-mode="dark"] .hljs-attr { color: #79c0ff; }
+:root[data-appearance-mode="dark"] .hljs-type,
+:root[data-appearance-mode="dark"] .hljs-class .hljs-title,
+:root[data-appearance-mode="dark"] .hljs-built_in { color: #ffa657; }
+:root[data-appearance-mode="dark"] .hljs-tag,
+:root[data-appearance-mode="dark"] .hljs-name,
+:root[data-appearance-mode="dark"] .hljs-attribute { color: #7ee787; }
+
+/* Collapsible long messages */
+.message-body-collapsible { position: relative; min-width: 0; }
+.message-body-collapsible.is-collapsed .message-body-viewport {
+  max-height: 420px;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 48px), transparent 100%);
+}
+.message-collapse-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+.message-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--rt-border);
+  border-radius: 999px;
+  background: var(--rt-surface);
+  color: var(--rt-secondary);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+.message-collapse-toggle:hover {
+  border-color: var(--rt-primary);
+  color: var(--rt-primary);
+  background: var(--rt-subtle);
+}
 .message-agent[data-message-id] .chat-message-column .message-body {
   padding-inline-start: 10px;
   border-inline-start: 2px solid color-mix(in srgb, var(--rt-primary) 35%, transparent);

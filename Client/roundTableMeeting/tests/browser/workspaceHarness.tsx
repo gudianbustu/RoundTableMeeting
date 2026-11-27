@@ -82,7 +82,26 @@ export const defaultMessages: ChatMessage[] = [
 ]
 
 export const mockImageUrls: Record<string, string> = {
-  'file-1': 'data:text/plain;charset=utf-8,' + encodeURIComponent('# Agent 接入体验报告\n\n让人和 AI Agent 坐在同一间会议室里开会。你在浏览器里发言，Agent 通过 MCP 接入，支持公屏点名、自由讨论与附件协作。'),
+  'file-1': 'data:text/plain;charset=utf-8,' + encodeURIComponent([
+    '# Agent 接入体验报告',
+    '',
+    '让人和 AI Agent 坐在同一间会议室里开会。你在浏览器里发言，Agent 通过 MCP 接入，支持公屏点名、自由讨论与附件协作。',
+    '',
+    '## 接入配置示例',
+    '',
+    '```json',
+    '{ "mcpServers": { "roundtable": { "command": "node", "args": ["roundtable-mcp.mjs"] } } }',
+    '```',
+  ].join('\n')),
+  'md-msg-1': 'data:text/plain;charset=utf-8,' + encodeURIComponent([
+    '# 会议纪要：界面密度与侧栏阅读统一',
+    '',
+    '本次讨论确认将直接发送的 `.md` 附件与右侧文件列表中的 `.md` 文件统一在右侧「文档阅读」视图中打开。',
+    '',
+    '```typescript',
+    'export const openMarkdownInReader = (fileName: string) => /\\.md$/i.test(fileName)',
+    '```',
+  ].join('\n')),
   'file-3': 'data:text/plain;charset=utf-8,' + encodeURIComponent('{"tools": ["join_meeting", "send_message", "wait_messages"], "version": "0.1.0", "transport": "stdio"}'),
   'file-4': 'data:text/plain;charset=utf-8,' + encodeURIComponent('2026-11-27 09:04:01 INFO 并发 50 路 SignalR 连接稳定，平均推送延迟 18ms，P99 42ms，零断线重连。'),
   'img-1': 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="320" height="240"><rect width="320" height="240" fill="#2563eb"/><text x="50%" y="52%" fill="#fff" font-size="22" font-family="sans-serif" text-anchor="middle">架构草图.png</text></svg>'),
