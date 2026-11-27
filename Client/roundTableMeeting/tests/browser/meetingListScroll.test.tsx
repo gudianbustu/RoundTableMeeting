@@ -427,11 +427,43 @@ describe('会议工作区完整布局', () => {
     await renderWorkspace({ messages: withMd })
     await waitForFirstMessage(withMd[0].content)
 
-    // 1. 点击聊天消息里直接发送的 .md 附件卡片 → 右侧栏打开文档阅读
+    // 1. 点击聊天消息里直接发送的 .md 附件卡片 → 右侧栏打开文档阅读，占满高度且无嵌套默认滚动条
     fireEvent.click(screen.getByRole('button', { name: '预览 会议纪要-2026-11-27.md' }))
     expect(await screen.findByText('文档阅读', undefined, { timeout: 5000 })).toBeTruthy()
     expect(await screen.findByText('会议纪要：界面密度与侧栏阅读统一', undefined, { timeout: 5000 })).toBeTruthy()
     expect(document.querySelector('.workspace-reader-doc .hljs-keyword')).not.toBeNull()
+
+    const panelBody = document.querySelector<HTMLElement>('.workspace-right-panel-body.is-reader')!
+    const readerDoc = document.querySelector<HTMLElement>('.workspace-reader-doc')!
+    const sidebarAttachmentReader = document.querySelector<HTMLElement>('.workspace-reader-doc .attachment-reader')!
+    expect(panelBody).not.toBeNull()
+    expect(readerDoc.getBoundingClientRect().height).toBeGreaterThanOrEqual(panelBody.clientHeight - 1)
+    expect(getComputedStyle(sidebarAttachmentReader).maxHeight).toBe('none')
+    expect(getComputedStyle(sidebarAttachmentReader).overflowY).toBe('visible')
+
+    // 1b. 放大阅读弹窗：消除双层滚动条（内层 .attachment-reader 不滚动），支持调宽与全屏切换
+    fireEvent.click(screen.getByRole('button', { name: '放大阅读' }))
+    expect(await screen.findByText('会议纪要：界面密度与侧栏阅读统一', undefined, { timeout: 5000 })).toBeTruthy()
+    const modalAttachmentReader = document.querySelector<HTMLElement>('.workspace-reader-modal-body .attachment-reader')!
+    expect(modalAttachmentReader).not.toBeNull()
+    expect(getComputedStyle(modalAttachmentReader).maxHeight).toBe('none')
+    expect(getComputedStyle(modalAttachmentReader).overflowY).toBe('visible')
+
+    const modalResizer = screen.getByRole('separator', { name: '调整阅读弹窗宽度' })
+    const initialModalWidth = Number(modalResizer.getAttribute('aria-valuenow'))
+    const maxModalWidth = Number(modalResizer.getAttribute('aria-valuemax'))
+    expect(initialModalWidth).toBeGreaterThanOrEqual(560)
+    fireEvent.keyDown(modalResizer, { key: 'End' })
+    expect(Number(modalResizer.getAttribute('aria-valuenow'))).toBe(maxModalWidth)
+    fireEvent.doubleClick(modalResizer)
+    expect(Number(modalResizer.getAttribute('aria-valuenow'))).toBe(initialModalWidth)
+
+    fireEvent.click(screen.getByRole('button', { name: '全屏阅读' }))
+    expect(document.querySelector('.workspace-reader-modal.is-fullscreen')).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '退出全屏' }))
+    expect(document.querySelector('.workspace-reader-modal.is-fullscreen')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '退出放大阅读' }))
+    await vi.waitFor(() => expect(document.querySelector('.workspace-reader-modal .message-body')).toBeNull(), { timeout: 3000 })
 
     // 2. 返回侧边栏并切到「文件」列表，点击其中的 .md 文件 → 同样在右侧栏打开文档阅读，且返回回到「文件」Tab
     fireEvent.click(screen.getByRole('button', { name: '返回侧边栏' }))

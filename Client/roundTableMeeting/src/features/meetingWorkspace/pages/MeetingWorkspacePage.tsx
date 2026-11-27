@@ -3,7 +3,7 @@ import { AvatarImage } from '@/features/avatars/AvatarImage'
 import { useAccountUnread } from '../chat/AccountUnreadProvider'
 import './MeetingWorkspaceShell.css'
 import { createPortal } from 'react-dom'
-import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, ExpandOutlined, FolderOpenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
+import { ArrowLeftOutlined, CloseOutlined, DownloadOutlined, ExpandOutlined, FolderOpenOutlined, FullscreenExitOutlined, FullscreenOutlined, InfoCircleOutlined, MenuOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { MessageComposerHandle } from '../components/MessageComposer'
 import { Alert, Button, Drawer, Flex, Input, Modal, Typography } from 'antd'
@@ -34,14 +34,26 @@ const RIGHT_PANEL_DEFAULT = 330
 const READER_PANEL_MIN = 360
 const READER_PANEL_DEFAULT = 520
 const READER_PANEL_HARD_MAX = 960
+const READER_MODAL_MIN_WIDTH = 560
+const READER_MODAL_AUTO_MAX_WIDTH = 1680
 const WORKSPACE_SIDEBAR_WIDTH = 236
 const CHAT_COLUMN_MIN = 380
 const rightPanelWidthKey = 'rtm-right-panel-width-v1'
 const readerPanelWidthKey = 'rtm-reader-panel-width-v1'
+const readerModalWidthKey = 'rtm-reader-modal-width-v1'
 
 function computeReaderMaxWidth(viewportWidth: number) {
   const available = viewportWidth - WORKSPACE_SIDEBAR_WIDTH - CHAT_COLUMN_MIN
   return Math.max(READER_PANEL_MIN, Math.min(READER_PANEL_HARD_MAX, Math.round(available)))
+}
+
+function computeReaderModalBounds(viewportWidth: number) {
+  const margin = viewportWidth <= 640 ? 16 : 48
+  const max = Math.max(320, viewportWidth - margin)
+  const min = Math.min(READER_MODAL_MIN_WIDTH, max)
+  const preferred = Math.round(viewportWidth * 0.8)
+  const fallback = Math.min(max, Math.max(min, Math.min(READER_MODAL_AUTO_MAX_WIDTH, preferred)))
+  return { min, max, fallback }
 }
 
 function readStoredWidth(key: string, min: number, max: number, fallback: number) {
@@ -49,6 +61,15 @@ function readStoredWidth(key: string, min: number, max: number, fallback: number
     const value = Number(localStorage.getItem(key))
     return Number.isSafeInteger(value) && value >= min && value <= max ? value : fallback
   } catch { return fallback }
+}
+
+function readOptionalStoredWidth(key: string, min: number) {
+  try {
+    const raw = localStorage.getItem(key)
+    if (!raw) return undefined
+    const value = Number(raw)
+    return Number.isSafeInteger(value) && value >= min ? value : undefined
+  } catch { return undefined }
 }
 
 export function hasUnknownOnlineParticipant(participants: Participant[], presence: Record<string, 'online' | 'offline'>) {
@@ -115,6 +136,7 @@ export function MeetingWorkspacePage() {
     | { kind: 'markdownFile'; meetingId: string; file: ChatAttachment; author?: string; createdAt?: Date; returnTab: 'info' | 'members' | 'files' | 'images' }
   >()
   const [readerExpanded, setReaderExpanded] = useState(false)
+  const [readerModalFullscreen, setReaderModalFullscreen] = useState(false)
   useEffect(() => { if (rightPanel) setRenderedPanel(rightPanel) }, [rightPanel])
   const [viewportWidth, setViewportWidth] = useState(() => typeof window !== 'undefined' ? window.innerWidth : 1280)
   useEffect(() => {
@@ -124,6 +146,51 @@ export function MeetingWorkspacePage() {
     return () => window.removeEventListener('resize', sync)
   }, [])
   const readerMaxWidth = computeReaderMaxWidth(viewportWidth)
+  const readerModalBounds = computeReaderModalBounds(viewportWidth)
+  const [readerModalCustomWidth, setReaderModalCustomWidth] = useState<number | undefined>(() => readOptionalStoredWidth(readerModalWidthKey, READER_MODAL_MIN_WIDTH))
+  const [resizingReaderModal, setResizingReaderModal] = useState(false)
+  const modalDrag = useRef<{ pointer: number; edge: 'left' | 'right'; startX: number; startWidth: number; lastWidth?: number } | undefined>(undefined)
+  const clampReaderModalWidth = (value: number) => Math.max(readerModalBounds.min, Math.min(readerModalBounds.max, Math.round(value)))
+  const activeReaderModalWidth = readerModalCustomWidth !== undefined ? clampReaderModalWidth(readerModalCustomWidth) : readerModalBounds.fallback
+  const saveReaderModalWidth = (value: number) => {
+    const next = clampReaderModalWidth(value)
+    setReaderModalCustomWidth(next)
+    try { localStorage.setItem(readerModalWidthKey, String(next)) } catch { /* ignore storage failure */ }
+  }
+  const resetReaderModalWidth = () => {
+    setReaderModalCustomWidth(undefined)
+    try { localStorage.removeItem(readerModalWidthKey) } catch { /* ignore storage failure */ }
+  }
+  const startModalResize = (edge: 'left' | 'right') => (event: PointerEvent<HTMLDivElement>) => {
+    if (!event.isPrimary || event.button !== 0 || readerModalFullscreen) return
+    event.currentTarget.setPointerCapture(event.pointerId)
+    modalDrag.current = { pointer: event.pointerId, edge, startX: event.clientX, startWidth: activeReaderModalWidth }
+    setResizingReaderModal(true)
+  }
+  const moveModalResize = (event: PointerEvent<HTMLDivElement>) => {
+    const active = modalDrag.current
+    if (active?.pointer !== event.pointerId) return
+    const delta = active.edge === 'right' ? (event.clientX - active.startX) * 2 : (active.startX - event.clientX) * 2
+    active.lastWidth = clampReaderModalWidth(active.startWidth + delta)
+    setReaderModalCustomWidth(active.lastWidth)
+  }
+  const finishModalResize = () => {
+    if (modalDrag.current?.lastWidth !== undefined) saveReaderModalWidth(modalDrag.current.lastWidth)
+    modalDrag.current = undefined
+    setResizingReaderModal(false)
+  }
+  const keydownModalResize = (event: KeyboardEvent<HTMLDivElement>) => {
+    const map: Record<string, number> = {
+      ArrowLeft: activeReaderModalWidth - 32,
+      ArrowRight: activeReaderModalWidth + 32,
+      Home: readerModalBounds.min,
+      End: readerModalBounds.max,
+    }
+    if (!Object.hasOwn(map, event.key)) return
+    event.preventDefault()
+    saveReaderModalWidth(map[event.key])
+  }
+  const closeReaderExpanded = () => { setReaderExpanded(false); setReaderModalFullscreen(false) }
   const [rightPanelWidth, setRightPanelWidth] = useState(() => readStoredWidth(rightPanelWidthKey, RIGHT_PANEL_MIN, RIGHT_PANEL_MAX, RIGHT_PANEL_DEFAULT))
   const [readerPanelWidth, setReaderPanelWidth] = useState(() => readStoredWidth(readerPanelWidthKey, READER_PANEL_MIN, READER_PANEL_HARD_MAX, READER_PANEL_DEFAULT))
   const [resizingRightPanel, setResizingRightPanel] = useState(false)
@@ -194,7 +261,7 @@ export function MeetingWorkspacePage() {
   useEffect(() => { if (workspace.joinSucceeded) setJoinOpen(false) }, [workspace.joinSucceeded])
   useEffect(() => {
     setRemoval(undefined); setNicknameOpen(false); setNavigationOpen(false)
-    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined); setReaderTarget(undefined); setReaderExpanded(false)
+    setRightPanel(wideDesktop ? 'members' : null); setActiveScope(undefined); setReaderTarget(undefined); closeReaderExpanded()
     setHideId(undefined); setPresence({}); setAgentActivities({})
     setCreateOpen(false); setJoinOpen(false)
     setInviteOpen(false); setDeleteOpen(false); setLeaveOpen(false); setConfirmName('')
@@ -288,14 +355,14 @@ export function MeetingWorkspacePage() {
   </div>
   const rightPanelHeader = activePanelTab === 'reader' ? <div className="workspace-right-panel-header">
     <div className="workspace-reader-head">
-      <Button type="text" size="small" aria-label="返回侧边栏" icon={<ArrowLeftOutlined />} onClick={() => { setReaderExpanded(false); setRightPanel(readerTarget?.returnTab ?? 'members') }} />
+      <Button type="text" size="small" aria-label="返回侧边栏" icon={<ArrowLeftOutlined />} onClick={() => { closeReaderExpanded(); setRightPanel(readerTarget?.returnTab ?? 'members') }} />
       <span>文档阅读</span>
     </div>
     <div className="workspace-reader-actions">
       <Button type="text" size="small" aria-label="放大阅读" title="放大阅读" icon={<ExpandOutlined />} onClick={() => setReaderExpanded(true)} />
       {readerTarget?.kind === 'markdownFile' && <Button type="text" size="small" aria-label={`下载 ${readerTarget.file.name}`} icon={<DownloadOutlined />}
         href={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId)} target="_blank" rel="noopener noreferrer" />}
-      <Button type="text" size="small" aria-label="关闭右侧面板" icon={<CloseOutlined />} onClick={() => { setReaderExpanded(false); setRightPanel(null) }} />
+      <Button type="text" size="small" aria-label="关闭右侧面板" icon={<CloseOutlined />} onClick={() => { closeReaderExpanded(); setRightPanel(null) }} />
     </div>
   </div> : <div className="workspace-right-panel-header">
     <div className="workspace-right-panel-tabs" role="tablist" aria-label="右侧信息面板">
@@ -352,17 +419,32 @@ export function MeetingWorkspacePage() {
         onPointerCancel={finishRightResize} onLostPointerCapture={finishRightResize} onKeyDown={keydownRightResize} />}
       <div className="workspace-right-panel-inner">
         {rightPanelHeader}
-        <div className="workspace-right-panel-body">{rightPanelBody}</div>
+        <div className={activePanelTab === 'reader' ? 'workspace-right-panel-body is-reader' : 'workspace-right-panel-body'}>{rightPanelBody}</div>
       </div>
     </aside>}
     </>}
     {!wideDesktop && workspace.details && <Drawer title={rightPanelHeader} closable={false} placement="right" size="min(360px, calc(100vw - 18px))"
-      open={Boolean(rightPanel)} onClose={() => { setReaderExpanded(false); setRightPanel(null) }} rootClassName="workspace-right-drawer">
+      open={Boolean(rightPanel)} onClose={() => { closeReaderExpanded(); setRightPanel(null) }} rootClassName={activePanelTab === 'reader' ? 'workspace-right-drawer is-reader' : 'workspace-right-drawer'}>
       {rightPanel && rightPanelBody}
     </Drawer>}
-    <Modal open={Boolean(readerExpanded && readerTarget)} onCancel={() => setReaderExpanded(false)} footer={null} centered closable={false} destroyOnHidden
-      width="min(960px, calc(100vw - 32px))" className="workspace-reader-modal" styles={{ mask: { backgroundColor: 'rgb(20 23 19 / 45%)' } }}>
+    <Modal open={Boolean(readerExpanded && readerTarget)} onCancel={closeReaderExpanded} footer={null} centered closable={false} destroyOnHidden
+      width={readerModalFullscreen ? '100vw' : activeReaderModalWidth}
+      className={'workspace-reader-modal' + (readerModalFullscreen ? ' is-fullscreen' : '') + (resizingReaderModal ? ' is-resizing' : '')}
+      styles={{ mask: { backgroundColor: 'rgb(20 23 19 / 45%)' } }}>
       {readerTarget && <>
+        {!readerModalFullscreen && viewportWidth > 640 && <>
+          <div className="workspace-reader-modal-resizer is-left" role="separator" aria-orientation="vertical" aria-label="调整阅读弹窗宽度"
+            aria-valuemin={readerModalBounds.min} aria-valuemax={readerModalBounds.max} aria-valuenow={activeReaderModalWidth} tabIndex={0}
+            title="拖动调整弹窗宽度，双击恢复默认"
+            onPointerDown={startModalResize('left')} onPointerMove={moveModalResize} onPointerUp={finishModalResize}
+            onPointerCancel={finishModalResize} onLostPointerCapture={finishModalResize} onKeyDown={keydownModalResize}
+            onDoubleClick={resetReaderModalWidth} />
+          <div className="workspace-reader-modal-resizer is-right" aria-hidden="true"
+            title="拖动调整弹窗宽度，双击恢复默认"
+            onPointerDown={startModalResize('right')} onPointerMove={moveModalResize} onPointerUp={finishModalResize}
+            onPointerCancel={finishModalResize} onLostPointerCapture={finishModalResize}
+            onDoubleClick={resetReaderModalWidth} />
+        </>}
         <div className="workspace-reader-modal-header">
           <div className="workspace-reader-modal-title">
             <strong title={readerTarget.kind === 'message' ? readerTarget.message.author.displayName : readerTarget.file.name}>
@@ -375,7 +457,9 @@ export function MeetingWorkspacePage() {
           <div className="workspace-reader-actions">
             {readerTarget.kind === 'markdownFile' && <Button type="text" size="small" aria-label={`下载 ${readerTarget.file.name}`} icon={<DownloadOutlined />}
               href={attachmentUrl(readerTarget.meetingId, readerTarget.file.attachmentId)} target="_blank" rel="noopener noreferrer" />}
-            <Button type="text" size="small" aria-label="退出放大阅读" title="退出放大阅读" icon={<CloseOutlined />} onClick={() => setReaderExpanded(false)} />
+            <Button type="text" size="small" aria-label={readerModalFullscreen ? '退出全屏' : '全屏阅读'} title={readerModalFullscreen ? '退出全屏' : '全屏阅读'}
+              icon={readerModalFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} onClick={() => setReaderModalFullscreen(value => !value)} />
+            <Button type="text" size="small" aria-label="退出放大阅读" title="退出放大阅读" icon={<CloseOutlined />} onClick={closeReaderExpanded} />
           </div>
         </div>
         <div className="workspace-reader-modal-body">{readerDocumentBody}</div>

@@ -187,12 +187,30 @@
   overscroll-behavior: contain;
   padding: 8px 10px 12px;
 }
+.workspace-right-panel-body.is-reader {
+  padding: 0;
+  background: var(--rt-surface);
+}
+.workspace-right-panel-body.is-reader > .workspace-right-panel-view {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .workspace-right-panel .participant-list-heading,
 .workspace-right-drawer .participant-list-heading { display: none; }
 .workspace-right-drawer .ant-drawer-header { padding: 4px 8px; }
 .workspace-right-drawer .ant-drawer-header-title { width: 100%; }
 .workspace-right-drawer .workspace-right-panel-header { padding: 2px 0; border-bottom: 0; }
 .workspace-right-drawer .ant-drawer-body { padding: 8px 10px 16px; }
+.workspace-right-drawer.is-reader .ant-drawer-body {
+  padding: 0;
+  background: var(--rt-surface);
+}
+.workspace-right-drawer.is-reader .workspace-right-panel-view {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+}
 .workspace-reader-head {
   display: inline-flex;
   align-items: center;
@@ -207,10 +225,10 @@
   gap: 2px;
 }
 .workspace-reader-doc {
-  padding: 10px 12px 16px;
-  border-radius: 10px;
+  flex: 1;
+  min-height: 100%;
+  padding: 12px 16px 24px;
   background: var(--rt-surface);
-  border: 1px solid var(--rt-border);
 }
 .workspace-reader-meta {
   display: flex;
@@ -222,9 +240,38 @@
   border-bottom: 1px solid var(--rt-border);
   font-size: 12px;
 }
+.workspace-reader-meta strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .workspace-reader-meta time {
+  flex: none;
   color: var(--rt-muted);
   font-variant-numeric: tabular-nums;
+}
+.workspace-reader-doc .attachment-reader,
+.workspace-reader-modal-body .attachment-reader {
+  width: 100%;
+  max-width: none;
+  margin-inline: 0;
+  max-height: none;
+  overflow: visible;
+}
+.workspace-reader-doc .attachment-reader details,
+.workspace-reader-modal-body .attachment-reader details {
+  margin: 0 0 10px;
+  font-size: 12px;
+}
+.workspace-reader-doc .attachment-reader .message-table th,
+.workspace-reader-doc .attachment-reader .message-table td {
+  padding: 7px 10px;
+  font-size: 13px;
+}
+.workspace-reader-modal-body .attachment-reader .message-table th,
+.workspace-reader-modal-body .attachment-reader .message-table td {
+  padding: 9px 12px;
 }
 .workspace-reader-doc .message-body {
   font-size: 14px;
@@ -239,18 +286,66 @@
   font-size: 12.5px;
   color: var(--rt-muted);
 }
+.workspace-reader-modal.ant-modal {
+  max-width: calc(100vw - 16px);
+  padding-bottom: 0;
+}
+.workspace-reader-modal.is-fullscreen.ant-modal {
+  max-width: 100vw;
+  margin: 0;
+  top: 0;
+}
+.workspace-reader-modal.is-resizing {
+  user-select: none;
+}
 .workspace-reader-modal .ant-modal-container {
+  position: relative;
   padding: 0;
   border-radius: 12px;
   overflow: hidden;
   background: var(--rt-surface);
   border: 1px solid var(--rt-border);
 }
+.workspace-reader-modal.is-fullscreen .ant-modal-container {
+  border-radius: 0;
+  border: 0;
+}
 .workspace-reader-modal .ant-modal-body {
+  position: relative;
   display: flex;
   flex-direction: column;
-  max-height: min(84dvh, 860px);
+  height: calc(100dvh - 48px);
+  max-height: calc(100dvh - 48px);
   padding: 0;
+}
+.workspace-reader-modal.is-fullscreen .ant-modal-body {
+  height: 100dvh;
+  max-height: 100dvh;
+}
+.workspace-reader-modal-resizer {
+  position: absolute;
+  inset-block: 0;
+  width: 8px;
+  z-index: 4;
+  cursor: col-resize;
+  touch-action: none;
+}
+.workspace-reader-modal-resizer.is-left { inset-inline-start: 0; }
+.workspace-reader-modal-resizer.is-right { inset-inline-end: 0; }
+.workspace-reader-modal-resizer::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  width: 3px;
+  background: transparent;
+  transition: background-color 0.12s ease;
+}
+.workspace-reader-modal-resizer.is-left::after { inset-inline-start: 0; }
+.workspace-reader-modal-resizer.is-right::after { inset-inline-end: 0; }
+.workspace-reader-modal-resizer:hover::after,
+.workspace-reader-modal-resizer:focus-visible::after,
+.workspace-reader-modal.is-resizing .workspace-reader-modal-resizer::after {
+  background: var(--rt-primary);
 }
 .workspace-reader-modal-header {
   flex: none;
@@ -258,7 +353,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 14px 10px 18px;
+  padding: 10px 14px 10px 20px;
   border-bottom: 1px solid var(--rt-border);
   background: var(--rt-page);
 }
@@ -286,7 +381,19 @@
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 16px 22px 24px;
+  padding: 16px 24px 28px;
+}
+@media (max-width: 640px) {
+  .workspace-reader-modal .ant-modal-body {
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  .workspace-reader-modal-header {
+    padding: 8px 10px 8px 14px;
+  }
+  .workspace-reader-modal-body {
+    padding: 12px 14px 20px;
+  }
 }
 .workspace-reader-modal-body .message-body {
   font-size: 14.5px;
